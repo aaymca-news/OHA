@@ -24,6 +24,12 @@
     RewriteRule ^ index.php [L]
 </IfModule>
 
+# cPanel's PHP writes an "error_log" file into this folder, and its PHP settings into
+# ".user.ini". Neither must ever be downloadable.
+<FilesMatch "^(error_log|\.user\.ini|php\.ini)$">
+    Require all denied
+</FilesMatch>
+
 # On the cPanel server, PHP 8.4 runs this site. cPanel writes this block itself when the
 # PHP version is chosen; keeping it in Git stops a `git pull` from conflicting with it.
 # Other servers ignore it.

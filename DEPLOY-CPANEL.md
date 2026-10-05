@@ -5,6 +5,25 @@ How to put the OHA platform on AAYMCA's cPanel server, next to the voting system
 PHP 8.4 runs it, PostgreSQL holds the data, cron runs the background work. No Node.js
 is needed on the server: the built CSS and JavaScript come with the code.
 
+## Ground rules: the main site and the voting system are never touched
+
+The cPanel account (`africaym`) also runs the main website, `africaymca.org` (WordPress,
+in `public_html`), and the voting system (`motion-vote`). Deploying OHA adds things
+**beside** them and changes nothing of theirs:
+
+| Never | Instead |
+|---|---|
+| Put anything in `public_html`, or change any file there | OHA lives in its own folder, `/home/africaym/oha` |
+| Accept cPanel's suggested document root (`public_html/…`), or tick "Share document root" | Set the document root to `oha/public` |
+| Change the PHP version of `africaymca.org`, of the voting site, or the account's default | Set PHP 8.4 for the OHA domain only, in MultiPHP Manager |
+| Touch the WordPress MySQL database or the voting system's PostgreSQL database | OHA gets its own new PostgreSQL database and user |
+| Edit or delete existing cron jobs | Only add OHA's two |
+| Edit or delete existing DNS records | Only add one new record for the OHA address |
+| Run commands inside `public_html` or `motion-vote` | Every command below starts with `cd ~/oha` |
+
+If a cPanel screen offers to change something for "all domains" or for the account,
+stop and check first.
+
 Names used below. Change them if you choose others:
 
 | | |
@@ -18,41 +37,66 @@ Names used below. Change them if you choose others:
 
 ## Part A: once, to go live
 
-### 1. Point the address at the server
-At GoDaddy (where `ymcaafricaalliance.org` is managed), add an **A record**:
-`oha` → the server's IP. This is the same IP as `vote.ymcaafricaalliance.org`.
+### 1. Choose the address, the way the voting site's was chosen
+cPanel → **Domains**: find the row whose document root is `/home/africaym/motion-vote/public`.
+That is the voting site's address. Give OHA the same kind of address, e.g. `oha.` instead
+of `vote.` on the same parent domain. This guide uses `oha.ymcaafricaalliance.org`.
 
-### 2. Create the subdomain
-cPanel → **Domains** → **Create A New Domain**: `oha.ymcaafricaalliance.org`.
-- Untick "Share document root".
-- Set **Document Root** to `oha/public`, which is `/home/africaym/oha/public`.
+Then point that address at the server. Look where the parent domain's DNS is managed
+(the voting runbook says GoDaddy for `ymcaafricaalliance.org`). Add **one** A record:
+`oha` → the same IP as the voting address. If the parent domain's DNS is in cPanel's own
+**Zone Editor** instead, cPanel adds the record itself in step 3.
 
-### 3. PHP 8.4 and its extensions
-- cPanel → **MultiPHP Manager**: set `oha.ymcaafricaalliance.org` to **PHP 8.4 (ea-php84)**.
-- Check the extensions: open cPanel → **Terminal** and run
+### 2. Get the code from GitHub, as for the voting system
+cPanel → **Git™ Version Control** → **Create**:
+- **Clone a Repository**: on
+- **Clone URL**: `https://github.com/aaymca-news/OHA.git`
+- **Repository Path**: `oha`, which is `/home/africaym/oha`. It sits beside `motion-vote`,
+  never inside `public_html`.
+- **Repository Name**: `OHA`
+
+This must come **before** step 3. cPanel only clones into a folder that does not exist
+yet, and creating the domain first would create `oha/public`.
+
+When it has finished, the list shows OHA next to the voting repository. In File
+Manager, `/home/africaym/oha` holds `app`, `public` and the rest of the code. It has no
+`vendor` folder and no `.env` yet; steps 4 and 6 add them.
+
+### 3. Create the domain
+cPanel → **Domains** → **Create A New Domain** → `oha.ymcaafricaalliance.org`.
+- **Untick** "Share document root (/home/africaym/public_html)". This is what keeps OHA
+  out of the main site.
+- Set **Document Root** to `oha/public`, which is `/home/africaym/oha/public`. It already
+  exists, from step 2.
+
+### 4. PHP 8.4, its extensions, and the PHP libraries
+- cPanel → **MultiPHP Manager**: tick **only** `oha.ymcaafricaalliance.org` and set it to
+  **PHP 8.4 (ea-php84)**, the same as the voting site. Leave every other row as it is.
+- Check the extensions. Open cPanel → **Terminal** and run
   `/opt/cpanel/ea-php84/root/usr/bin/php -m`. These must be listed:
   `pdo_pgsql, zip, gd, dom, xml, simplexml, xmlreader, xmlwriter, fileinfo, mbstring, iconv, openssl, curl`.
-- If one is missing, it is added in WHM → **EasyApache 4** → PHP Extensions (`ea-php84-php-…`).
+  The voting system already needs most of them. `zip` (for reading the Excel forms) is
+  the one most likely missing.
+- This server runs **CloudLinux** (the `.cagefs` and `.cl.selector` folders). If an
+  extension is missing, don't use "Select PHP Version": it changes PHP for the whole
+  account. Ask the host (JaguarPC) to enable it for **ea-php84**, the way the voting
+  site's PHP was set up. Adding an extension does not change the other sites.
+- Install the PHP libraries (the `vendor` folder, which is not in GitHub). In Terminal:
+  ```bash
+  cd ~/oha
+  alias php=/opt/cpanel/ea-php84/root/usr/bin/php        # PHP 8.4 for this session
+  php -v                                                   # must say 8.4
+  php /opt/cpanel/composer/bin/composer install --no-dev --optimize-autoloader
+  ```
+  If `/opt/cpanel/composer/bin/composer` is not there, run `which composer` and use that path.
 
-### 4. Create the database
+### 5. Create the database
 cPanel → **PostgreSQL Databases**:
 1. Create the database `oha`. cPanel names it `africaym_oha`.
 2. Create the user `oha` (`africaym_oha`) with a strong password. Keep the password.
 3. Add the user to the database with **all privileges**.
 
 Check the Postgres version in Terminal with `psql --version`. Version 13 or newer is fine.
-
-### 5. Get the code
-In cPanel Terminal:
-```bash
-cd ~
-git clone https://github.com/aaymca-news/OHA.git oha
-cd oha
-alias php=/opt/cpanel/ea-php84/root/usr/bin/php        # PHP 8.4 for this session
-php -v                                                   # must say 8.4
-php /opt/cpanel/composer/bin/composer install --no-dev --optimize-autoloader
-```
-If `/opt/cpanel/composer/bin/composer` is not there, run `which composer` and use that path.
 
 ### 6. Settings (`.env`)
 ```bash
@@ -70,7 +114,7 @@ LOG_LEVEL=warning
 DB_HOST=127.0.0.1
 DB_DATABASE=africaym_oha
 DB_USERNAME=africaym_oha
-DB_PASSWORD=the password from step 4
+DB_PASSWORD=the password from step 5
 
 SESSION_SECURE_COOKIE=true
 
@@ -134,6 +178,9 @@ reached the server (step 1).
 2. Sign in as the Super Administrator. The dashboard says 0 of 23 movements rated.
 3. Invite a second Administrator. If their email arrives, mail and the queue cron work.
 4. **National Movements** lists all 23.
+5. `https://oha.ymcaafricaalliance.org/error_log` and `…/.env` both answer **403 Forbidden**
+   or **404 Not Found**, never a file.
+6. `https://africaymca.org` and the voting site still open and work as before.
 
 ### 13. Make the GitHub repository private
 On GitHub: aaymca-news/OHA → Settings → General → Danger Zone → **Change visibility** →
@@ -163,12 +210,14 @@ cat ~/.ssh/oha_deploy.pub
 
 On the PC: commit, then run `./push-platform.sh`.
 
-On the server (cPanel Terminal):
+On the server, bring the new code in. Either use cPanel → **Git™ Version Control** → OHA →
+**Manage** → **Pull or Deploy** → **Update from Remote**, or run the `git pull` line below.
+Then, in Terminal:
 ```bash
 cd ~/oha
 alias php=/opt/cpanel/ea-php84/root/usr/bin/php
 php artisan down --retry=60
-git pull --ff-only origin main
+git pull --ff-only origin main      # skip if you used "Update from Remote"
 php /opt/cpanel/composer/bin/composer install --no-dev --optimize-autoloader
 php artisan migrate --force
 php artisan optimize
