@@ -108,9 +108,14 @@ cPanel → **Domains** → **Create A New Domain** → `oha.ymcaafricaalliance.o
 
 ### 5. Create the database
 cPanel → **PostgreSQL Databases**:
-1. Create the database `oha`. cPanel names it `africaym_oha`.
-2. Create the user `oha` (`africaym_oha`) with a strong password. Keep the password.
-3. Add the user to the database with **all privileges**.
+1. Create the database `oha`. cPanel names it `africaym_oha`, like the voting system's `africaym_voting`.
+2. Create the user `oha_user` (`africaym_oha_user`), with a password from **Password Generator**. Keep the password.
+   **Watch out:** the browser may autofill the Username and Password boxes with the cPanel
+   login. Clear both before creating the user.
+3. **Add User To Database**: choose `africaym_oha_user` and `africaym_oha`, then Submit. The lists start
+   on the voting system's user and database, so change both first.
+4. Check in Terminal (it asks for the password):
+   `psql -U africaym_oha_user -d africaym_oha -c "select version();"`
 
 This server runs **PostgreSQL 10**, which is old but supported. The platform's database
 code avoids anything newer, e.g. its triggers use `EXECUTE PROCEDURE`, not
@@ -131,7 +136,7 @@ LOG_LEVEL=warning
 
 DB_HOST=127.0.0.1
 DB_DATABASE=africaym_oha
-DB_USERNAME=africaym_oha
+DB_USERNAME=africaym_oha_user
 DB_PASSWORD=the password from step 5
 
 SESSION_SECURE_COOKIE=true
@@ -249,7 +254,7 @@ These two hold everything. Neither is in GitHub:
 
 | What | Where |
 |---|---|
-| The database | `pg_dump -U africaym_oha -d africaym_oha --no-owner -f ~/backups/oha-$(date +%F).sql` |
+| The database | `pg_dump -U africaym_oha_user -d africaym_oha --no-owner -f ~/backups/oha-$(date +%F).sql` |
 | Uploaded files: forms, reports, ODPs, signatures | `/home/africaym/oha/storage/app/private/oha` |
 
 If `pg_dump` fails with an SSL or `pg_hba` error, leave out `-h`, as on the voting server.
