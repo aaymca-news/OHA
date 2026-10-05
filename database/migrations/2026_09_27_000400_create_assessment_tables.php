@@ -91,7 +91,7 @@ return new class extends Migration
 
             CREATE TRIGGER board_signatures_frozen
                 BEFORE UPDATE ON board_signatures
-                FOR EACH ROW EXECUTE FUNCTION board_signatures_reject_update();
+                FOR EACH ROW EXECUTE PROCEDURE board_signatures_reject_update();
             SQL);
 
         Schema::create('artefact_comments', function (Blueprint $table) {
@@ -144,7 +144,7 @@ return new class extends Migration
 
             CREATE TRIGGER category_scores_frozen
                 BEFORE UPDATE ON category_scores
-                FOR EACH ROW EXECUTE FUNCTION category_scores_reject_update();
+                FOR EACH ROW EXECUTE PROCEDURE category_scores_reject_update();
             SQL);
 
         Schema::create('form_findings', function (Blueprint $table) {

@@ -81,14 +81,29 @@ cPanel → **Domains** → **Create A New Domain** → `oha.ymcaafricaalliance.o
   extension is missing, don't use "Select PHP Version": it changes PHP for the whole
   account. Ask the host (JaguarPC) to enable it for **ea-php84**, the way the voting
   site's PHP was set up. Adding an extension does not change the other sites.
-- Install the PHP libraries (the `vendor` folder, which is not in GitHub). In Terminal:
+- Composer downloads the PHP libraries (the `vendor` folder, which is not in GitHub).
+  The server has no Composer, so install it once, into your own `~/bin`. This affects
+  your account only: nothing of the main site or the voting system. The installer is
+  checked against Composer's published fingerprint before it runs:
+  ```bash
+  PHP=/opt/cpanel/ea-php84/root/usr/bin/php
+  mkdir -p ~/bin && cd ~/bin
+  $PHP -r "copy('https://getcomposer.org/installer', 'composer-setup.php');"
+  if [ "$(curl -s https://composer.github.io/installer.sig)" = "$($PHP -r "echo hash_file('sha384', 'composer-setup.php');")" ]; then
+      $PHP composer-setup.php --install-dir="$HOME/bin" --filename=composer && echo "Composer installed"
+  else
+      echo "Installer fingerprint does not match: not installed"
+  fi
+  rm -f composer-setup.php
+  $PHP ~/bin/composer --version
+  ```
+- Install the libraries:
   ```bash
   cd ~/oha
   alias php=/opt/cpanel/ea-php84/root/usr/bin/php        # PHP 8.4 for this session
   php -v                                                   # must say 8.4
-  php /opt/cpanel/composer/bin/composer install --no-dev --optimize-autoloader
+  php ~/bin/composer install --no-dev --optimize-autoloader
   ```
-  If `/opt/cpanel/composer/bin/composer` is not there, run `which composer` and use that path.
 
 ### 5. Create the database
 cPanel → **PostgreSQL Databases**:
@@ -96,7 +111,9 @@ cPanel → **PostgreSQL Databases**:
 2. Create the user `oha` (`africaym_oha`) with a strong password. Keep the password.
 3. Add the user to the database with **all privileges**.
 
-Check the Postgres version in Terminal with `psql --version`. Version 13 or newer is fine.
+This server runs **PostgreSQL 10**, which is old but supported. The platform's database
+code avoids anything newer, e.g. its triggers use `EXECUTE PROCEDURE`, not
+`EXECUTE FUNCTION`.
 
 ### 6. Settings (`.env`)
 ```bash
@@ -218,7 +235,7 @@ cd ~/oha
 alias php=/opt/cpanel/ea-php84/root/usr/bin/php
 php artisan down --retry=60
 git pull --ff-only origin main      # skip if you used "Update from Remote"
-php /opt/cpanel/composer/bin/composer install --no-dev --optimize-autoloader
+php ~/bin/composer install --no-dev --optimize-autoloader
 php artisan migrate --force
 php artisan optimize
 php artisan queue:restart
