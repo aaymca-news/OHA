@@ -83,19 +83,21 @@ cPanel → **Domains** → **Create A New Domain** → `oha.ymcaafricaalliance.o
   site's PHP was set up. Adding an extension does not change the other sites.
 - Composer downloads the PHP libraries (the `vendor` folder, which is not in GitHub).
   The server has no Composer, so install it once, into your own `~/bin`. This affects
-  your account only: nothing of the main site or the voting system. The installer is
-  checked against Composer's published fingerprint before it runs:
+  your account only: nothing of the main site or the voting system. It is downloaded
+  with `curl` (PHP itself may not download files on this server) and checked against
+  Composer's published SHA-256 fingerprint before it is kept:
   ```bash
   PHP=/opt/cpanel/ea-php84/root/usr/bin/php
   mkdir -p ~/bin && cd ~/bin
-  $PHP -r "copy('https://getcomposer.org/installer', 'composer-setup.php');"
-  if [ "$(curl -s https://composer.github.io/installer.sig)" = "$($PHP -r "echo hash_file('sha384', 'composer-setup.php');")" ]; then
-      $PHP composer-setup.php --install-dir="$HOME/bin" --filename=composer && echo "Composer installed"
+  curl -fsSL -o composer https://getcomposer.org/download/latest-stable/composer.phar
+  EXPECTED=$(curl -fsSL https://getcomposer.org/download/latest-stable/composer.phar.sha256sum | cut -d' ' -f1)
+  ACTUAL=$(sha256sum composer | cut -d' ' -f1)
+  if [ -n "$EXPECTED" ] && [ "$EXPECTED" = "$ACTUAL" ]; then
+      chmod 700 composer && $PHP composer --version
   else
-      echo "Installer fingerprint does not match: not installed"
+      echo "Fingerprint does not match: removed"; rm -f composer
   fi
-  rm -f composer-setup.php
-  $PHP ~/bin/composer --version
+  cd ~
   ```
 - Install the libraries:
   ```bash
