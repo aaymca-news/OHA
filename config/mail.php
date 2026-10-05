@@ -47,6 +47,10 @@ return [
             'password' => env('MAIL_PASSWORD'),
             'timeout' => null,
             'local_domain' => env('MAIL_EHLO_DOMAIN', parse_url((string) env('APP_URL', 'http://localhost'), PHP_URL_HOST)),
+            // Checks the mail server's certificate. If the server's certificate is for another
+            // name (cPanel's is for its own hostname), set MAIL_HOST to that name; only if that
+            // is impossible, set MAIL_VERIFY_PEER=false. The connection stays encrypted.
+            'verify_peer' => env('MAIL_VERIFY_PEER', true),
         ],
 
         'ses' => [
