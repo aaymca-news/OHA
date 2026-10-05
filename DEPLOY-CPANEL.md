@@ -48,19 +48,18 @@ Then point that address at the server. Look where the parent domain's DNS is man
 **Zone Editor** instead, cPanel adds the record itself in step 3.
 
 ### 2. Get the code from GitHub, as for the voting system
-cPanel → **Git™ Version Control** → **Create**:
-- **Clone a Repository**: on
-- **Clone URL**: `https://github.com/aaymca-news/OHA.git`
-- **Repository Path**: `oha`, which is `/home/africaym/oha`. It sits beside `motion-vote`,
-  never inside `public_html`.
-- **Repository Name**: `OHA`
+The voting system was cloned in the Terminal, not with cPanel's Git™ Version Control
+(which lists no repositories). Do the same. In cPanel → **Terminal**:
+```bash
+cd ~ && git clone https://github.com/aaymca-news/OHA.git oha && cd ~/oha && git log -1 --format='%h %an | %s' && ls && ls public && cd ~
+```
+This creates `/home/africaym/oha`, beside `motion-vote` and never inside `public_html`.
+It must come **before** step 3: `git clone` only works into a folder that does not
+exist yet, and creating the domain first would create `oha/public`.
 
-This must come **before** step 3. cPanel only clones into a folder that does not exist
-yet, and creating the domain first would create `oha/public`.
-
-When it has finished, the list shows OHA next to the voting repository. In File
-Manager, `/home/africaym/oha` holds `app`, `public` and the rest of the code. It has no
-`vendor` folder and no `.env` yet; steps 4 and 6 add them.
+The output ends with the latest commit and the code's folders (`app`, `config`,
+`database`, `public`, …). There is no `vendor` folder and no `.env` yet; steps 4 and 6
+add them.
 
 ### 3. Create the domain
 cPanel → **Domains** → **Create A New Domain** → `oha.ymcaafricaalliance.org`.
@@ -229,14 +228,12 @@ cat ~/.ssh/oha_deploy.pub
 
 On the PC: commit, then run `./push-platform.sh`.
 
-On the server, bring the new code in. Either use cPanel → **Git™ Version Control** → OHA →
-**Manage** → **Pull or Deploy** → **Update from Remote**, or run the `git pull` line below.
-Then, in Terminal:
+On the server, in cPanel → Terminal:
 ```bash
 cd ~/oha
 alias php=/opt/cpanel/ea-php84/root/usr/bin/php
 php artisan down --retry=60
-git pull --ff-only origin main      # skip if you used "Update from Remote"
+git pull --ff-only origin main
 php ~/bin/composer install --no-dev --optimize-autoloader
 php artisan migrate --force
 php artisan optimize
