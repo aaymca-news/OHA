@@ -1,0 +1,61 @@
+<?php
+
+namespace App\Http\Controllers;
+
+use App\Enums\DocumentFormat;
+use App\Models\BoardSignature;
+use App\Models\Document;
+use App\Models\FormUpload;
+use Illuminate\Support\Facades\Gate;
+use Illuminate\Support\Facades\Storage;
+use Symfony\Component\HttpFoundation\BinaryFileResponse;
+use Symfony\Component\HttpFoundation\StreamedResponse;
+
+/**
+ * Hands out stored OHA files, under the name they were uploaded with. Who may
+ * download what is decided by the policies, on the routes.
+ */
+class DownloadController extends Controller
+{
+    public function form(FormUpload $formUpload): StreamedResponse
+    {
+        return Storage::disk($formUpload->disk)->download($formUpload->path, $formUpload->original_name);
+    }
+
+    public function document(Document $document): StreamedResponse
+    {
+        return Storage::disk($document->disk)->download($document->path, $document->original_name);
+    }
+
+    /**
+     * The same file, shown in the page rather than saved: a PDF opens in the browser's
+     * own viewer, and a Word file is drawn on the page by docx-preview.
+     */
+    public function preview(Document $document): StreamedResponse
+    {
+        abort_unless($document->canPreview(), 404);
+
+        $type = $document->format === DocumentFormat::Pdf
+            ? 'application/pdf'
+            : 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+
+        return Storage::disk($document->disk)->response($document->path, $document->original_name, [
+            'Content-Type' => $type,
+            'X-Content-Type-Options' => 'nosniff',
+            'Cache-Control' => 'private, max-age=0, must-revalidate',
+        ], 'inline');
+    }
+
+    /** The drawn board signature, shown to whoever may see the signed document. */
+    public function signature(BoardSignature $signature): StreamedResponse
+    {
+        Gate::authorize('view', $signature->artefact);
+
+        return Storage::disk($signature->signature_disk)->response($signature->signature_path, 'signature.png', ['Content-Type' => 'image/png']);
+    }
+
+    public function blankForm(): BinaryFileResponse
+    {
+        return response()->download((string) config('oha.blank_form'), 'YMCA OHA Form 2026 (blank).xlsx');
+    }
+}

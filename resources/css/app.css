@@ -1,0 +1,169 @@
+@import '@fontsource/ibm-plex-sans/400.css';
+@import '@fontsource/ibm-plex-sans/500.css';
+@import '@fontsource/ibm-plex-sans/600.css';
+@import '@fontsource/ibm-plex-sans/700.css';
+@import 'material-symbols/outlined.css';
+
+@import 'tailwindcss';
+
+@source '../../vendor/laravel/framework/src/Illuminate/Pagination/resources/views/*.blade.php';
+@source '../../storage/framework/views/*.php';
+
+/*
+ * Design tokens from the Africa Alliance of YMCAs brand manual: black (100k), red
+ * (Pantone 032C / 0c 100m 100y 0k), and the greys of the Africa device (35k) and the
+ * mono triangle (80k). Typeface: Univers, where installed.
+ *
+ * Brand red on white is 3.9:1, under the 4.5:1 that small text needs, so red is for
+ * the logo, markers and accents; red TEXT uses brand-red-ink (5.9:1). Primary actions
+ * are brand black.
+ */
+@theme {
+    --font-sans: 'Univers', 'Univers LT Std', 'Univers Next', 'IBM Plex Sans', ui-sans-serif, system-ui, sans-serif;
+
+    --color-brand-red: #ef3340;
+    --color-brand-red-ink: #c8102e;
+    --color-brand-red-wash: #fdecee;
+    --color-brand-grey: #b1b3b6;
+    --color-brand-grey-dark: #58595b;
+
+    --color-primary: #231f20;
+    --color-on-primary: #ffffff;
+    --color-primary-container: #58595b;
+    --color-secondary: #c8102e;
+    --color-secondary-container: #fea619;
+    --color-on-secondary: #ffffff;
+    --color-tertiary: #231f20;
+    --color-error: #c8102e;
+    --color-on-error: #ffffff;
+    --color-error-container: #fdecee;
+    --color-on-error-container: #93000a;
+    --color-background: #f6f6f6;
+    --color-surface: #f6f6f6;
+    --color-on-surface: #231f20;
+    --color-on-surface-variant: #4d4d4f;
+    --color-surface-variant: #dcddde;
+    --color-surface-container-lowest: #ffffff;
+    --color-surface-container-low: #f1f1f2;
+    --color-surface-container: #e9e9ea;
+    --color-surface-container-high: #e2e2e3;
+    --color-outline: #808285;
+    --color-outline-variant: #c7c8ca;
+
+    /* Health bands — always paired with an icon and label, never colour alone. */
+    --color-band-strong: #0ca30c;
+    --color-band-developing: #fab219;
+    --color-band-atrisk: #ec835a;
+    --color-band-critical: #d03b3b;
+    --color-band-notstarted: #898781;
+
+    /* Status tones: dark ink on a pale wash, always with an icon and a label. */
+    --color-good-ink: #065f06;
+    --color-good-wash: #e6f6e6;
+    --color-info-ink: #1d4f91;
+    --color-info-wash: #e8f0fb;
+    --color-warning-ink: #7a5200;
+    --color-warning-wash: #fdf3e0;
+    --color-serious-ink: #8c3d18;
+    --color-serious-wash: #fdeee7;
+    --color-critical-ink: #8c1d1d;
+    --color-critical-wash: #fbeaea;
+    --color-neutral-ink: #4f4e4a;
+    --color-neutral-wash: #f1f1ef;
+
+    /*
+     * Charts. Categorical slots for identity (funding and spending mixes), in this fixed
+     * order, never cycled; validated on white (slots 3–5 are under 3:1, so every such chart
+     * shows its values as text and has a table view). The heat ramp is the brand's greys,
+     * light to dark, ending in brand black, for magnitude (a category's score, Critical →
+     * Excellent): lightness monotone, clear steps, light end 2.4:1 on white; greys carry no
+     * hue, so the one-hue check does not apply. Cell text: brand black on steps 1–2 (6.9
+     * and 4.9:1), white on 3–5 (6.0:1 and up). Validated with validate_palette.js, 30 Sep 2026.
+     */
+    --color-viz-1: #2a78d6;
+    --color-viz-2: #eb6834;
+    --color-viz-3: #1baf7a;
+    --color-viz-4: #eda100;
+    --color-viz-5: #e87ba4;
+    --color-viz-6: #008300;
+    --color-heat-1: #a8a8a8;
+    --color-heat-2: #8c8c8c;
+    --color-heat-3: #636363;
+    --color-heat-4: #434343;
+    --color-heat-5: #231f20;
+
+    --radius-DEFAULT: 0.25rem;
+    --radius-lg: 0.5rem;
+    --radius-xl: 0.75rem;
+
+    --spacing-xs: 4px;
+    --spacing-sm: 8px;
+    --spacing-md: 16px;
+    --spacing-lg: 24px;
+    --spacing-xl: 40px;
+    --spacing-gutter: 24px;
+}
+
+@layer base {
+    body {
+        @apply bg-background text-on-surface antialiased;
+        line-height: 1.55;
+    }
+
+    /* Password boxes have their own show/hide button; hide Edge's built-in one so there are not two. */
+    input::-ms-reveal,
+    input::-ms-clear {
+        display: none;
+    }
+
+    /* Placeholders at full contrast, not the browser's faint default. */
+    ::placeholder {
+        color: var(--color-on-surface-variant);
+        opacity: 1;
+    }
+}
+
+/*
+ * Readability. Every text size is in rem, so the reader's own browser setting counts,
+ * and the "Text size" choice (user menu) scales the whole page from here.
+ */
+html[data-text-size='large'] {
+    font-size: 112.5%;
+}
+html[data-text-size='larger'] {
+    font-size: 125%;
+}
+
+/* A thick, high-contrast outline wherever the keyboard is. */
+:focus-visible {
+    outline: 3px solid var(--color-primary);
+    outline-offset: 2px;
+    border-radius: 2px;
+}
+
+/*
+ * The menu on wide screens: as wide as the viewer dragged it, but never under 13rem
+ * nor over a quarter of the window, and hidden entirely when they close it.
+ */
+@media (min-width: 64rem) {
+    .sidebar-shell {
+        width: clamp(13rem, var(--sidebar-w, 15rem), 25vw);
+    }
+    html[data-sidebar='collapsed'] .sidebar-shell {
+        display: none;
+    }
+    .topbar-logo {
+        display: none;
+    }
+    html[data-sidebar='collapsed'] .topbar-logo {
+        display: block;
+    }
+}
+
+.material-symbols-outlined {
+    font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+}
+
+[x-cloak] {
+    display: none !important;
+}
