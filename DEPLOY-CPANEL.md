@@ -30,22 +30,26 @@ Names used below. Change them if you choose others:
 |---|---|
 | cPanel account | `africaym` |
 | App folder | `/home/africaym/oha` |
-| Address | `https://oha.ymcaafricaalliance.org` |
+| Address | `https://oha.africaymca.org` |
+| Server | darrell.nocdirect.com, IP **74.81.95.251** (not 205.251.145.90, which is no longer ours) |
 | PHP 8.4 (command line) | `/opt/cpanel/ea-php84/root/usr/bin/php` |
+
+**Live since 6 Oct 2026** at `https://oha.africaymca.org`. Part A is how it was set up; for
+a rebuild, follow it again. Part B is the routine for every update.
 
 ---
 
 ## Part A: once, to go live
 
-### 1. Choose the address, the way the voting site's was chosen
-cPanel → **Domains**: find the row whose document root is `/home/africaym/motion-vote/public`.
-That is the voting site's address. Give OHA the same kind of address, e.g. `oha.` instead
-of `vote.` on the same parent domain. This guide uses `oha.ymcaafricaalliance.org`.
+### 1. The address, and pointing it at the server
+OHA is a **subdomain of the account's main domain**, `oha.africaymca.org`. A subdomain of
+another domain (e.g. `oha.ymcaafricaalliance.org`) counts as an **addon domain**: the
+account allows only one, which the voting site (`vote.ymcaafricaalliance.org`) uses, and cPanel also refuses it because
+that domain's DNS is at GoDaddy, not on this server.
 
-Then point that address at the server. Look where the parent domain's DNS is managed
-(the voting runbook says GoDaddy for `ymcaafricaalliance.org`). Add **one** A record:
-`oha` → the same IP as the voting address. If the parent domain's DNS is in cPanel's own
-**Zone Editor** instead, cPanel adds the record itself in step 3.
+The DNS for `africaymca.org` is at **GoDaddy**. Add **one** A record there: Name `oha`,
+Value `74.81.95.251`. Use **Add New Record**: the pencil on an existing row (e.g. `www`)
+edits the main website's record instead. Check with `dig +short oha.africaymca.org`.
 
 ### 2. Get the code from GitHub, as for the voting system
 The voting system was cloned in the Terminal, not with cPanel's Git™ Version Control
@@ -62,14 +66,19 @@ The output ends with the latest commit and the code's folders (`app`, `config`,
 add them.
 
 ### 3. Create the domain
-cPanel → **Domains** → **Create A New Domain** → `oha.ymcaafricaalliance.org`.
+cPanel → **Domains** → **Create A New Domain** → `oha.africaymca.org`.
 - **Untick** "Share document root (/home/africaym/public_html)". This is what keeps OHA
   out of the main site.
-- Set **Document Root** to `oha/public`, which is `/home/africaym/oha/public`. It already
-  exists, from step 2.
+- Set **Document Root** to just `oha/public`. cPanel adds `/home/africaym/` itself:
+  typing the full path makes `/home/africaym/home/africaym/oha/public`, an empty folder.
+  The Domains list must show `/oha/public`. It already exists, from step 2.
+- cPanel rewrites the PHP block at the end of `public/.htaccess` when it sets up the
+  domain. The copy in Git matches what it writes, so `git status` stays clean; if it
+  ever shows `public/.htaccess` changed, check the diff still says `ea-php84`, then
+  `git checkout -- public/.htaccess`.
 
 ### 4. PHP 8.4, its extensions, and the PHP libraries
-- cPanel → **MultiPHP Manager**: tick **only** `oha.ymcaafricaalliance.org` and set it to
+- cPanel → **MultiPHP Manager**: tick **only** `oha.africaymca.org` and set it to
   **PHP 8.4 (ea-php84)**, the same as the voting site. Leave every other row as it is.
 - Check the extensions. Open cPanel → **Terminal** and run
   `/opt/cpanel/ea-php84/root/usr/bin/php -m`. These must be listed:
@@ -131,7 +140,7 @@ Set these, and leave the rest as they are:
 ```
 APP_ENV=production
 APP_DEBUG=false
-APP_URL=https://oha.ymcaafricaalliance.org
+APP_URL=https://oha.africaymca.org
 LOG_LEVEL=warning
 
 DB_HOST=127.0.0.1
@@ -202,15 +211,15 @@ The first runs scheduled tasks: reminders, and the Google Drive check once it is
 connected. The second sends notifications and emails, which wait in a queue.
 
 ### 11. HTTPS
-cPanel → **SSL/TLS Status** → run **AutoSSL** for `oha.ymcaafricaalliance.org` once DNS has
+cPanel → **SSL/TLS Status** → run **AutoSSL** for `oha.africaymca.org` once DNS has
 reached the server (step 1).
 
 ### 12. Check it works
-1. Open `https://oha.ymcaafricaalliance.org`. The sign-in page shows the AAYMCA logo.
+1. Open `https://oha.africaymca.org`. The sign-in page shows the AAYMCA logo.
 2. Sign in as the Super Administrator. The dashboard says 0 of 23 movements rated.
 3. Invite a second Administrator. If their email arrives, mail and the queue cron work.
 4. **National Movements** lists all 23.
-5. `https://oha.ymcaafricaalliance.org/error_log` and `…/.env` both answer **403 Forbidden**
+5. `https://oha.africaymca.org/error_log` and `…/.env` both answer **403 Forbidden**
    or **404 Not Found**, never a file.
 6. `https://africaymca.org` and the voting site still open and work as before.
 
