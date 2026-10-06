@@ -1,8 +1,9 @@
 <?php
 
 /**
- * The 23 National Movements: name, zone, membership status, city, and the planned
- * assessment period where AAYMCA has scheduled one.
+ * The 23 National Movements: name, zone, membership status and city. None starts with a
+ * planned assessment: the quarters in the old risk register were never scheduled in OHA,
+ * so every movement shows "Not scheduled" until one is.
  *
  * Membership status and city from africaymca.org/national-movements (checked 25 Sep 2026).
  * No ratings are held here: a movement is rated only when its OHA form is validated.
@@ -40,19 +41,19 @@ return [
     ['slug' => 'burundi', 'name' => 'Burundi YMCA', 'country' => 'Burundi', 'city' => 'Bujumbura',
         'zone' => 'east', 'membership' => 'formation', 'planned' => null],
     ['slug' => 'kenya', 'name' => 'Kenya YMCA', 'country' => 'Kenya', 'city' => 'Nairobi',
-        'zone' => 'east', 'membership' => 'chartered', 'planned' => ['label' => 'Qtr 4 2026', 'on' => '2026-10-01']],
+        'zone' => 'east', 'membership' => 'chartered', 'planned' => null],
     ['slug' => 'benin', 'name' => 'Benin YMCA', 'country' => 'Benin', 'city' => 'Cotonou',
-        'zone' => 'west', 'membership' => 'associate', 'planned' => ['label' => 'Qtr 1 2027', 'on' => '2027-01-01']],
+        'zone' => 'west', 'membership' => 'associate', 'planned' => null],
     ['slug' => 'niger', 'name' => 'Niger YMCA', 'country' => 'Niger', 'city' => 'Niamey',
-        'zone' => 'west', 'membership' => 'chartered', 'planned' => ['label' => 'Qtr 1 2027', 'on' => '2027-01-01']],
+        'zone' => 'west', 'membership' => 'chartered', 'planned' => null],
     ['slug' => 'tanzania', 'name' => 'Tanzania YMCA', 'country' => 'Tanzania', 'city' => 'Dodoma',
-        'zone' => 'east', 'membership' => 'chartered', 'planned' => ['label' => 'TBD', 'on' => null]],
+        'zone' => 'east', 'membership' => 'chartered', 'planned' => null],
     ['slug' => 'gambia', 'name' => 'Gambia YMCA', 'country' => 'Gambia', 'city' => 'Banjul',
-        'zone' => 'west', 'membership' => 'chartered', 'planned' => ['label' => 'Qtr 4 2026', 'on' => '2026-10-01']],
+        'zone' => 'west', 'membership' => 'chartered', 'planned' => null],
     ['slug' => 'malawi', 'name' => 'Malawi YMCA', 'country' => 'Malawi', 'city' => 'Lilongwe',
-        'zone' => 'southern', 'membership' => 'formation', 'planned' => ['label' => 'TBD', 'on' => null]],
+        'zone' => 'southern', 'membership' => 'formation', 'planned' => null],
     ['slug' => 'guinea-bissau', 'name' => 'Guinea-Bissau YMCA', 'country' => 'Guinea-Bissau', 'city' => 'Bissau',
-        'zone' => 'west', 'membership' => 'formation', 'planned' => ['label' => 'Qtr 1 2027', 'on' => '2027-01-01']],
+        'zone' => 'west', 'membership' => 'formation', 'planned' => null],
     ['slug' => 'guinea-conakry', 'name' => 'Guinea YMCA', 'country' => 'Guinea', 'city' => 'Conakry',
-        'zone' => 'west', 'membership' => 'formation', 'planned' => ['label' => 'Qtr 1 2027', 'on' => '2027-01-01']],
+        'zone' => 'west', 'membership' => 'formation', 'planned' => null],
 ];
