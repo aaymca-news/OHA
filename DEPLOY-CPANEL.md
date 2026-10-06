@@ -177,10 +177,19 @@ php artisan oha:create-super-admin raymond@africaymca.org "Raymond Njiru"
 It prints a link. Open it to set the password; it works once, for 7 days. Run the command
 again for a new link. From then on, invite people from **Users & Roles**.
 
-### 9. Speed up, and file permissions
+### 9. File permissions, and speed up
+**This server refuses to run PHP from group-writable files**: it answers every page
+with a bare `500 Internal Server Error` and Laravel writes no log. Files created in the
+Terminal here are group-writable by default (`664`/`775`), so set the standard
+permissions, the same as the voting site's, and make new files standard from now on:
 ```bash
+cd ~/oha
+find ~/oha -type d -exec chmod 755 {} +
+find ~/oha -type f -exec chmod 644 {} +
+git ls-files -s | awk '$1=="100755"{print $4}' | xargs -r chmod 755
+chmod 600 ~/oha/.env
+grep -qx 'umask 022' ~/.bashrc || echo 'umask 022' >> ~/.bashrc   # new files: 644/755
 php artisan optimize          # caches settings, routes, views and events
-chmod -R ug+rwX storage bootstrap/cache
 ```
 
 ### 10. Background work (cron)
@@ -240,6 +249,9 @@ alias php=/opt/cpanel/ea-php84/root/usr/bin/php
 php artisan down --retry=60
 git pull --ff-only origin main
 php ~/bin/composer install --no-dev --optimize-autoloader
+find ~/oha -type d ! -perm 755 -exec chmod 755 {} +       # new files must not be group-writable,
+find ~/oha -type f -perm /022 -exec chmod go-w {} +        # or the server answers 500
+chmod 600 ~/oha/.env
 php artisan migrate --force
 php artisan optimize
 php artisan queue:restart
