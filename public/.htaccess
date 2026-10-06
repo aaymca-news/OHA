@@ -32,9 +32,10 @@
 
 # On the cPanel server, PHP 8.4 runs this site. cPanel writes this block itself when the
 # PHP version is chosen; keeping it in Git stops a `git pull` from conflicting with it.
-# Other servers ignore it.
+# Other servers ignore it. (Kept exactly as cPanel writes it, curly quotes included.)
+
 # php -- BEGIN cPanel-generated handler, do not edit
-# Set the "ea-php84" package as the default "PHP" programming language.
+# Set the “ea-php84” package as the default “PHP” programming language.
 <IfModule mime_module>
   AddHandler application/x-httpd-ea-php84 .php .php8 .phtml
 </IfModule>
