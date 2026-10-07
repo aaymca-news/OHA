@@ -12,6 +12,7 @@ use App\Models\Artefact;
 use App\Models\Assessment;
 use App\Models\AssessmentMilestone;
 use App\Models\Document;
+use App\Models\FormUpload;
 use App\Models\Movement;
 use App\Oha\CategoryRows;
 use App\Oha\DqaSummary;
@@ -93,7 +94,12 @@ class AssessmentController extends Controller
         $tab = $tabs->contains($request->query('tab')) ? $request->query('tab') : $tabs->first();
 
         $milestones = AssessmentMilestone::query()->where('assessment_id', $assessment->id)->orderBy('sort_order')->get();
-        $upload = $tabs->contains('form') ? $form->currentUpload()->with('findings.category', 'findings.resolver')->first() : null;
+        // The assessors and the Administrators work on the latest upload; everyone else sees
+        // the approved one, also while a corrected form waits for approval.
+        $seesDrafts = $user->oversees() || $user->canAssess($assessment->movement);
+        $uploads = $tabs->contains('form') ? $form->uploads()->with('uploader', 'approver')->latest('id')->get()
+            ->filter(fn (FormUpload $u) => $seesDrafts || $u->isApproved())->values() : collect();
+        $upload = $uploads->first()?->load('findings.category', 'findings.resolver');
         $formMilestone = $milestones->firstWhere('gate_code', 'form');
 
         return view('assessments.show', [
@@ -104,7 +110,8 @@ class AssessmentController extends Controller
             'milestones' => $milestones,
             'rows' => CategoryRows::for($assessment),
             'upload' => $upload,
-            'uploads' => $tabs->contains('form') ? $form->uploads()->with('uploader')->latest('id')->get() : collect(),
+            'uploads' => $uploads,
+            'previewing' => $uploads->firstWhere('id', (int) $request->query('upload')) ?? $upload,
             // Before validation the score is provisional: recomputed from the answers, not yet recorded.
             'provisional' => $upload !== null ? array_sum(array_filter($scorer->score($upload->answers, $upload->form_meta['missing_sheets'] ?? []))) : null,
             'dqa' => $upload !== null ? DqaSummary::of($upload->findings, (bool) ($formMilestone?->overdue || $formMilestone?->completed_late)) : null,

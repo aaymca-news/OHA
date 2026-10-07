@@ -22,6 +22,7 @@ enum FindingRule: string
     case Inconsistent = 'inconsistent';
     case InvalidOption = 'invalid_option';
     case NonNumeric = 'non_numeric';
+    case WrongUnit = 'wrong_unit';
     case OutOfRange = 'out_of_range';
     case FormVersion = 'form_version';
     case ScoringNote = 'scoring_note';
@@ -44,7 +45,7 @@ enum FindingRule: string
             self::Unreadable, self::MissingSheet, self::EmptyForm, self::MissingSection,
             self::Unanswered, self::ConditionalMissing, self::CommentMissing,
             self::ReportSectionMissing, self::ReportCategoryMissing => DqaDimension::Completeness,
-            self::MovementMismatch, self::TotalMismatch, self::FormulaOverwritten, self::ReportScoreMismatch => DqaDimension::Accuracy,
+            self::MovementMismatch, self::TotalMismatch, self::FormulaOverwritten, self::WrongUnit, self::ReportScoreMismatch => DqaDimension::Accuracy,
             self::SumMismatch, self::Inconsistent => DqaDimension::Consistency,
             self::InvalidOption, self::NonNumeric, self::OutOfRange, self::FormVersion, self::ScoringNote,
             self::ReportUnreadable, self::ReportScoreUnreadable => DqaDimension::Validity,

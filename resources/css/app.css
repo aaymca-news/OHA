@@ -167,3 +167,29 @@ html[data-text-size='larger'] {
 [x-cloak] {
     display: none !important;
 }
+
+/*
+ * A workbook shown like Excel: a white sheet with light gridlines, in the file's own
+ * colours whatever the display mode, and its heading row kept in view while scrolling.
+ */
+.workbook {
+    color: #1f1f1f;
+}
+.workbook td,
+.workbook th {
+    border: 1px solid #d9d9d9;
+    overflow-wrap: anywhere;
+}
+.workbook .workbook-head {
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    background-color: #eef2f6;
+    box-shadow: 0 1px 0 #9aa5b1;
+}
+
+/* A signature typed by the Board Chairperson, shown in a handwriting face the device already has. */
+.signature-typed {
+    font-family: 'Segoe Script', 'Bradley Hand', 'Brush Script MT', 'Snell Roundhand', 'URW Chancery L', cursive;
+    font-style: italic;
+}

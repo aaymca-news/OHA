@@ -32,6 +32,7 @@ dataset('pages', [
     'notifications' => ['notifications.index', fn () => [], '*'],
     'my profile' => ['profile.show', fn () => [], '*'],
     'security' => ['security.show', fn () => [], '*'],
+    'resources' => ['resources', fn () => [], '*'],
     'search' => ['search', fn () => ['q' => 'zam'], '*'],
     'movements list' => ['movements.index', fn () => [], 'secretariat'],
     'assessments list' => ['assessments.index', fn () => [], 'secretariat'],
@@ -70,12 +71,15 @@ it('lets the right roles in, keeps everyone else out, and renders sound markup',
     }
 })->with('pages');
 
-it('shows the Board Chairperson the approved report and ODP, never the form or the audit trail', function () {
+it('shows the Board Chairperson the approved form, report and ODP, never the form’s gaps or the audit trail', function () {
     $audit = route('assessments.show', ['assessment' => $this->assessment->id, 'tab' => 'audit']);
+    $form = route('assessments.show', ['assessment' => $this->assessment->id, 'tab' => 'form']);
 
     $this->actingAs($this->j->chair)->get($audit)
-        ->assertDontSee('Audit trail')->assertDontSee('Score check')->assertDontSee('1. OHA form')
-        ->assertSee('2. Report')->assertSee('3. ODP');
+        ->assertDontSee('Audit trail')->assertSee('1. OHA form')->assertSee('2. Report')->assertSee('3. ODP');
+    $this->actingAs($this->j->chair)->get($form)
+        ->assertSee('Score check')->assertSee('Preview ·')
+        ->assertDontSee('What the check found')->assertDontSee('Data quality')->assertDontSee('Upload a corrected OHA form');
 });
 
 it('shows the audit trail only to the Administrators and the movement’s assessors', function () {

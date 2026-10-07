@@ -46,10 +46,11 @@ class DownloadController extends Controller
         ], 'inline');
     }
 
-    /** The drawn board signature, shown to whoever may see the signed document. */
+    /** A drawn board signature (signed before 8 Oct 2026), shown to whoever may see the signed document. */
     public function signature(BoardSignature $signature): StreamedResponse
     {
         Gate::authorize('view', $signature->artefact);
+        abort_if($signature->signature_path === null, 404);
 
         return Storage::disk($signature->signature_disk)->response($signature->signature_path, 'signature.png', ['Content-Type' => 'image/png']);
     }

@@ -83,11 +83,12 @@ final class DeleteAssessment
      * Files are stored once by content, so the same bytes may belong to another
      * assessment too. A file is removed only when nothing refers to it any more.
      *
-     * @param  list<array{disk: string, path: string}>  $files
+     * @param  list<array{disk: string|null, path: string|null}>  $files  a typed signature has no file
      */
     private function removeUnreferencedFiles(array $files): void
     {
-        foreach (collect($files)->unique(fn ($f) => $f['disk'].'|'.$f['path']) as $file) {
+        // A typed signature has no file.
+        foreach (collect($files)->filter(fn ($f) => $f['disk'] !== null && $f['path'] !== null)->unique(fn ($f) => $f['disk'].'|'.$f['path']) as $file) {
             $stillUsed = FormUpload::query()->where('disk', $file['disk'])->where('path', $file['path'])->exists()
                 || Document::query()->where('disk', $file['disk'])->where('path', $file['path'])->exists()
                 || BoardSignature::query()->where('signature_disk', $file['disk'])->where('signature_path', $file['path'])->exists();

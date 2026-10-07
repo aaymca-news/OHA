@@ -187,12 +187,24 @@ final class FormChecker
                         question: $q->code, category: $category);
                 }
 
+                // A figure in the wrong unit is not counted (see Interpreter): "2 years" where months are asked.
+                if (isset($form->wrongUnits[$q->code])) {
+                    $wrong = $form->wrongUnits[$q->code];
+                    $this->add(FindingSeverity::Warning, FindingRule::WrongUnit,
+                        $q->displayCode().' is given as "'.$this->clip($wrong['given'], 40).'", which is '.$wrong['unit'].', but the form asks for '.$wrong['expected'].'.',
+                        location: $location,
+                        hint: 'It is not counted as entered'.($q->max ? ', so it scores 0' : '').'. Confirm the figure with the movement and type it here, or upload a corrected form.',
+                        question: $q->code, category: $category);
+
+                    continue;
+                }
+
                 // A money figure may carry its currency ("USD 90,000"); only text that is not an amount is flagged.
                 $readable = $q->type === 'money' ? Answer::amount($answer) : Answer::number($answer);
                 if (Answer::has($answer) && in_array($q->type, ['number', 'pct', 'money'], true) && $readable === null) {
                     $this->add(FindingSeverity::Warning, FindingRule::NonNumeric,
-                        $q->code.' holds "'.$this->clip((string) $answer, 40).'" where a number was expected.',
-                        location: $location, hint: 'Enter the number only, without currency or units.',
+                        $q->displayCode().' holds "'.$this->clip((string) $answer, 40).'" where '.Interpreter::expected($q).' was expected.',
+                        location: $location, hint: 'It could not be read as one figure, so it is not counted. Type the figure here, or ask the movement for it.',
                         question: $q->code, category: $category);
                 }
 

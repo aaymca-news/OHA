@@ -133,17 +133,18 @@ it('clears the report gate on its first approved version, and keeps it cleared',
         ->and($done())->toEqual($first);
 });
 
-it('shows the report to the Board Chairperson once a version is approved, never the form', function () {
+it('shows the report to the Board Chairperson once a version is approved, like the approved form', function () {
     $assessment = $this->j->assessmentAt('report_submitted');
 
+    // The form is approved by now: the Chairperson sees it, and so the assessment, but not the report yet.
     expect(Gate::forUser($this->j->chair)->allows('view', $this->j->report($assessment)))->toBeFalse()
-        ->and(Gate::forUser($this->j->chair)->allows('view', $assessment))->toBeFalse();
+        ->and(Gate::forUser($this->j->chair)->allows('view', $this->j->form($assessment)))->toBeTrue()
+        ->and(Gate::forUser($this->j->chair)->allows('view', $assessment))->toBeTrue();
 
     app(ApproveArtefact::class)->handle($this->j->report($assessment), $this->j->admin);
 
     expect(Gate::forUser($this->j->chair)->allows('view', $this->j->report($assessment)))->toBeTrue()
-        ->and(Gate::forUser($this->j->chair)->allows('view', $assessment))->toBeTrue()
-        ->and(Gate::forUser($this->j->chair)->allows('view', $this->j->form($assessment)))->toBeFalse()
         ->and(Gate::forUser($this->j->ghanaChair)->allows('view', $this->j->report($assessment)))->toBeFalse()
+        ->and(Gate::forUser($this->j->ghanaChair)->allows('view', $assessment))->toBeFalse()
         ->and(Document::query()->count())->toBe(1);
 });

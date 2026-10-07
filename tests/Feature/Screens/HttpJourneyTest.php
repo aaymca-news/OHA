@@ -90,7 +90,7 @@ it('takes Zambia from a new assessment to a signed ODP through the screens', fun
         ->assertDontSee('Google Drive document')->assertDontSee('docs.google.com');
     $this->actingAs($j->otherStaff)->get($odpTab)->assertOk()->assertSee('Version 1 · Zambia ODP 2026.pdf')->assertDontSee('Upload a new version');
     $this->actingAs($j->chair)->post(route('artefacts.sign', $odp), [
-        'signed_name' => 'Naledi Moyo', 'signature' => Journey::SIGNATURE, 'confirm' => '1', 'comment' => 'Well done.',
+        'signature' => 'Naledi Moyo', 'confirm' => '1', 'comment' => 'Well done.',
     ])->assertSessionHas('status', 'Signed. The ODP is now validated by the board.');
 
     expect($j->odp($assessment)->state)->toBe(ArtefactState::Approved)
@@ -98,7 +98,8 @@ it('takes Zambia from a new assessment to a signed ODP through the screens', fun
         ->and(ArtefactStatus::query()->findOrFail($odp->id)->validated)->toBeTrue()
         ->and(MovementStatus::query()->where('slug', 'zambia')->value('has_odp'))->toBeTrue();
 
-    $this->actingAs($j->otherStaff)->get(route('downloads.signature', $j->odp($assessment)->signature))->assertOk()->assertHeader('Content-Type', 'image/png');
+    // The typed signature shows on the ODP for everyone who may see it.
+    $this->actingAs($j->otherStaff)->get($odpTab)->assertSee('Validated by the board')->assertSee('Naledi Moyo');
 });
 
 it('lets the assessor upload a new version after approval, which goes back for approval', function () {
@@ -139,7 +140,7 @@ it('explains a refused step instead of failing', function () {
 it('refuses a signature without the confirmation', function () {
     $odp = $this->j->odp($this->j->assessmentAt('odp_approved'));
 
-    $this->actingAs($this->j->chair)->post(route('artefacts.sign', $odp), ['signed_name' => 'Naledi Moyo', 'signature' => Journey::SIGNATURE])
+    $this->actingAs($this->j->chair)->post(route('artefacts.sign', $odp), ['signature' => Journey::SIGNATURE])
         ->assertSessionHasErrors(['confirm' => 'Tick the box to confirm you validate this document.']);
 });
 

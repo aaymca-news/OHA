@@ -2,7 +2,6 @@
 
 namespace App\Policies;
 
-use App\Enums\ArtefactKind;
 use App\Models\Assessment;
 use App\Models\User;
 use Illuminate\Auth\Access\Response;
@@ -11,7 +10,8 @@ class AssessmentPolicy
 {
     /**
      * Secretariat users can open any assessment (each document on it has its own
-     * rule). The Board Chairperson sees their own movement's once its report or ODP is approved.
+     * rule). The Board Chairperson sees their own movement's once its OHA form, report or
+     * ODP is approved.
      */
     public function view(User $user, Assessment $assessment): Response
     {
@@ -25,8 +25,7 @@ class AssessmentPolicy
             return Response::deny('You see only your own movement.');
         }
 
-        return $assessment->artefacts()->whereIn('kind', [ArtefactKind::Report, ArtefactKind::Odp])
-            ->whereHas('status', fn ($q) => $q->where('published', true))->exists()
+        return $assessment->artefacts()->whereHas('status', fn ($q) => $q->where('published', true))->exists()
             ? Response::allow()
             : Response::deny('Nothing from this assessment has been approved yet.');
     }

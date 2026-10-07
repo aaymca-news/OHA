@@ -26,7 +26,8 @@ use Illuminate\Support\Facades\Storage;
 final class Journey
 {
     /** A tiny valid PNG, standing in for a drawn signature. */
-    public const SIGNATURE = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==';
+    /** What the Chairperson types to sign: their initials. */
+    public const SIGNATURE = 'N. M.';
 
     public const STAGES = [
         'opened', 'form_uploaded', 'form_submitted', 'form_approved',
@@ -135,7 +136,7 @@ final class Journey
 
     public function sign(Artefact $artefact, ?User $by = null): BoardSignature
     {
-        return app(SignAsBoard::class)->handle($artefact, $by ?? $this->chair, 'Naledi Moyo', self::SIGNATURE, confirmed: true);
+        return app(SignAsBoard::class)->handle($artefact, $by ?? $this->chair, self::SIGNATURE, confirmed: true);
     }
 
     public function form(Assessment $assessment): Artefact

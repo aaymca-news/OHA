@@ -33,6 +33,7 @@ final class Navigation
 
         if (! $user->isSecretariat()) {
             $items[] = $item('our_movement', 'movements.show', 'flag', params: ['movement' => $user->movement], active: 'movements.*');
+            $items[] = $item('resources', 'resources', 'folder_open');
 
             return $items;
         }
@@ -40,6 +41,7 @@ final class Navigation
         $items[] = $item('movements', 'movements.index', 'public',
             MovementStatus::query()->where('reassessment_overdue', true)->count(), 'warning', active: 'movements.*');
         $items[] = $item('assessments', 'assessments.index', 'fact_check', active: 'assessments.*');
+        $items[] = $item('resources', 'resources', 'folder_open');
 
         if ($user->isAssessor()) {
             $items[] = $item('timelines', 'timelines', 'event_note', $this->overdueMilestones($user));

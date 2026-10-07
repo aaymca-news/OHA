@@ -42,7 +42,7 @@ final class ApproveArtefact
             $this->ensure($approver, 'approve', $artefact);
 
             $assessment = $artefact->assessment;
-            $scores = $artefact->kind === ArtefactKind::Form ? $this->freezeScores($artefact) : null;
+            $scores = $artefact->kind === ArtefactKind::Form ? $this->freezeScores($artefact, $approver) : null;
             $version = $artefact->kind !== ArtefactKind::Form ? $this->approveLatestVersion($artefact, $approver) : null;
 
             $from = $artefact->state;
@@ -68,7 +68,7 @@ final class ApproveArtefact
             };
             Notify::send([$artefact->submitter], new WorkflowNotice(
                 "Approved: {$name}, {$movement}",
-                "{$approver->name} approved the ".lcfirst($name).". {$onwards}",
+                "{$approver->name} approved the ".SubmitForApproval::inSentence($name).". {$onwards}",
                 Notify::link($assessment), 'good',
             ));
 
@@ -76,7 +76,7 @@ final class ApproveArtefact
                 $toSign = $artefact->kind === ArtefactKind::Odp;
                 Notify::send([$assessment->movement->chair], new WorkflowNotice(
                     ($toSign ? 'Please sign: ' : 'Now available: ')."{$name}, {$movement}",
-                    'The '.lcfirst($name)." for {$movement} ({$assessment->period_label}) has been approved by AAYMCA."
+                    'The '.SubmitForApproval::inSentence($name)." for {$movement} ({$assessment->period_label}) has been approved by AAYMCA."
                         .($toSign ? ' Please read it and sign it to validate it on behalf of your board.' : ' You can read and download it.'),
                     Notify::link($assessment), $toSign ? 'action' : 'info',
                 ));
@@ -89,12 +89,17 @@ final class ApproveArtefact
     /**
      * @return array<string, int|null>
      */
-    private function freezeScores(Artefact $form): array
+    private function freezeScores(Artefact $form, User $approver): array
     {
         $upload = $form->currentUpload()->first()
             ?? throw new WorkflowRuleBroken('There is no uploaded form to approve.');
 
+        // The answers as recorded: read from the file, with any typed in the platform.
         $points = $this->scorer->score($upload->answers, $upload->form_meta['missing_sheets'] ?? []);
+        $upload->update(['approved_by' => $approver->id, 'approved_at' => now()]);
+
+        // A corrected form approved again replaces the score recorded before; the audit trail keeps both.
+        CategoryScore::query()->where('assessment_id', $form->assessment_id)->delete();
 
         foreach (Category::query()->weighted()->get() as $category) {
             CategoryScore::query()->create([

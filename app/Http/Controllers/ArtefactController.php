@@ -132,13 +132,12 @@ class ArtefactController extends Controller
     public function sign(Request $request, Artefact $artefact, SignAsBoard $sign): RedirectResponse
     {
         $data = $request->validate([
-            'signed_name' => ['required', 'string', 'max:255'],
-            'signature' => ['required', 'string', 'max:500000'],
+            'signature' => ['required', 'string', 'max:100'],
             'confirm' => ['accepted'],
             'comment' => ['nullable', 'string', 'max:2000'],
-        ], ['signature.required' => 'Draw your signature in the box before signing.', 'confirm.accepted' => 'Tick the box to confirm you validate this document.']);
+        ], ['signature.required' => 'Type your initials or your full name as your signature.', 'confirm.accepted' => 'Tick the box to confirm you validate this document.']);
 
-        $sign->handle($artefact, $request->user(), $data['signed_name'], $data['signature'], true, $data['comment'] ?? null,
+        $sign->handle($artefact, $request->user(), $data['signature'], true, $data['comment'] ?? null,
             $request->ip(), (string) $request->userAgent());
 
         return $this->back($artefact, 'Signed. The ODP is now validated by the board.');

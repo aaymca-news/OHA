@@ -79,7 +79,7 @@ final class SubmitForApproval
             $movement = $assessment->movement->name;
             Notify::send($approvers, new WorkflowNotice(
                 "Approval needed: {$name}, {$movement}",
-                "{$submitter->name} submitted the ".lcfirst($name)." for {$movement} ({$assessment->period_label}). Any Administrator may approve it or send it back."
+                "{$submitter->name} submitted the ".self::inSentence($name)." for {$movement} ({$assessment->period_label}). Any Administrator may approve it or send it back."
                     .($openGaps > 0 ? " It was submitted with {$openGaps} missing item".($openGaps === 1 ? '' : 's').': check them before approving.' : '')
                     .($flagged > 0 ? " The report check flagged {$flagged} item".($flagged === 1 ? '' : 's').' to look at before approving.' : ''),
                 Notify::link($assessment), 'action',
@@ -96,6 +96,15 @@ final class SubmitForApproval
 
             return $artefact;
         });
+    }
+
+    /**
+     * A label inside a sentence: "the health assessment report", but "the OHA form" and
+     * "the ODP", whose capitals are part of the name.
+     */
+    public static function inSentence(string $label): string
+    {
+        return preg_match('/^\p{Lu}\p{Lu}/u', $label) ? $label : lcfirst($label);
     }
 
     public static function label(Artefact $artefact): string

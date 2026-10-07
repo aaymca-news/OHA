@@ -107,6 +107,16 @@ class Assessment extends Model
         return $this->hasMany(AuditEvent::class);
     }
 
+    /**
+     * Once the Board Chairperson has signed the ODP, Stage 2 begins and the OHA form, the
+     * report and the ODP are frozen: the ODP rests on the report, which rests on the form.
+     */
+    public function isFrozen(): bool
+    {
+        return BoardSignature::query()->whereHas('artefact', fn ($q) => $q
+            ->where('assessment_id', $this->id)->where('kind', ArtefactKind::Odp))->exists();
+    }
+
     protected function casts(): array
     {
         return [

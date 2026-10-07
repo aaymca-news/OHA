@@ -9,6 +9,7 @@ use App\Enums\Role;
 use App\Exceptions\WorkflowRuleBroken;
 use App\Models\Artefact;
 use App\Models\AuditEvent;
+use App\Models\FormUpload;
 use App\Models\Movement;
 use App\Models\MovementStatus;
 use App\Models\User;
@@ -144,7 +145,7 @@ it('keeps a refused upload on record, but it cannot be submitted', function () {
         ->toThrow(WorkflowRuleBroken::class, 'refused');
 });
 
-it('refuses uploads from anyone not assigned to the movement, and after approval', function () {
+it('refuses uploads from anyone not assigned to the movement, and while the Administrators decide', function () {
     $stranger = User::factory()->create();
     $form = ($this->openForm)();
 
@@ -152,9 +153,12 @@ it('refuses uploads from anyone not assigned to the movement, and after approval
 
     ($this->upload)($form);
     app(SubmitForApproval::class)->handle($form->refresh(), $this->assessor, acknowledgeGaps: true);
-    app(ApproveArtefact::class)->handle($form->refresh(), $this->admin);
 
-    expect(fn () => ($this->upload)($form->refresh()))->toThrow(WorkflowRuleBroken::class, 'already approved');
+    expect(fn () => ($this->upload)($form->refresh()))->toThrow(WorkflowRuleBroken::class, 'with the Administrators');
+
+    // Once approved, a corrected form may be uploaded: it goes back for approval (see FormCorrectionTest).
+    app(ApproveArtefact::class)->handle($form->refresh(), $this->admin);
+    expect(($this->upload)($form->refresh()))->toBeInstanceOf(FormUpload::class);
 });
 
 it('records every step in the audit trail', function () {

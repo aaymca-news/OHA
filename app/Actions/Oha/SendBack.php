@@ -44,7 +44,7 @@ final class SendBack
             $name = SubmitForApproval::label($artefact);
             Notify::send([$artefact->submitter], new WorkflowNotice(
                 "Sent back: {$name}, {$assessment->movement->name}",
-                "{$approver->name} returned the ".lcfirst($name).' for changes: '.trim($reason),
+                "{$approver->name} returned the ".SubmitForApproval::inSentence($name).' for changes: '.trim($reason),
                 Notify::link($assessment), 'serious',
             ));
 

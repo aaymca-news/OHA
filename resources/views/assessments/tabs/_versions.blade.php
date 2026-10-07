@@ -49,29 +49,7 @@
             @if ($workbook === null || $workbook === [])
                 <p class="text-[0.875rem]">This Excel file could not be shown here. Download it to read it.</p>
             @else
-                @foreach ($workbook as $sheet)
-                    <div class="flex flex-col gap-xs">
-                        @if (count($workbook) > 1)
-                            <h3 class="text-[0.875rem] font-semibold text-primary">Sheet: {{ $sheet['title'] }}</h3>
-                        @endif
-                        <div class="max-h-[80vh] overflow-auto rounded border-[1.5px] border-outline-variant bg-white">
-                            <table class="text-[0.8125rem] border-collapse" aria-label="{{ $shown->original_name }}, sheet {{ $sheet['title'] }}">
-                                <tbody>
-                                    @foreach ($sheet['rows'] as $row)
-                                        <tr class="align-top even:bg-surface-container-low">
-                                            @foreach ($row as $cell)
-                                                <td class="border border-outline-variant px-2 py-1 min-w-24 max-w-[24rem] whitespace-pre-line">{{ $cell }}</td>
-                                            @endforeach
-                                        </tr>
-                                    @endforeach
-                                </tbody>
-                            </table>
-                        </div>
-                        @if ($sheet['truncated'])
-                            <p class="text-[0.8125rem] text-on-surface-variant">Only the first rows are shown here. Download the file to see all of it.</p>
-                        @endif
-                    </div>
-                @endforeach
+                <x-workbook :sheets="$workbook" :name="$shown->original_name" />
             @endif
         @else
             <div x-data="docxPreview(@js(route('downloads.preview', $shown)))" class="flex flex-col gap-sm">

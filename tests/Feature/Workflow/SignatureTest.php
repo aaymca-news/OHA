@@ -9,7 +9,6 @@ use App\Models\User;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Notification;
-use Illuminate\Support\Facades\Storage;
 use Tests\Support\Journey;
 
 /*
@@ -31,11 +30,14 @@ it('validates the approved ODP when the Chairperson signs it, and says so', func
     $signature = $this->j->sign($odp);
 
     expect($status()->validated)->toBeTrue()
+        // Who signed, and what they typed as their signature: their initials.
         ->and($signature->signed_name)->toBe('Naledi Moyo')
+        ->and($signature->isTyped())->toBeTrue()
+        ->and($signature->signature_text)->toBe('N. M.')
+        ->and($signature->signature_path)->toBeNull()
         // The exact version signed: the approved one, by its file's fingerprint.
         ->and($signature->document_id)->toBe($odp->approvedVersion()->firstOrFail()->id)
-        ->and($signature->document_sha256)->toBe($odp->approvedVersion()->firstOrFail()->sha256)
-        ->and(Storage::disk('oha')->exists($signature->signature_path))->toBeTrue();
+        ->and($signature->document_sha256)->toBe($odp->approvedVersion()->firstOrFail()->sha256);
 });
 
 it('lets only this movement’s Chairperson sign, only the ODP, and only once it is approved', function () {
@@ -63,14 +65,32 @@ it('never shows a report or form as validated: they are approved, not signed', f
         ->and(ArtefactStatus::query()->findOrFail($this->j->odp($assessment)->id)->validated)->toBeTrue();
 });
 
-it('needs the confirmation, a typed name and a drawn signature', function () {
+it('needs the confirmation and typed initials or a name', function () {
     $odp = $this->j->odp($this->j->assessmentAt('odp_approved'));
-    $sign = fn (string $name, string $png, bool $confirmed) => app(SignAsBoard::class)->handle($odp, $this->j->chair, $name, $png, $confirmed);
+    $sign = fn (string $typed, bool $confirmed) => app(SignAsBoard::class)->handle($odp, $this->j->chair, $typed, $confirmed);
 
-    expect(fn () => $sign('Naledi Moyo', Journey::SIGNATURE, false))->toThrow(WorkflowRuleBroken::class, 'Tick the box')
-        ->and(fn () => $sign(' ', Journey::SIGNATURE, true))->toThrow(WorkflowRuleBroken::class, 'full name')
-        ->and(fn () => $sign('Naledi Moyo', 'data:image/png;base64,bm90IGEgcG5n', true))->toThrow(WorkflowRuleBroken::class, 'could not be read')
-        ->and(fn () => $sign('Naledi Moyo', 'not a picture', true))->toThrow(WorkflowRuleBroken::class, 'Draw your signature');
+    expect(fn () => $sign('N. M.', false))->toThrow(WorkflowRuleBroken::class, 'Tick the box')
+        ->and(fn () => $sign(' ', true))->toThrow(WorkflowRuleBroken::class, 'initials or your full name')
+        ->and(fn () => $sign('N', true))->toThrow(WorkflowRuleBroken::class, 'at least two')
+        ->and(fn () => $sign('12345', true))->toThrow(WorkflowRuleBroken::class, 'letters only')
+        ->and(fn () => $sign('<b>NM</b>', true))->toThrow(WorkflowRuleBroken::class, 'letters only');
+
+    // Initials as people type them, or the full name, with accents.
+    expect($sign('  Naledi   Moyo-Bandá ', true)->signature_text)->toBe('Naledi Moyo-Bandá');
+});
+
+it('shows the typed signature to the Chairperson as they type, and on the signed ODP', function () {
+    $assessment = $this->j->assessmentAt('odp_approved');
+    $tab = route('assessments.show', ['assessment' => $assessment, 'tab' => 'odp']);
+
+    $this->actingAs($this->j->chair)->get($tab)
+        ->assertSee('Your signature')->assertSee('Type your initials or your full name, for example N. M. or Naledi Moyo.')
+        ->assertDontSee('Draw with your mouse');
+
+    $this->j->sign($this->j->odp($assessment));
+
+    $this->actingAs($this->j->admin)->get($tab)
+        ->assertSee('Validated by the board')->assertSee('signature-typed', escape: false)->assertSee('N. M.');
 });
 
 it('never lets a signature be changed afterwards', function () {

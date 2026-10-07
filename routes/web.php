@@ -11,6 +11,7 @@ use App\Http\Controllers\MovementController;
 use App\Http\Controllers\MyWorkController;
 use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\ProfileController;
+use App\Http\Controllers\ResourceController;
 use App\Http\Controllers\SearchController;
 use App\Http\Controllers\SecurityController;
 use App\Http\Controllers\TimelineController;
@@ -68,6 +69,12 @@ Route::middleware('auth')->group(function () {
 
     Route::post('findings/{finding}/resolve', [GapController::class, 'resolve'])->name('findings.resolve');
     Route::post('findings/{finding}/reopen', [GapController::class, 'reopen'])->name('findings.reopen');
+    // What the OHA form lacks, typed in the platform; and an upload made by mistake, deleted.
+    Route::post('findings/{finding}/answer', [GapController::class, 'answer'])->name('findings.answer');
+    Route::delete('form-uploads/{formUpload}/answers', [GapController::class, 'withdraw'])->name('form-uploads.withdraw');
+    Route::delete('form-uploads/{formUpload}', [GapController::class, 'destroyUpload'])->name('form-uploads.destroy');
+
+    Route::get('resources', ResourceController::class)->name('resources');
 
     Route::put('assessments/{assessment}/timeline/gate', [TimelineController::class, 'setGate'])->name('timeline.gate');
     Route::post('assessments/{assessment}/timeline/steps', [TimelineController::class, 'addStep'])->name('timeline.steps.store');

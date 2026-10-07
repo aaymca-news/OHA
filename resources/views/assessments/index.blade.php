@@ -19,7 +19,7 @@
                         <td class="px-md py-sm"><a href="{{ route('assessments.show', $assessment) }}" class="font-semibold text-primary underline">{{ $assessment->movement->name }}</a>
                             <span class="block text-[0.8125rem] text-on-surface-variant">{{ $assessment->period_label }} · opened by {{ $assessment->opener->name }}</span></td>
                         @foreach (['form', 'report', 'odp'] as $kind)
-                            <td class="px-md py-sm"><span class="flex flex-col items-start gap-xs"><x-state-chip :state="$a[$kind]->status->effective_state" />@if ($kind !== 'form')<x-validation-chip :status="$a[$kind]->status" />@endif</span></td>
+                            <td class="px-md py-sm"><span class="flex flex-col items-start gap-xs"><x-state-chip :state="$a[$kind]->status->effective_state" />@if ($kind === 'odp')<x-validation-chip :status="$a[$kind]->status" />@endif</span></td>
                         @endforeach
                         <td class="px-md py-sm">{{ $assessment->workItem?->holder_role->label() ?? 'Stage 1 complete' }}</td>
                         <td class="px-md py-sm">@if ($assessment->workItem) <x-due-chip :days="$assessment->workItem->days_left" /> @else — @endif</td>

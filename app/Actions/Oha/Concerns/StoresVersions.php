@@ -10,6 +10,7 @@ use App\Models\Artefact;
 use App\Models\Document;
 use App\Models\User;
 use App\Support\Audit;
+use App\Support\ChangedAfterApproval;
 use App\Support\FileVault;
 use Illuminate\Support\Facades\DB;
 
@@ -58,8 +59,8 @@ trait StoresVersions
             if ($artefact->state === ArtefactState::PendingApproval) {
                 throw new WorkflowRuleBroken('It is with the Administrators for approval. A new version can be added once they decide.');
             }
-            if ($artefact->signature()->exists()) {
-                throw new WorkflowRuleBroken('It is signed by the Board Chairperson, so it is frozen.');
+            if ($artefact->assessment->isFrozen()) {
+                throw new WorkflowRuleBroken('The Board Chairperson has signed the ODP, so the OHA form, the report and the ODP are frozen.');
             }
 
             $version = $artefact->documents()->create($stored + $attributes + [
@@ -72,6 +73,13 @@ trait StoresVersions
 
             $from = $artefact->state;
             $artefact->update(['state' => ArtefactState::Drafted]);
+
+            // Changed after approval: the Administrators are told it will need their approval again.
+            if ($from === ArtefactState::Approved) {
+                ChangedAfterApproval::tell($artefact, $actor ?? $createdBy, $version->fromDrive()
+                    ? 'A change made in Google Drive'.($version->edited_by_email ? ' by '.$version->edited_by_email : '').' was saved as version '.$version->versionNumber().' of'
+                    : ($actor ?? $createdBy)->name.' saved version '.$version->versionNumber().' of');
+            }
 
             Audit::record($actor, $artefact->kind->value.'.version_'.($version->fromDrive() ? 'from_drive' : 'uploaded'), $version, $assessment, $from, $artefact->state,
                 payload: array_filter([

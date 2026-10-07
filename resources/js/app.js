@@ -1,58 +1,138 @@
 import Alpine from 'alpinejs';
 
 /*
- * The Board Chairperson's signature pad: draw with a mouse, pen or finger. On submit
- * the drawing is sent as a PNG; an empty pad is refused before anything is sent.
+ * Choosing a profile photo: it is shown at once in the round frame it will appear in,
+ * to be dragged into place and zoomed. On saving, the framed square is what is sent
+ * (512 pixels, JPEG); the server makes the final 256-pixel copy. Without scripts the
+ * chosen file is sent as it is, and the server crops it around the centre.
  */
-Alpine.data('signaturePad', () => ({
-    empty: true,
-    drawing: false,
+Alpine.data('photoCropper', () => ({
+    src: null,
+    image: null,
+    zoom: 1,
+    x: 0,
+    y: 0,
+    dragging: null,
+    problem: '',
 
-    init() {
-        const canvas = this.$refs.canvas;
-        const ctx = canvas.getContext('2d');
-        ctx.lineWidth = 2.5;
-        ctx.lineCap = 'round';
-        ctx.lineJoin = 'round';
-        ctx.strokeStyle = '#191c1e';
-
-        const point = (e) => {
-            const r = canvas.getBoundingClientRect();
-            return { x: (e.clientX - r.left) * (canvas.width / r.width), y: (e.clientY - r.top) * (canvas.height / r.height) };
-        };
-
-        canvas.addEventListener('pointerdown', (e) => {
-            this.drawing = true;
-            canvas.setPointerCapture(e.pointerId);
-            const p = point(e);
-            ctx.beginPath();
-            ctx.moveTo(p.x, p.y);
-        });
-        canvas.addEventListener('pointermove', (e) => {
-            if (!this.drawing) return;
-            const p = point(e);
-            ctx.lineTo(p.x, p.y);
-            ctx.stroke();
-            this.empty = false;
-        });
-        const stop = () => { this.drawing = false; };
-        canvas.addEventListener('pointerup', stop);
-        canvas.addEventListener('pointerleave', stop);
+    get frame() {
+        return this.$refs.frame?.clientWidth || 224;
     },
 
-    clear() {
-        const canvas = this.$refs.canvas;
-        canvas.getContext('2d').clearRect(0, 0, canvas.width, canvas.height);
-        this.empty = true;
+    /** The smallest scale at which the photo still fills the frame. */
+    get cover() {
+        return this.image ? this.frame / Math.min(this.image.naturalWidth, this.image.naturalHeight) : 1;
     },
 
-    capture(event) {
-        if (this.empty) {
-            event.preventDefault();
-            alert('Draw your signature in the box before signing.');
+    get style() {
+        if (!this.image) return '';
+        const s = this.cover * this.zoom;
+        return `width:${this.image.naturalWidth * s}px;height:${this.image.naturalHeight * s}px;transform:translate(${this.x}px,${this.y}px)`;
+    },
+
+    choose(event) {
+        const file = event.target.files[0];
+        this.problem = '';
+        if (this.src) URL.revokeObjectURL(this.src);
+        this.src = null;
+        this.image = null;
+        if (!file) return;
+        if (!/^image\/(jpeg|png|webp)$/.test(file.type)) {
+            this.problem = 'Choose a JPG, PNG or WebP photo.';
             return;
         }
-        this.$refs.data.value = this.$refs.canvas.toDataURL('image/png');
+        const url = URL.createObjectURL(file);
+        const img = new Image();
+        img.onload = () => {
+            this.image = img;
+            this.zoom = 1;
+            // Measure the frame once it is on screen: its size follows the chosen text size.
+            this.$nextTick(() => this.centre());
+        };
+        img.onerror = () => { this.problem = 'This image could not be read. Use a JPG or PNG photo.'; };
+        img.src = url;
+        this.src = url;
+    },
+
+    centre() {
+        const s = this.cover * this.zoom;
+        this.x = (this.frame - this.image.naturalWidth * s) / 2;
+        this.y = (this.frame - this.image.naturalHeight * s) / 2;
+    },
+
+    /** Keeps the frame filled: the photo's edges never come inside it. */
+    clamp() {
+        const s = this.cover * this.zoom;
+        this.x = Math.min(0, Math.max(this.frame - this.image.naturalWidth * s, this.x));
+        this.y = Math.min(0, Math.max(this.frame - this.image.naturalHeight * s, this.y));
+    },
+
+    setZoom(value) {
+        const before = this.cover * this.zoom;
+        const centre = this.frame / 2;
+        this.zoom = Number(value);
+        const after = this.cover * this.zoom;
+        // Zoom around the middle of the frame, so what is centred stays centred.
+        this.x = centre - ((centre - this.x) * after) / before;
+        this.y = centre - ((centre - this.y) * after) / before;
+        this.clamp();
+    },
+
+    start(event) {
+        if (!this.image) return;
+        event.target.setPointerCapture?.(event.pointerId);
+        this.dragging = { px: event.clientX, py: event.clientY, x: this.x, y: this.y };
+    },
+
+    move(event) {
+        if (!this.dragging) return;
+        this.x = this.dragging.x + event.clientX - this.dragging.px;
+        this.y = this.dragging.y + event.clientY - this.dragging.py;
+        this.clamp();
+    },
+
+    stop() {
+        this.dragging = null;
+    },
+
+    /** Arrow keys move the photo; + and − zoom. */
+    key(event) {
+        if (!this.image) return;
+        const step = event.shiftKey ? 20 : 5;
+        const moves = { ArrowLeft: [step, 0], ArrowRight: [-step, 0], ArrowUp: [0, step], ArrowDown: [0, -step] };
+        if (moves[event.key]) {
+            event.preventDefault();
+            this.x += moves[event.key][0];
+            this.y += moves[event.key][1];
+            this.clamp();
+        } else if (event.key === '+' || event.key === '=') {
+            this.setZoom(Math.min(4, this.zoom + 0.1));
+        } else if (event.key === '-') {
+            this.setZoom(Math.max(1, this.zoom - 0.1));
+        }
+    },
+
+    /** Replaces the chosen file with the framed square before the form is sent. */
+    async save(event) {
+        if (!this.image) return;
+        event.preventDefault();
+        const form = event.target;
+        const size = 512;
+        const s = this.cover * this.zoom;
+        const canvas = document.createElement('canvas');
+        canvas.width = size;
+        canvas.height = size;
+        const ctx = canvas.getContext('2d');
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, 0, size, size);
+        ctx.drawImage(this.image, -this.x / s, -this.y / s, this.frame / s, this.frame / s, 0, 0, size, size);
+        const blob = await new Promise((resolve) => canvas.toBlob(resolve, 'image/jpeg', 0.9));
+        if (blob) {
+            const files = new DataTransfer();
+            files.items.add(new File([blob], 'photo.jpg', { type: 'image/jpeg' }));
+            this.$refs.file.files = files.files;
+        }
+        form.submit();
     },
 }));
 

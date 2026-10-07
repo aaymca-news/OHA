@@ -26,8 +26,8 @@ class ArtefactPolicy
 {
     /**
      * Work in progress: the movement's assessors and the Administrators. Once
-     * approved: every AAYMCA staff member. The Board Chairperson: the approved
-     * report and ODP of their own movement, never the raw form.
+     * approved: every AAYMCA staff member. The Board Chairperson: the approved OHA
+     * form, report and ODP of their own movement (in Resources).
      */
     public function view(User $user, Artefact $artefact): Response
     {
@@ -40,9 +40,6 @@ class ArtefactPolicy
         if (! $user->isSecretariat()) {
             if (! $user->isChairOf($movement)) {
                 return Response::deny('You see only your own movement.');
-            }
-            if ($artefact->kind === ArtefactKind::Form) {
-                return Response::deny('The OHA form stays with AAYMCA. You see the approved report and ODP.');
             }
 
             return $artefact->isPublished()
@@ -72,6 +69,9 @@ class ArtefactPolicy
         if ($denied = $this->notAssessorOf($user, $artefact)) {
             return $denied;
         }
+        if ($artefact->assessment->isFrozen()) {
+            return Response::deny('The Board Chairperson has signed the ODP, so the OHA form, the report and the ODP are frozen. Its implementation is followed in Stage 2.');
+        }
 
         if ($artefact->kind === ArtefactKind::Report) {
             if ($artefact->status?->isLocked()) {
@@ -83,11 +83,10 @@ class ArtefactPolicy
                 : Response::allow();
         }
 
-        return match ($artefact->state) {
-            ArtefactState::Approved => Response::deny('This form is already approved. A correction needs a new assessment.'),
-            ArtefactState::PendingApproval => Response::deny('This form is with the Administrators. It can be replaced only if it is sent back.'),
-            default => Response::allow(),
-        };
+        // An approved form may be corrected until the ODP is signed; it then goes back for approval.
+        return $artefact->state === ArtefactState::PendingApproval
+            ? Response::deny('This form is with the Administrators. It can be replaced only if it is sent back.')
+            : Response::allow();
     }
 
     /** Linking (or re-linking) the Google Drive document the ODP is written in. */

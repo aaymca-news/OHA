@@ -11,10 +11,16 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * The Board Chairperson's online signature on one approved version of the ODP. Its
  * existence is what makes the document "Validated". The database refuses any change.
  */
-#[Fillable(['artefact_id', 'document_id', 'signed_by', 'signed_name', 'signature_disk', 'signature_path', 'signature_sha256', 'document_sha256', 'comment', 'ip', 'user_agent', 'signed_at'])]
+#[Fillable(['artefact_id', 'document_id', 'signed_by', 'signed_name', 'signature_method', 'signature_text', 'signature_disk', 'signature_path', 'signature_sha256', 'document_sha256', 'comment', 'ip', 'user_agent', 'signed_at'])]
 #[WithoutTimestamps]
 class BoardSignature extends Model
 {
+    /** Signed by typing initials or a name (now the only way), rather than drawn (before 8 Oct 2026). */
+    public function isTyped(): bool
+    {
+        return $this->signature_method === 'typed';
+    }
+
     /**
      * @return BelongsTo<Artefact, $this>
      */

@@ -162,8 +162,13 @@
 @if ($signature)
     <x-card title="Validated by the board" :subtitle="'Signed by '.$assessment->movement->name.'’s Board Chairperson.'">
         <div class="flex flex-wrap items-end gap-lg">
-            <img src="{{ route('downloads.signature', $signature) }}" alt="Signature of {{ $signature->signed_name }}"
-                 class="h-24 max-w-[20rem] bg-white border-b-2 border-on-surface">
+            @if ($signature->isTyped())
+                <p class="signature-typed min-w-48 max-w-[20rem] px-sm pt-md pb-1 border-b-2 border-on-surface text-[2rem] leading-tight text-primary break-words"
+                   aria-label="Signature typed by {{ $signature->signed_name }}: {{ $signature->signature_text }}">{{ $signature->signature_text }}</p>
+            @else
+                <img src="{{ route('downloads.signature', $signature) }}" alt="Signature of {{ $signature->signed_name }}"
+                     class="h-24 max-w-[20rem] bg-white border-b-2 border-on-surface">
+            @endif
             <dl class="text-[0.875rem] grid grid-cols-[auto_1fr] gap-x-md gap-y-xs">
                 <dt class="text-on-surface-variant">Signed by</dt><dd class="font-semibold">{{ $signature->signed_name }}</dd>
                 <dt class="text-on-surface-variant">Role</dt><dd>{{ $signature->signer->title ?? 'Board Chairperson' }}</dd>
@@ -177,20 +182,16 @@
         @endif
     </x-card>
 @elseif (Gate::allows('sign', $artefact))
-    <x-card title="Sign to validate the ODP" :subtitle="'Read version '.$artefact->approvedVersion?->versionNumber().' of the ODP below, then sign. Your signature, name, the date and a fingerprint of this exact file are recorded. Once signed, the ODP is frozen.'">
-        <form method="POST" action="{{ route('artefacts.sign', $artefact) }}" x-data="signaturePad" x-on:submit="capture($event)" class="flex flex-col gap-md">
+    <x-card title="Sign to validate the ODP" :subtitle="'Read version '.$artefact->approvedVersion?->versionNumber().' of the ODP below, then sign. Your signature, your name, the date and a fingerprint of this exact file are recorded. Once signed, the ODP is frozen, and so are the OHA form and the report it rests on.'">
+        <form method="POST" action="{{ route('artefacts.sign', $artefact) }}" x-data="{ mark: @js(old('signature', '')) }" class="flex flex-col gap-md">
             @csrf
-            <input type="hidden" name="signature" x-ref="data">
-            <div class="flex flex-col gap-xs">
-                <span class="text-[0.875rem] font-semibold">Your signature</span>
-                <canvas x-ref="canvas" width="560" height="160" aria-label="Draw your signature here"
-                        class="w-full max-w-[35rem] h-40 bg-white rounded border-[1.5px] border-outline-variant touch-none cursor-crosshair"></canvas>
-                <div class="flex items-center gap-sm text-[0.8125rem] text-on-surface-variant">
-                    <span x-text="empty ? 'Draw with your mouse or finger.' : 'Signature captured.'">Draw with your mouse or finger.</span>
-                    <button type="button" x-on:click="clear()" class="text-primary underline">Clear</button>
-                </div>
+            <div class="flex flex-col gap-xs max-w-[28rem]">
+                <x-input name="signature" label="Your signature" required maxlength="100" autocomplete="off" x-model="mark"
+                         :hint="'Type your initials or your full name, for example '.collect(preg_split('/\s+/u', auth()->user()->name))->map(fn ($p) => mb_substr($p, 0, 1).'.')->implode(' ').' or '.auth()->user()->name.'.'" />
+                <p class="signature-typed min-h-[3.5rem] px-sm pt-sm pb-1 border-b-2 border-on-surface text-[2rem] leading-tight text-primary break-words"
+                   aria-hidden="true" x-text="mark" x-show="mark.trim() !== ''" x-cloak></p>
+                <p class="text-[0.8125rem] text-on-surface-variant">Signing as {{ auth()->user()->name }}{{ auth()->user()->title ? ', '.auth()->user()->title : '' }}.</p>
             </div>
-            <x-input name="signed_name" label="Type your full name" :value="auth()->user()->name" required class="max-w-[28rem]" />
             <label class="flex flex-col gap-xs text-[0.875rem]">
                 <span class="font-semibold">Comment (optional)</span>
                 <textarea name="comment" rows="2" class="px-sm py-2 rounded border-[1.5px] border-outline-variant max-w-[35rem]"></textarea>

@@ -32,8 +32,9 @@ it('shows an approved document to every AAYMCA staff member', function () {
     $form = $this->j->form($this->j->assessmentAt('form_approved'));
 
     expect(($this->can)($this->j->otherStaff, 'view', $form))->toBeTrue()
-        // The form never reaches the Board Chairperson.
-        ->and(($this->can)($this->j->chair, 'view', $form))->toBeFalse();
+        // And to the movement's own Board Chairperson (in Resources), never another's.
+        ->and(($this->can)($this->j->chair, 'view', $form))->toBeTrue()
+        ->and(($this->can)($this->j->ghanaChair, 'view', $form))->toBeFalse();
 });
 
 it('shows the Board Chairperson the report and ODP as each is approved, for their own movement only', function () {
@@ -41,7 +42,7 @@ it('shows the Board Chairperson the report and ODP as each is approved, for thei
 
     expect(($this->can)($this->j->chair, 'view', $this->j->report($assessment)))->toBeTrue()
         ->and(($this->can)($this->j->chair, 'view', $this->j->odp($assessment)))->toBeFalse()
-        ->and(($this->can)($this->j->chair, 'view', $this->j->form($assessment)))->toBeFalse()
+        ->and(($this->can)($this->j->chair, 'view', $this->j->form($assessment)))->toBeTrue()
         ->and(($this->can)($this->j->chair, 'view', $assessment))->toBeTrue()
         ->and(($this->can)($this->j->ghanaChair, 'view', $this->j->report($assessment)))->toBeFalse()
         ->and(($this->can)($this->j->ghanaChair, 'view', $assessment))->toBeFalse();

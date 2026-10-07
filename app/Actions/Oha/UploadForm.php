@@ -4,11 +4,10 @@ namespace App\Actions\Oha;
 
 use App\Actions\Oha\Concerns\EnforcesPolicy;
 use App\Actions\Oha\Concerns\LocksArtefact;
-use App\Enums\ArtefactState;
+use App\Actions\Oha\Concerns\RecordsFormChecks;
 use App\Enums\FindingSeverity;
 use App\Exceptions\WorkflowRuleBroken;
 use App\Models\Artefact;
-use App\Models\Category;
 use App\Models\FormUpload;
 use App\Models\Movement;
 use App\Models\User;
@@ -29,10 +28,14 @@ use Illuminate\Support\Facades\DB;
  *
  * A refused form (wrong movement, not the OHA form, blank) is still kept, with
  * its findings, so there is a record of what was tried. It cannot be submitted.
+ *
+ * A corrected form may be uploaded after approval, until the Board Chairperson signs
+ * the ODP. It goes back to the Administrators, who are told; until they approve it,
+ * everyone keeps seeing the approved form and its recorded score.
  */
 final class UploadForm
 {
-    use EnforcesPolicy, LocksArtefact;
+    use EnforcesPolicy, LocksArtefact, RecordsFormChecks;
 
     public function __construct(
         private readonly FormReader $reader,
@@ -71,13 +74,9 @@ final class UploadForm
 
             $this->recordFindings($upload, $result);
 
-            $from = $form->state;
             // A fresh upload is a fresh read: its own findings, and no acknowledgement carried over.
-            $form->update([
-                'state' => $result->ok ? ArtefactState::Ready : ArtefactState::RulesFailed,
-                'gap_ack' => false,
-                'gap_ack_reason' => null,
-            ]);
+            $from = $form->state;
+            $this->settle($form, $result, $uploader, 'uploaded a new file for');
 
             Audit::record($uploader, 'form.uploaded', $upload, $assessment, $from, $form->state, payload: [
                 'file' => $originalName,
@@ -85,6 +84,7 @@ final class UploadForm
                 'accepted' => $result->ok,
                 'points' => $result->points,
                 'gaps' => count($result->withSeverity(FindingSeverity::Missing)),
+                'read_from_words' => count($read->interpreted ?? []),
             ]);
 
             return $upload;
@@ -104,44 +104,5 @@ final class UploadForm
         }
 
         return [$read, $this->checker->check($read, $movement)];
-    }
-
-    /**
-     * @return array<string, mixed>
-     */
-    private function meta(?ReadForm $read, CheckResult $result): array
-    {
-        if ($read === null) {
-            return [];
-        }
-
-        return [
-            'notes' => array_filter($read->notes, fn ($v) => $v !== null),
-            'comments' => array_map(fn ($c) => $c['text'], $read->comments),
-            'cover' => $result->cover,
-            'sheet_names' => $read->sheetNames,
-            'missing_sheets' => $read->missingCategorySheets(),
-            'points_at_stake' => $result->pointsAtStake,
-        ];
-    }
-
-    private function recordFindings(FormUpload $upload, CheckResult $result): void
-    {
-        $categories = Category::query()->pluck('id', 'code');
-
-        foreach ($result->findings as $finding) {
-            $upload->findings()->create([
-                'severity' => $finding->severity,
-                'rule' => $finding->rule->value,
-                'ref' => $finding->ref,
-                'question_code' => $finding->questionCode,
-                'category_id' => $finding->categoryCode !== null ? $categories[$finding->categoryCode] ?? null : null,
-                'location' => $finding->location !== '' ? $finding->location : null,
-                'message' => $finding->message,
-                'hint' => $finding->hint !== '' ? $finding->hint : null,
-                'points_at_stake' => $finding->pointsAtStake,
-                'dqa_dimension' => $finding->rule->dimension(),
-            ]);
-        }
     }
 }

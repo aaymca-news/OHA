@@ -39,7 +39,8 @@ final class FormReader
         }
 
         try {
-            return $this->readWorkbook($workbook);
+            // Answers written in words are read as the number or option they mean.
+            return Interpreter::apply($this->readWorkbook($workbook));
         } finally {
             $workbook->disconnectWorksheets();
         }
