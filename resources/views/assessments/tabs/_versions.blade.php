@@ -19,9 +19,11 @@
                 <a href="{{ route('downloads.document', $shown) }}" class="inline-flex items-center gap-xs text-[0.875rem] text-primary underline">
                     <span class="material-symbols-outlined text-[1.125rem]" aria-hidden="true">download</span> Download
                 </a>
-                <a href="{{ route('downloads.preview', $shown) }}" target="_blank" rel="noopener" class="inline-flex items-center gap-xs text-[0.875rem] text-primary underline">
-                    <span class="material-symbols-outlined text-[1.125rem]" aria-hidden="true">open_in_new</span> Open in a new tab
-                </a>
+                @if ($shown->canPreview())
+                    <a href="{{ route('downloads.preview', $shown) }}" target="_blank" rel="noopener" class="inline-flex items-center gap-xs text-[0.875rem] text-primary underline">
+                        <span class="material-symbols-outlined text-[1.125rem]" aria-hidden="true">open_in_new</span> Open in a new tab
+                    </a>
+                @endif
                 @if ($driveLink)
                     <a href="{{ $driveLink }}" target="_blank" rel="noopener noreferrer"
                        class="inline-flex items-center gap-xs px-sm py-1.5 rounded border-[1.5px] border-primary text-[0.875rem] font-semibold text-primary hover:bg-surface-container-low">
@@ -42,6 +44,35 @@
         @if ($shown->format->value === 'pdf')
             <iframe src="{{ route('downloads.preview', $shown) }}" title="Preview of {{ $shown->original_name }}"
                     class="w-full h-[80vh] rounded border-[1.5px] border-outline-variant bg-white"></iframe>
+        @elseif ($shown->format->value === 'xlsx')
+            @php($workbook = \App\Support\SpreadsheetPreview::of($shown))
+            @if ($workbook === null || $workbook === [])
+                <p class="text-[0.875rem]">This Excel file could not be shown here. Download it to read it.</p>
+            @else
+                @foreach ($workbook as $sheet)
+                    <div class="flex flex-col gap-xs">
+                        @if (count($workbook) > 1)
+                            <h3 class="text-[0.875rem] font-semibold text-primary">Sheet: {{ $sheet['title'] }}</h3>
+                        @endif
+                        <div class="max-h-[80vh] overflow-auto rounded border-[1.5px] border-outline-variant bg-white">
+                            <table class="text-[0.8125rem] border-collapse" aria-label="{{ $shown->original_name }}, sheet {{ $sheet['title'] }}">
+                                <tbody>
+                                    @foreach ($sheet['rows'] as $row)
+                                        <tr class="align-top even:bg-surface-container-low">
+                                            @foreach ($row as $cell)
+                                                <td class="border border-outline-variant px-2 py-1 min-w-24 max-w-[24rem] whitespace-pre-line">{{ $cell }}</td>
+                                            @endforeach
+                                        </tr>
+                                    @endforeach
+                                </tbody>
+                            </table>
+                        </div>
+                        @if ($sheet['truncated'])
+                            <p class="text-[0.8125rem] text-on-surface-variant">Only the first rows are shown here. Download the file to see all of it.</p>
+                        @endif
+                    </div>
+                @endforeach
+            @endif
         @else
             <div x-data="docxPreview(@js(route('downloads.preview', $shown)))" class="flex flex-col gap-sm">
                 <p x-show="state === 'loading'" class="text-[0.875rem] text-on-surface-variant">Loading the preview…</p>

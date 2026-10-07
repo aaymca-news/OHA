@@ -13,9 +13,9 @@ use App\Support\Google\DriveLink;
 
 /**
  * Saves a version of the ODP, uploaded by the movement's assessors or an
- * Administrator as a Word (.docx) or PDF file. The ODP is written in Google Drive,
- * so it must carry the link to that document: given with the first version, and
- * changeable later.
+ * Administrator as an Excel (.xlsx), Word (.docx) or PDF file; AAYMCA's ODP template
+ * is a workbook. The ODP is written in Google Drive (a Google Sheet, usually), so it
+ * must carry the link to that file: given with the first version, and changeable later.
  *
  * As with the report, a version saved after approval goes back to the
  * Administrators, and everyone else keeps seeing the last approved version until

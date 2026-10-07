@@ -5,12 +5,14 @@ use App\Actions\Oha\LinkOdpToDrive;
 use App\Actions\Oha\SubmitForApproval;
 use App\Actions\Oha\TakeOdpFromDrive;
 use App\Enums\ArtefactState;
+use App\Enums\DocumentFormat;
 use App\Enums\DocumentSource;
 use App\Exceptions\WorkflowRuleBroken;
 use App\Models\AssessmentMilestone;
 use App\Models\AuditEvent;
 use App\Models\DriveSyncRun;
 use App\Notifications\WorkflowNotice;
+use App\Support\Google\DriveFile;
 use App\Support\Google\DriveLink;
 use App\Support\Google\GoogleDrive;
 use Illuminate\Support\Facades\Gate;
@@ -32,10 +34,12 @@ beforeEach(function () {
     $this->take = fn ($assessment, $by = null) => app(TakeOdpFromDrive::class)->handle($this->j->odp($assessment), $by);
 });
 
-it('reads the file ID from the links people copy, and refuses anything that is not a document', function () {
+it('reads the file ID from the links people copy (Sheets, Docs, Drive files), and refuses anything else', function () {
     $id = '1ZaMbIaOdP2026xYzAbCdEfGhIjKlMnOpQr';
 
     foreach ([
+        "https://docs.google.com/spreadsheets/d/{$id}/edit?gid=0#gid=0",
+        "https://docs.google.com/spreadsheets/u/0/d/{$id}/edit",
         "https://docs.google.com/document/d/{$id}/edit?usp=sharing",
         "https://docs.google.com/document/u/0/d/{$id}/edit",
         "https://drive.google.com/file/d/{$id}/view?usp=drive_link",
@@ -50,7 +54,7 @@ it('reads the file ID from the links people copy, and refuses anything that is n
         "https://docs.google.com/presentation/d/{$id}/edit" => 'Google Slides',
         "http://docs.google.com/document/d/{$id}/edit" => 'starts with https://',
         "https://docs.google.com.evil.example/document/d/{$id}" => 'starts with https://',
-        'https://docs.google.com/document/d/short/edit' => 'does not point to a document',
+        'https://docs.google.com/document/d/short/edit' => 'does not point to a file',
     ] as $link => $why) {
         expect(fn () => DriveLink::fileId($link))->toThrow(WorkflowRuleBroken::class, $why);
     }
@@ -79,6 +83,18 @@ it('saves a change made in Google Drive as a new version, recorded under the per
     expect(($this->take)($assessment)['outcome'])->toBe(TakeOdpFromDrive::UNCHANGED)
         ->and($this->drive->reads)->toBe(1)
         ->and($odp->versions()->count())->toBe(2);
+});
+
+it('takes a change to an ODP written as a Google Sheet as an Excel version', function () {
+    $assessment = $this->j->assessmentAt('odp_uploaded');
+    $this->drive->mimeType = DriveFile::GOOGLE_SHEET;
+    $this->drive->edit('sheet with a new task', $this->j->assessor->email);
+
+    $version = ($this->take)($assessment)['version'];
+
+    expect($version->format)->toBe(DocumentFormat::Xlsx)
+        ->and($version->original_name)->toBe('Zambia ODP 2026.xlsx')
+        ->and($version->source)->toBe(DocumentSource::GoogleDrive);
 });
 
 it('leaves a document being edited until it has been quiet, unless someone asks for it now', function () {

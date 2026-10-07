@@ -46,7 +46,7 @@
 
 {{-- The Google Drive document the ODP is written in: for AAYMCA staff only. --}}
 @if ($artefact->drive_url && $me->isSecretariat() && $effective !== 'locked')
-    <x-card title="Google Drive document" subtitle="Where the staff write the ODP together. Every saved version here is a copy of it at one moment.">
+    <x-card title="Google Drive file" subtitle="Where the staff write the ODP together. Every saved version here is a copy of it at one moment.">
         <x-slot:actions>
             <a href="{{ $artefact->drive_url }}" target="_blank" rel="noopener noreferrer"
                class="inline-flex items-center gap-xs px-md py-2 rounded bg-primary text-on-primary text-[0.875rem] font-semibold hover:opacity-90">
@@ -114,8 +114,8 @@
 @can('upload', $artefact)
     <x-card :title="$versions->isEmpty() ? 'Upload the ODP' : 'Upload a new version'"
             :subtitle="$artefact->drive_file_id && $connected
-                ? 'Changes made in Google Drive are saved as versions by themselves. Upload here only to add a version by hand, as a Word (.docx) or PDF file.'
-                : 'The ODP as a Word (.docx) or PDF file. Every version is kept; the newest one is what you submit for approval.'">
+                ? 'Changes made in Google Drive are saved as versions by themselves. Upload here only to add a version by hand, as an Excel (.xlsx), Word (.docx) or PDF file.'
+                : 'The ODP as an Excel (.xlsx), Word (.docx) or PDF file, as in AAYMCA’s ODP template. Every version is kept; the newest one is what you submit for approval.'">
         <form method="POST" action="{{ route('artefacts.versions', $artefact) }}" enctype="multipart/form-data"
               x-data="{ name: '', over: false }" class="flex flex-col gap-sm">
             @csrf
@@ -126,14 +126,14 @@
                    :class="over ? 'border-primary bg-surface-container-low' : 'border-outline-variant'"
                    class="flex flex-col items-center gap-xs p-lg rounded-lg border-2 border-dashed text-[0.875rem] cursor-pointer text-center">
                 <span class="material-symbols-outlined text-[2rem] text-primary" aria-hidden="true">upload_file</span>
-                <span x-text="name || 'Drop the ODP here, or choose the file (.docx or .pdf)'">Choose the ODP file (.docx or .pdf)</span>
-                <input type="file" name="odp" accept=".docx,.pdf" required class="sr-only focus:not-sr-only"
+                <span x-text="name || 'Drop the ODP here, or choose the file (.xlsx, .docx or .pdf)'">Choose the ODP file (.xlsx, .docx or .pdf)</span>
+                <input type="file" name="odp" accept=".xlsx,.docx,.pdf" required class="sr-only focus:not-sr-only"
                        x-on:change="name = $event.target.files[0]?.name ?? ''">
             </label>
             @unless ($artefact->drive_file_id)
                 <x-input name="drive_url" label="Link to the ODP in Google Drive" type="url" required
-                         placeholder="https://docs.google.com/document/d/…"
-                         hint="The document the staff write the ODP in. In Google Drive, open it and use Share → Copy link." />
+                         placeholder="https://docs.google.com/spreadsheets/d/…"
+                         hint="The Google Sheet (or Doc) the staff write the ODP in. In Google Drive, open it and use Share → Copy link." />
             @endunless
             @if ($versions->isNotEmpty())
                 <label class="flex flex-col gap-xs text-[0.875rem]">

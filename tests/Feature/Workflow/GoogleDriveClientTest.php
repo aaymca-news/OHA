@@ -74,6 +74,24 @@ it('signs in with a signed token, reads the file and exports a Google Doc as Wor
     Http::assertNotSent(fn (Request $r) => str_contains($r->url(), '/drive/') && $r->method() !== 'GET');
 });
 
+it('exports a Google Sheet as an Excel workbook', function () {
+    Http::fake([
+        'oauth2.googleapis.com/token' => Http::response(['access_token' => 'ya29.test']),
+        'www.googleapis.com/drive/v3/files/sheet12345678901234567890/export*' => Http::response('PK excel bytes'),
+        'www.googleapis.com/drive/v3/files/sheet12345678901234567890*' => Http::response([
+            'id' => 'sheet12345678901234567890', 'name' => 'TOGO YMCA Organisational Development Plan', 'mimeType' => DriveFile::GOOGLE_SHEET,
+            'version' => '9', 'modifiedTime' => '2026-10-07T09:30:00Z', 'trashed' => false,
+        ]),
+    ]);
+    $drive = app(GoogleDrive::class);
+    $file = $drive->file('sheet12345678901234567890');
+
+    expect($file->format())->toBe('xlsx')
+        ->and($file->fileName())->toBe('TOGO YMCA Organisational Development Plan.xlsx')
+        ->and($drive->content($file))->toBe('PK excel bytes');
+    Http::assertSent(fn (Request $r) => str_contains($r->url(), '/export') && $r['mimeType'] === DriveFile::XLSX);
+});
+
 it('says what to do when the document is not shared with the platform, or is in the bin', function () {
     Http::fake([
         'oauth2.googleapis.com/token' => Http::response(['access_token' => 'ya29.test']),

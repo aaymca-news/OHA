@@ -19,6 +19,9 @@ final class FakeDrive extends GoogleDrive
 
     public int $version = 1;
 
+    /** What kind of file the linked ODP is in Drive: a Google Doc unless a test says otherwise. */
+    public string $mimeType = DriveFile::GOOGLE_DOC;
+
     public string $content = 'first draft';
 
     public ?string $editor = null;
@@ -57,7 +60,7 @@ final class FakeDrive extends GoogleDrive
             throw new DriveUnavailable($this->failure);
         }
 
-        return new DriveFile($fileId, 'Zambia ODP 2026', DriveFile::GOOGLE_DOC, $this->version, $this->modifiedAt, $this->editor, $this->editor !== null ? 'Editor '.$this->editor : null);
+        return new DriveFile($fileId, 'Zambia ODP 2026', $this->mimeType, $this->version, $this->modifiedAt, $this->editor, $this->editor !== null ? 'Editor '.$this->editor : null);
     }
 
     public function content(DriveFile $file): string

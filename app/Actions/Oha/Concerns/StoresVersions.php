@@ -14,8 +14,9 @@ use App\Support\FileVault;
 use Illuminate\Support\Facades\DB;
 
 /**
- * Saves a version of the report or ODP: a Word (.docx) or PDF file, stored once and
- * never overwritten. Saving a version makes the document a draft again, so a version
+ * Saves a version of the report or ODP: a Word (.docx) or PDF file (the ODP also an
+ * Excel workbook), stored once and never overwritten. Saving a version makes the
+ * document a draft again, so a version
  * saved after approval goes back to the Administrators; until then everyone else
  * keeps seeing the last approved version.
  */
@@ -84,12 +85,19 @@ trait StoresVersions
         });
     }
 
-    /** A version is a Word or PDF file within the size limit. */
+    /**
+     * A version is a Word or PDF file within the size limit. The ODP may also be an
+     * Excel workbook: AAYMCA's ODP template is one.
+     */
     private function versionFormat(Artefact $artefact, string $sourcePath, string $originalName): DocumentFormat
     {
+        $odp = $artefact->kind->value === 'odp';
+        $allowed = $odp ? [DocumentFormat::Docx, DocumentFormat::Xlsx, DocumentFormat::Pdf] : [DocumentFormat::Docx, DocumentFormat::Pdf];
         $format = DocumentFormat::tryFrom(strtolower(pathinfo($originalName, PATHINFO_EXTENSION)));
-        if (! in_array($format, [DocumentFormat::Docx, DocumentFormat::Pdf], true)) {
-            throw new WorkflowRuleBroken('The '.($artefact->kind->value === 'odp' ? 'ODP' : 'report').' must be a Word (.docx) or PDF file.');
+        if (! in_array($format, $allowed, true)) {
+            throw new WorkflowRuleBroken($odp
+                ? 'The ODP must be an Excel (.xlsx), Word (.docx) or PDF file.'
+                : 'The report must be a Word (.docx) or PDF file.');
         }
         if (filesize($sourcePath) > (int) config('oha.max_upload_kb') * 1024) {
             throw new WorkflowRuleBroken('The file is larger than '.((int) config('oha.max_upload_kb') / 1024).' MB.');

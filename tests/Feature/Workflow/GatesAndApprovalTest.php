@@ -76,8 +76,8 @@ it('needs the ODP’s Google Drive link with its first version, and refuses link
         ->toThrow(WorkflowRuleBroken::class, 'Add the link to the ODP in Google Drive')
         ->and(fn () => $this->j->uploadOdp($assessment, 'folder', driveUrl: 'https://drive.google.com/drive/folders/1AbCdEfGhIjKlMnOpQrStUvWx'))
         ->toThrow(WorkflowRuleBroken::class, 'link to a folder')
-        ->and(fn () => $this->j->uploadOdp($assessment, 'sheet', driveUrl: 'https://docs.google.com/spreadsheets/d/1AbCdEfGhIjKlMnOpQrStUvWx/edit'))
-        ->toThrow(WorkflowRuleBroken::class, 'Google Sheets')
+        ->and(fn () => $this->j->uploadOdp($assessment, 'slides', driveUrl: 'https://docs.google.com/presentation/d/1AbCdEfGhIjKlMnOpQrStUvWx/edit'))
+        ->toThrow(WorkflowRuleBroken::class, 'Google Slides')
         ->and(fn () => $this->j->uploadOdp($assessment, 'elsewhere', driveUrl: 'https://example.com/odp.docx'))
         ->toThrow(WorkflowRuleBroken::class, 'starts with https://docs.google.com/')
         ->and($this->j->odp($assessment)->versions()->count())->toBe(0);
