@@ -7,6 +7,7 @@ use App\Exceptions\WorkflowRuleBroken;
 use App\Models\Movement;
 use App\Models\User;
 use App\Notifications\InvitationNotice;
+use App\Support\AssessorChanges;
 use App\Support\Audit;
 use Illuminate\Auth\Passwords\PasswordBroker;
 use Illuminate\Support\Facades\DB;
@@ -46,7 +47,7 @@ final class InviteUser
 
         return DB::transaction(function () use ($admin, $name, $email, $role, $title, $movementIds, $chairOf, $confirmReplace): User {
             if ($role === Role::Board) {
-                $this->vacateChair($admin, $chairOf, null, $confirmReplace);
+                $this->vacateChair($admin, $chairOf, null, $confirmReplace, trim($name));
             }
 
             $user = User::query()->create([
@@ -63,6 +64,10 @@ final class InviteUser
 
             if ($user->isAssessor() && $movementIds !== []) {
                 $user->assignedMovements()->sync($movementIds);
+                // Recorded on each movement like any assignment; the invitation itself names them.
+                foreach (Movement::query()->whereKey($movementIds)->get() as $movement) {
+                    AssessorChanges::record($admin, $movement, collect([$user]), collect(), tellAdded: false);
+                }
             }
 
             $this->sendInvitation($user, $admin);
@@ -75,6 +80,11 @@ final class InviteUser
     {
         /** @var PasswordBroker $broker */
         $broker = Password::broker('invites');
-        $user->notify(new InvitationNotice($broker->createToken($user), $admin->name));
+        $user->notify(new InvitationNotice(
+            $broker->createToken($user),
+            $admin->name,
+            $user->isAssessor() ? $user->assignedMovements()->orderBy('name')->pluck('name')->all() : [],
+            $user->movement?->name,
+        ));
     }
 }

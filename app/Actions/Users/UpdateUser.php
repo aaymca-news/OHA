@@ -3,7 +3,9 @@
 namespace App\Actions\Users;
 
 use App\Exceptions\WorkflowRuleBroken;
+use App\Models\Movement;
 use App\Models\User;
+use App\Support\AssessorChanges;
 use App\Support\Audit;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -41,6 +43,13 @@ final class UpdateUser
                 $result = $user->assignedMovements()->sync($movementIds);
                 if ($result['attached'] !== [] || $result['detached'] !== []) {
                     $changed[] = 'movements';
+                }
+                // The same record and notices as assigning from the movement's own page.
+                foreach (Movement::query()->whereKey($result['attached'])->get() as $movement) {
+                    AssessorChanges::record($admin, $movement, collect([$user]), collect());
+                }
+                foreach (Movement::query()->whereKey($result['detached'])->get() as $movement) {
+                    AssessorChanges::record($admin, $movement, collect(), collect([$user]));
                 }
             }
 

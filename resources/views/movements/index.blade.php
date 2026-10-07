@@ -102,8 +102,13 @@
                                             <span class="material-symbols-outlined text-[1rem]" aria-hidden="true">person_off</span>No assessor
                                         </span>
                                     @else
-                                        <span class="flex items-center gap-xs text-on-surface-variant truncate" title="Assessed by {{ $who->pluck('name')->join(', ') }}">
-                                            <span class="material-symbols-outlined text-[1rem]" aria-hidden="true">person</span>{{ $who->pluck('name')->join(', ') }}
+                                        <span class="flex items-center gap-xs text-on-surface-variant min-w-0" title="Assessed by {{ $who->pluck('name')->join(', ') }}">
+                                            <span class="flex -space-x-1.5 shrink-0">
+                                                @foreach ($who->take(3) as $person)
+                                                    <x-avatar :user="$person" size="sm" class="ring-2 ring-surface-container-lowest" />
+                                                @endforeach
+                                            </span>
+                                            <span class="truncate">{{ $who->pluck('name')->join(', ') }}</span>
                                         </span>
                                     @endif
                                 @endif

@@ -89,9 +89,7 @@
                     <div class="relative" x-data="{ open: false }" x-on:click.outside="open = false" x-on:keydown.escape="open = false">
                         <button type="button" x-on:click="open = ! open" :aria-expanded="open" aria-haspopup="true"
                                 class="flex items-center gap-sm pl-1 pr-2 py-1 rounded-full border-[1.5px] border-outline-variant hover:border-primary">
-                            <span class="w-8 h-8 rounded-full bg-primary-container text-on-primary text-[0.8125rem] font-bold flex items-center justify-center" aria-hidden="true">
-                                {{ collect(explode(' ', auth()->user()->name))->map(fn ($p) => mb_substr($p, 0, 1))->take(2)->implode('') }}
-                            </span>
+                            <x-avatar :user="auth()->user()" />
                             <span class="text-left leading-tight hidden md:block">
                                 <span class="block text-[0.875rem] font-semibold text-primary">{{ auth()->user()->name }}</span>
                                 <span class="block text-[0.8125rem] text-on-surface-variant">{{ auth()->user()->role->label() }}{{ auth()->user()->movement ? ' · '.auth()->user()->movement->name : '' }}</span>
@@ -110,7 +108,12 @@
                                     @endforeach
                                 </div>
                             </div>
-                            <a href="{{ route('security.show') }}" class="block px-md py-2 hover:bg-surface-container">{{ __('oha.nav.security') }}</a>
+                            <a href="{{ route('profile.show') }}" class="flex items-center gap-sm px-md py-2 hover:bg-surface-container">
+                                <span class="material-symbols-outlined text-[1.125rem]" aria-hidden="true">account_circle</span>{{ __('oha.nav.profile') }}
+                            </a>
+                            <a href="{{ route('security.show') }}" class="flex items-center gap-sm px-md py-2 hover:bg-surface-container">
+                                <span class="material-symbols-outlined text-[1.125rem]" aria-hidden="true">lock</span>{{ __('oha.nav.security') }}
+                            </a>
                             <form method="POST" action="{{ route('logout') }}">
                                 @csrf
                                 <button class="w-full text-left px-md py-2 hover:bg-surface-container">Sign out</button>

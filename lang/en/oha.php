@@ -22,6 +22,7 @@ return [
         'users' => 'Users & Roles',
         'our_movement' => 'Our Movement',
         'notifications' => 'Notifications',
+        'profile' => 'My profile',
         'security' => 'Security',
     ],
 
@@ -54,6 +55,7 @@ return [
         'subtitle' => 'One queue for everything waiting on you, whatever your role.',
         'groups' => [
             'mine' => 'Awaiting my action',
+            'start' => 'Movements to start',
             'approve' => 'Awaiting my approval',
             'sign' => 'Awaiting my signature',
             'gaps' => 'Missing information',

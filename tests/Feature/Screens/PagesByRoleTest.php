@@ -30,6 +30,7 @@ dataset('pages', [
     'dashboard' => ['dashboard', fn () => [], '*'],
     'my work' => ['my-work', fn () => [], '*'],
     'notifications' => ['notifications.index', fn () => [], '*'],
+    'my profile' => ['profile.show', fn () => [], '*'],
     'security' => ['security.show', fn () => [], '*'],
     'search' => ['search', fn () => ['q' => 'zam'], '*'],
     'movements list' => ['movements.index', fn () => [], 'secretariat'],

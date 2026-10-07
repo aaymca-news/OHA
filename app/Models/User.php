@@ -13,7 +13,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 
-#[Fillable(['name', 'email', 'password', 'role', 'title', 'movement_id', 'active'])]
+#[Fillable(['name', 'email', 'password', 'role', 'title', 'movement_id', 'active', 'avatar_disk', 'avatar_path'])]
 #[Hidden(['password', 'remember_token'])]
 class User extends Authenticatable
 {
@@ -109,6 +109,21 @@ class User extends Authenticatable
     public function isInvitationPending(): bool
     {
         return $this->email_verified_at === null;
+    }
+
+    /** Their profile photo, if they added one; the file name changes with the photo, so browsers never show an old one. */
+    public function avatarUrl(): ?string
+    {
+        return $this->avatar_path !== null
+            ? route('avatars.show', ['user' => $this->id, 'v' => substr(basename($this->avatar_path), 0, 12)])
+            : null;
+    }
+
+    /** Up to two initials, shown when there is no photo. */
+    public function initials(): string
+    {
+        return collect(preg_split('/\s+/u', trim($this->name)) ?: [])->filter()
+            ->map(fn (string $part) => mb_strtoupper(mb_substr($part, 0, 1)))->take(2)->implode('');
     }
 
     /**

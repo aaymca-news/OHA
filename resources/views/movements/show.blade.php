@@ -34,7 +34,7 @@
             @endif
             <x-card title="Board Chairperson" subtitle="The movement’s one user. Reads the approved report and signs the ODP.">
                 @if ($chair)
-                    <p class="text-[0.875rem] flex flex-wrap items-center gap-sm">{{ $chair->name }}
+                    <p class="text-[0.875rem] flex flex-wrap items-center gap-sm"><x-avatar :user="$chair" /> {{ $chair->name }}
                         @if ($chair->title)
                             <span class="text-on-surface-variant">· {{ $chair->title }}</span>
                         @endif

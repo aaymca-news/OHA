@@ -1,4 +1,4 @@
-<x-layouts.app title="Security">
+<x-layouts.app :title="__('oha.nav.security')">
     <div class="grid lg:grid-cols-2 gap-md items-start">
         {{-- Password --}}
         <section class="bg-surface-container-lowest border-[1.5px] border-outline-variant rounded-lg p-lg flex flex-col gap-md">

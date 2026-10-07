@@ -7,9 +7,7 @@ use App\Exceptions\WorkflowRuleBroken;
 use App\Models\Assessment;
 use App\Models\Movement;
 use App\Models\User;
-use App\Notifications\WorkflowNotice;
-use App\Support\Audit;
-use App\Support\Notify;
+use App\Support\AssessorChanges;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\DB;
 
@@ -43,31 +41,9 @@ final class AssignAssessors
                 return $movement;
             }
 
-            $added = User::query()->whereKey($result['attached'])->orderBy('name')->get();
-            $removed = User::query()->whereKey($result['detached'])->orderBy('name')->get();
-            $payload = [
-                'added' => $result['attached'],
-                'removed' => $result['detached'],
-                'added_names' => $added->pluck('name')->all(),
-                'removed_names' => $removed->pluck('name')->all(),
-                'now' => $movement->assessors()->orderBy('name')->pluck('name')->all(),
-            ];
-
-            Audit::record($assigner, 'movement.assessors_changed', $movement, payload: $payload);
-            foreach (self::inProgress($movement) as $assessment) {
-                Audit::record($assigner, 'assessment.assessors_changed', $movement, $assessment, payload: $payload);
-            }
-
-            Notify::send($added, new WorkflowNotice(
-                "You are assigned to assess {$movement->name}",
-                "{$assigner->name} assigned you to assess {$movement->name}. You can now open its assessments and upload its OHA form.",
-                '/movements/'.$movement->slug, 'info',
-            ), except: $assigner);
-            Notify::send($removed, new WorkflowNotice(
-                "You no longer assess {$movement->name}",
-                "{$assigner->name} reassigned the assessment of {$movement->name}".($added->isNotEmpty() ? ' to '.$added->pluck('name')->join(', ', ' and ') : '').'.',
-                '/movements/'.$movement->slug, 'info',
-            ), except: $assigner);
+            AssessorChanges::record($assigner, $movement,
+                User::query()->whereKey($result['attached'])->orderBy('name')->get(),
+                User::query()->whereKey($result['detached'])->orderBy('name')->get());
 
             return $movement;
         });

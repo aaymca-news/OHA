@@ -7,6 +7,7 @@ use App\Enums\ArtefactState;
 use App\Enums\FindingSeverity;
 use App\Enums\HolderRole;
 use App\Models\Artefact;
+use App\Models\Movement;
 use App\Models\User;
 use App\Models\WorkItem;
 use Illuminate\Auth\Access\Response;
@@ -29,7 +30,7 @@ use Illuminate\Support\Facades\Gate;
 final class MyWork
 {
     /**
-     * @return list<array{key: string, items: list<array{artefact: Artefact, holder: string, days_left: int|null, actionable: bool, blocked: string|null}>}>
+     * @return list<array{key: string, items: list<array{artefact: Artefact|null, movement?: Movement, holder: string, days_left: int|null, actionable: bool, blocked: string|null}>}>
      */
     public function for(User $user): array
     {
@@ -38,6 +39,12 @@ final class MyWork
 
         if ($user->isAssessor()) {
             $groups[] = $this->fromWork('mine', $this->work(HolderRole::Assessor)->whereIn('movement_id', $assigned)->get());
+
+            // Movements given to them with no assessment under way: theirs to open.
+            $toStart = $this->toStart($user);
+            if ($toStart !== []) {
+                $groups[] = ['key' => 'start', 'items' => $toStart];
+            }
         }
 
         if ($user->isAdmin()) {
@@ -81,8 +88,33 @@ final class MyWork
     public function actionableCount(User $user): int
     {
         return collect($this->for($user))
-            ->whereIn('key', ['mine', 'approve', 'sign'])
+            ->whereIn('key', ['mine', 'start', 'approve', 'sign'])
             ->sum(fn (array $group) => count(array_filter($group['items'], fn ($i) => $i['actionable'])));
+    }
+
+    /**
+     * The movements this person is assigned to assess that have no assessment under way:
+     * never assessed, or their last assessment is complete. Theirs to open.
+     *
+     * @return list<array{artefact: null, movement: Movement, holder: string, days_left: null, actionable: bool, blocked: string|null}>
+     */
+    private function toStart(User $user): array
+    {
+        return $user->assignedMovements()
+            ->whereDoesntHave('assessments', fn (Builder $a) => $a->whereHas('workItem'))
+            ->with('status')->orderBy('name')->get()
+            ->map(function (Movement $m) use ($user) {
+                $response = Gate::forUser($user)->inspect('openAssessment', $m);
+
+                return [
+                    'artefact' => null,
+                    'movement' => $m,
+                    'holder' => __('oha.holder.assessor'),
+                    'days_left' => null,
+                    'actionable' => $response->allowed(),
+                    'blocked' => $response->denied() ? $response->message() : null,
+                ];
+            })->values()->all();
     }
 
     /**

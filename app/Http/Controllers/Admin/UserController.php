@@ -61,7 +61,7 @@ class UserController extends Controller
             $data['title'] ?? null,
             array_map('intval', $data['movement_ids'] ?? []),
             isset($data['board_movement_id']) ? Movement::query()->findOrFail($data['board_movement_id']) : null,
-            (bool) ($data['confirm_replace'] ?? false),
+            ($data['chair_mode'] ?? null) === 'replace' || (bool) ($data['confirm_replace'] ?? false),
         );
 
         return redirect()->route('admin.users.edit', $user)->with('status', "Invitation sent to {$user->email}.");
@@ -145,6 +145,6 @@ class UserController extends Controller
      */
     private function movements()
     {
-        return Movement::query()->with(['zone:id,name', 'chair:id,name,movement_id'])->orderBy('name')->get(['id', 'name', 'zone_id']);
+        return Movement::query()->with(['zone:id,name', 'chair:id,name,movement_id,email_verified_at'])->orderBy('name')->get(['id', 'name', 'zone_id']);
     }
 }

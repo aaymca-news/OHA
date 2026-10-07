@@ -4,9 +4,7 @@
         <ul class="flex flex-col gap-xs">
             @foreach ($assessors as $person)
                 <li class="flex flex-wrap items-center gap-sm text-[0.875rem]">
-                    <span class="w-8 h-8 rounded-full bg-primary-container text-on-primary text-[0.8125rem] font-bold flex items-center justify-center" aria-hidden="true">
-                        {{ collect(explode(' ', $person->name))->map(fn ($p) => mb_substr($p, 0, 1))->take(2)->implode('') }}
-                    </span>
+                    <x-avatar :user="$person" />
                     <span class="flex-1 min-w-40">
                         <span class="font-semibold">{{ $person->name }}</span>
                         <span class="block text-[0.8125rem] text-on-surface-variant">

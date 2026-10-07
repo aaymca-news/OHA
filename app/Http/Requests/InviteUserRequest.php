@@ -28,6 +28,7 @@ class InviteUserRequest extends FormRequest
             'movement_ids.*' => ['integer', 'exists:movements,id'],
             'board_movement_id' => ['nullable', 'required_if:role,board', 'integer', 'exists:movements,id'],
             'confirm_replace' => ['boolean'],
+            'chair_mode' => ['nullable', 'in:new,replace'],
         ];
     }
 

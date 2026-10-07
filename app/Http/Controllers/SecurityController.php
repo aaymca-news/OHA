@@ -11,7 +11,7 @@ use Illuminate\View\View;
 
 /**
  * A user's own security settings: their password, and the browsers and devices
- * they are signed in on.
+ * they are signed in on. (Their photo and details are on My profile.)
  */
 class SecurityController extends Controller
 {

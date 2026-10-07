@@ -10,6 +10,7 @@ use App\Http\Controllers\InvitationController;
 use App\Http\Controllers\MovementController;
 use App\Http\Controllers\MyWorkController;
 use App\Http\Controllers\NotificationController;
+use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\SearchController;
 use App\Http\Controllers\SecurityController;
 use App\Http\Controllers\TimelineController;
@@ -28,6 +29,11 @@ Route::middleware('guest')->group(function () {
 Route::middleware('auth')->group(function () {
     Route::get('security', [SecurityController::class, 'show'])->name('security.show');
     Route::delete('security/other-sessions', [SecurityController::class, 'signOutOtherSessions'])->name('security.other-sessions');
+    Route::get('profile', [ProfileController::class, 'show'])->name('profile.show');
+    Route::put('profile', [ProfileController::class, 'update'])->name('profile.update');
+    Route::post('profile/photo', [ProfileController::class, 'updatePhoto'])->middleware('throttle:10,1')->name('profile.photo');
+    Route::delete('profile/photo', [ProfileController::class, 'removePhoto'])->name('profile.photo.remove');
+    Route::get('people/{user}/photo', [ProfileController::class, 'photo'])->name('avatars.show');
 
     Route::get('dashboard', DashboardController::class)->name('dashboard');
     Route::get('my-work', MyWorkController::class)->name('my-work');
