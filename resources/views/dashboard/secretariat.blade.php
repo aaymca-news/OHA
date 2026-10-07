@@ -49,7 +49,8 @@
                 @php($bandTotal = max(1, $bands->sum('count')))
                 <ul class="flex flex-col gap-sm">
                     @foreach ($bands as $row)
-                        <li class="grid grid-cols-[8rem_1fr] items-center gap-sm">
+                        {{-- Side by side from 22rem; on the narrowest phones the band sits above its bar. --}}
+                        <li class="grid min-[22rem]:grid-cols-[8rem_minmax(0,1fr)] items-center gap-x-sm gap-y-xs">
                             <x-band-chip :band="$row['band']" />
                             <x-bar wide :value="$row['count']" :max="$bandTotal" :label="$row['count'].' '.($row['count'] === 1 ? 'movement' : 'movements')"
                                    :tone="['excellent' => 'good', 'strong' => 'good', 'developing' => 'warning', 'atrisk' => 'serious', 'critical' => 'critical'][$row['band']->code] ?? 'neutral'" />
@@ -178,6 +179,7 @@
             @if ($due->isEmpty())
                 <x-empty-state icon="event_available">No movement is past its re-assessment date.</x-empty-state>
             @else
+                <div class="overflow-x-auto">
                 <table class="w-full text-[0.875rem]">
                     <thead class="text-left text-[0.8125rem] uppercase tracking-wider text-on-surface-variant">
                         <tr><th class="py-xs">Movement</th><th class="py-xs">Band</th><th class="py-xs">Was due</th></tr>
@@ -192,6 +194,7 @@
                         @endforeach
                     </tbody>
                 </table>
+                </div>
             @endif
         </x-card>
     </div>

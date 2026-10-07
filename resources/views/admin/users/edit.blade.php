@@ -12,7 +12,7 @@
         {{-- Details --}}
         @if ($canAdminister)
             <form method="POST" action="{{ route('admin.users.update', $target) }}"
-                  class="bg-surface-container-lowest border-[1.5px] border-outline-variant rounded-lg p-lg flex flex-col gap-md lg:col-span-2">
+                  class="bg-surface-container-lowest border-[1.5px] border-outline-variant rounded-lg p-md sm:p-lg flex flex-col gap-md lg:col-span-2">
                 @csrf
                 @method('PUT')
                 <h2 class="text-[1.125rem] font-bold text-primary">Details</h2>
@@ -31,7 +31,7 @@
         {{-- Role --}}
         @can('changeRole', $target)
             <form method="POST" action="{{ route('admin.users.role', $target) }}" x-data="{ role: '{{ $target->role->value }}' }"
-                  class="bg-surface-container-lowest border-[1.5px] border-outline-variant rounded-lg p-lg flex flex-col gap-md">
+                  class="bg-surface-container-lowest border-[1.5px] border-outline-variant rounded-lg p-md sm:p-lg flex flex-col gap-md">
                 @csrf
                 @method('PUT')
                 <h2 class="text-[1.125rem] font-bold text-primary">Role</h2>
@@ -59,7 +59,7 @@
                 <x-button class="self-start">Change role</x-button>
             </form>
         @else
-            <section class="bg-surface-container-lowest border-[1.5px] border-outline-variant rounded-lg p-lg">
+            <section class="bg-surface-container-lowest border-[1.5px] border-outline-variant rounded-lg p-md sm:p-lg">
                 <h2 class="text-[1.125rem] font-bold text-primary">Role</h2>
                 <p class="text-[0.875rem] text-on-surface-variant mt-xs">{{ Gate::inspect('changeRole', $target)->message() }}</p>
             </section>
@@ -67,7 +67,7 @@
 
         {{-- Account --}}
         @if ($canAdminister)
-            <section class="bg-surface-container-lowest border-[1.5px] border-outline-variant rounded-lg p-lg flex flex-col gap-md">
+            <section class="bg-surface-container-lowest border-[1.5px] border-outline-variant rounded-lg p-md sm:p-lg flex flex-col gap-md">
                 <h2 class="text-[1.125rem] font-bold text-primary">Account</h2>
                 <div class="flex flex-wrap gap-sm">
                     @if ($target->isInvitationPending() && $target->active)

@@ -15,7 +15,7 @@
         <p class="text-[1.125rem] font-bold text-primary">{{ __('oha.app.title') }}</p>
     </div>
 
-    <main class="w-full max-w-[28rem] bg-surface-container-lowest border-[1.5px] border-outline-variant border-t-[4px] border-t-brand-red rounded-lg p-lg">
+    <main class="w-full max-w-[28rem] bg-surface-container-lowest border-[1.5px] border-outline-variant border-t-[4px] border-t-brand-red rounded-lg p-md sm:p-lg">
         <h1 class="text-[1.25rem] font-bold text-primary mb-md">{{ $title }}</h1>
         <x-flash />
         {{ $slot }}

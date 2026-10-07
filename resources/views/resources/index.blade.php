@@ -48,7 +48,7 @@
                 @php($list = $assessments->get($movement->id, collect()))
                 <section class="bg-surface-container-lowest border-[1.5px] border-outline-variant rounded-lg p-md flex flex-col gap-sm" aria-labelledby="res-{{ $movement->id }}">
                     <header class="flex flex-wrap items-start gap-sm">
-                        <div class="flex-1 min-w-40">
+                        <div class="flex-1 min-w-[min(10rem,100%)]">
                             <h2 id="res-{{ $movement->id }}" class="text-[1rem] font-bold text-primary">
                                 <a href="{{ route('movements.show', $movement) }}" class="underline decoration-1 underline-offset-2">{{ $movement->name }}</a>
                             </h2>
@@ -81,7 +81,7 @@
                                 ] as [$kind, $icon, $label, $file, $read, $download])
                                     <li class="flex flex-wrap items-center gap-sm px-sm py-2 text-[0.875rem]">
                                         <span class="material-symbols-outlined text-[1.25rem] {{ $file ? 'text-primary' : 'text-on-surface-variant' }}" aria-hidden="true">{{ $icon }}</span>
-                                        <span class="flex-1 min-w-40">
+                                        <span class="flex-1 min-w-[min(10rem,100%)]">
                                             <span class="block font-semibold">{{ $label }}</span>
                                             @if ($file)
                                                 <span class="block text-[0.8125rem] text-on-surface-variant break-words">

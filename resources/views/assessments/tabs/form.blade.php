@@ -136,7 +136,7 @@
                             : $figure($entry['value']);
                     @endphp
                     <li class="flex flex-wrap items-start gap-sm p-sm rounded border-[1.5px] border-outline-variant">
-                        <span class="flex-1 min-w-60">
+                        <span class="flex-1 min-w-[min(15rem,100%)]">
                             <span class="block font-semibold">{{ $what }}</span>
                             <span class="block whitespace-pre-line">{{ $kind === 'q' && in_array(Interpreter::question($key)?->type, ['pct'], true) ? $shown.'%' : $shown }}</span>
                             <span class="block text-[0.8125rem] text-on-surface-variant">Typed by {{ $entry['by_name'] ?? 'someone' }}, {{ \Illuminate\Support\Carbon::parse($entry['at'])->format('j M Y, H:i') }}</span>
@@ -165,7 +165,7 @@
                  x-data="{ open: {{ $errors->any() && old('finding') == $finding->id ? 'true' : 'false' }}, note: false }">
                 <x-chip :tone="['error' => 'critical', 'missing' => 'serious', 'warning' => 'warning'][$finding->severity->value]"
                         :icon="['error' => 'block', 'missing' => 'playlist_remove', 'warning' => 'visibility'][$finding->severity->value]">{{ __('oha.severity.'.$finding->severity->value) }}</x-chip>
-                <div class="flex-1 min-w-60 text-[0.875rem]">
+                <div class="flex-1 min-w-[min(15rem,100%)] text-[0.875rem]">
                     <p class="font-semibold">{{ $finding->message }}</p>
                     <p class="text-[0.8125rem] text-on-surface-variant">{{ $finding->location }}{{ $finding->hint ? ' · '.$finding->hint : '' }}</p>
                     @if ($finding->resolved_at)
@@ -194,7 +194,7 @@
                     @unless ($finding->resolved_at)
                         <form method="POST" action="{{ route('findings.resolve', $finding) }}" x-show="note" x-cloak class="basis-full flex flex-wrap items-end gap-xs">
                             @csrf
-                            <label class="flex flex-col gap-xs text-[0.875rem] flex-1 min-w-60">
+                            <label class="flex flex-col gap-xs text-[0.875rem] flex-1 min-w-[min(15rem,100%)]">
                                 <span class="font-semibold">How was it resolved?</span>
                                 <input name="note" required class="px-sm py-1.5 rounded border-[1.5px] border-outline-variant" placeholder="For example: the NGS confirmed by email that…">
                                 <span class="text-[0.8125rem] text-on-surface-variant">A note records how it was settled; it does not change the answers or the score. To change the score, type the answer instead.</span>
@@ -266,7 +266,7 @@
             @foreach ($uploads as $u)
                 <li @class(['flex flex-wrap items-center gap-sm p-sm rounded-lg border-[1.5px]',
                             'border-primary' => $u->id === $previewing?->id, 'border-outline-variant' => $u->id !== $previewing?->id])>
-                    <span class="flex-1 min-w-48">
+                    <span class="flex-1 min-w-[min(12rem,100%)]">
                         {{ $u->original_name }}
                         <span class="block text-[0.8125rem] text-on-surface-variant">{{ $u->uploaded_at->format('j M Y, H:i') }} · {{ $u->uploader->name }}{{ $u->id === $upload?->id ? ' · latest' : '' }}</span>
                     </span>

@@ -116,6 +116,15 @@
         display: none;
     }
 
+    /*
+     * A grid is one column until a breakpoint gives it more, and that column may shrink:
+     * one long line (names, a file name) never pushes a page wider than a phone. Any
+     * grid-cols-* class (a utility) still sets the columns.
+     */
+    .grid {
+        grid-template-columns: minmax(0, 1fr);
+    }
+
     /* Placeholders at full contrast, not the browser's faint default. */
     ::placeholder {
         color: var(--color-on-surface-variant);
@@ -132,6 +141,39 @@ html[data-text-size='large'] {
 }
 html[data-text-size='larger'] {
     font-size: 125%;
+}
+
+/*
+ * Phones and tablets. iPhones zoom the whole page in when a box with text under 16px is
+ * tapped, so on touch screens boxes use 16px. And a full-height panel uses the height
+ * actually visible (100dvh), not the height behind Safari's and Chrome's toolbars.
+ */
+@media (pointer: coarse) {
+    input:not([type='checkbox']):not([type='radio']):not([type='range']):not([type='file']),
+    select,
+    textarea {
+        font-size: max(1rem, 16px);
+    }
+}
+
+/*
+ * On touch screens, something to tap is at least 24px tall (WCAG 2.5.8). A link inside
+ * a sentence (a paragraph) is left as it is; a link standing on its own becomes an
+ * inline block so the height applies. In the base layer: any display or size class wins.
+ */
+@layer base {
+    @media (pointer: coarse) {
+        :is(a[href], button, summary, [role='tab']) {
+            min-height: 24px;
+        }
+        a[href]:not(p *) {
+            display: inline-block;
+        }
+    }
+}
+.h-visible-screen {
+    height: 100vh;
+    height: 100dvh;
 }
 
 /* A thick, high-contrast outline wherever the keyboard is. */

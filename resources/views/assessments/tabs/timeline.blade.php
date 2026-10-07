@@ -48,7 +48,7 @@
 <x-card title="Other steps" subtitle="Steps staff add, such as sending the form to the movement or a field visit.">
     @forelse ($timeline as $step)
         <div class="flex flex-wrap items-center gap-sm text-[0.875rem] p-sm rounded border-[1.5px] border-outline-variant">
-            <span class="flex-1 min-w-40 {{ $step->done_on ? 'line-through text-on-surface-variant' : 'font-semibold' }}">{{ $step->label }}</span>
+            <span class="flex-1 min-w-[min(10rem,100%)] {{ $step->done_on ? 'line-through text-on-surface-variant' : 'font-semibold' }}">{{ $step->label }}</span>
             @if ($canEdit)
                 <form method="POST" action="{{ route('timeline.steps.update', $step) }}" class="flex flex-wrap items-center gap-xs">
                     @csrf
@@ -72,11 +72,11 @@
     @endforelse
 
     @if ($canEdit)
-        <form method="POST" action="{{ route('timeline.steps.store', $assessment) }}" class="flex flex-wrap items-end gap-sm">
+        <form method="POST" action="{{ route('timeline.steps.store', $assessment) }}" class="flex flex-col sm:flex-row sm:flex-wrap sm:items-end gap-sm">
             @csrf
-            <x-input name="label" label="New step" placeholder="Field visit" required class="w-64" />
+            <x-input name="label" label="New step" placeholder="Field visit" required class="sm:w-64" />
             <x-input name="due_on" label="Due" type="date" />
-            <x-button>Add step</x-button>
+            <x-button class="self-start sm:self-auto">Add step</x-button>
         </form>
     @endif
 </x-card>

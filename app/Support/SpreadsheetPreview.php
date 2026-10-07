@@ -28,7 +28,7 @@ use Throwable;
  */
 final class SpreadsheetPreview
 {
-    private const CACHE_VERSION = 2;
+    private const CACHE_VERSION = 3;
 
     /**
      * @return list<array{title: string, columns: list<int>, rows: list<array{gap: bool, header: bool, cells: list<array<string, mixed>>}>, truncated: bool}>|null
@@ -195,7 +195,7 @@ final class SpreadsheetPreview
 
         return [
             'title' => $sheet->getTitle(),
-            'columns' => array_map(fn (int $c) => self::width($sheet, $c), $columns),
+            'columns' => array_map(fn (int $c) => self::width($sheet, $c, array_column($values, $c)), $columns),
             'rows' => $rows,
             'truncated' => $truncated,
         ];
@@ -283,14 +283,29 @@ final class SpreadsheetPreview
     }
 
     /** The column's width on screen, in pixels, from its width in Excel (in characters). */
-    private static function width(Worksheet $sheet, int $col): int
+    /**
+     * The column's width on screen, in pixels: its width in Excel (in characters). A column
+     * left at Excel's narrow default is widened to its content (up to about 40 characters),
+     * so words are not broken letter by letter; longer text wraps.
+     *
+     * @param  list<bool|string>  $column  what the column's cells show
+     */
+    private static function width(Worksheet $sheet, int $col, array $column): int
     {
-        $chars = $sheet->getColumnDimension(Coordinate::stringFromColumnIndex($col))->getWidth();
-        if ($chars <= 0) {
-            $chars = $sheet->getDefaultColumnDimension()->getWidth();
-        }
+        $set = $sheet->getColumnDimension(Coordinate::stringFromColumnIndex($col))->getWidth();
+        $chars = $set > 0 ? $set : $sheet->getDefaultColumnDimension()->getWidth();
         if ($chars <= 0) {
             $chars = 8.43;
+        }
+
+        if ($set <= 0) {
+            $longest = 0;
+            foreach ($column as $value) {
+                foreach (is_string($value) ? explode("\n", $value) : [] as $line) {
+                    $longest = max($longest, mb_strlen($line));
+                }
+            }
+            $chars = max($chars, min(40, $longest * 0.95));
         }
 
         return (int) max(48, min(480, round($chars * 7 + 5)));

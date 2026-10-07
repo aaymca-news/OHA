@@ -79,7 +79,7 @@
                             'border-primary bg-surface-container-lowest' => $v->id === $shown?->id,
                             'border-outline-variant' => $v->id !== $shown?->id])>
                     <span class="font-semibold text-primary">Version {{ $v->number }}</span>
-                    <span class="flex-1 min-w-48">
+                    <span class="flex-1 min-w-[min(12rem,100%)]">
                         {{ $v->original_name }}
                         <span class="block text-[0.8125rem] text-on-surface-variant">
                             {{ $v->fromDrive() ? 'From Google Drive'.($v->edited_by_email ? ', changed by '.$v->edited_by_email : '') : $v->creator->name }}

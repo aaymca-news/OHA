@@ -95,7 +95,7 @@
                     @endcan
                 @endif
                 @can('linkDrive', $artefact)
-                    <details class="flex-1 min-w-64 text-[0.875rem]">
+                    <details class="flex-1 min-w-[min(16rem,100%)] text-[0.875rem]">
                         <summary class="cursor-pointer font-semibold text-primary py-2">Change the link</summary>
                         <form method="POST" action="{{ route('artefacts.drive', $artefact) }}" class="flex flex-col gap-sm mt-sm">
                             @csrf
@@ -163,7 +163,7 @@
     <x-card title="Validated by the board" :subtitle="'Signed by '.$assessment->movement->name.'’s Board Chairperson.'">
         <div class="flex flex-wrap items-end gap-lg">
             @if ($signature->isTyped())
-                <p class="signature-typed min-w-48 max-w-[20rem] px-sm pt-md pb-1 border-b-2 border-on-surface text-[2rem] leading-tight text-primary break-words"
+                <p class="signature-typed min-w-[min(12rem,100%)] max-w-full sm:max-w-[20rem] px-sm pt-md pb-1 border-b-2 border-on-surface text-[2rem] leading-tight text-primary break-words"
                    aria-label="Signature typed by {{ $signature->signed_name }}: {{ $signature->signature_text }}">{{ $signature->signature_text }}</p>
             @else
                 <img src="{{ route('downloads.signature', $signature) }}" alt="Signature of {{ $signature->signed_name }}"

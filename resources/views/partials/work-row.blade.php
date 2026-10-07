@@ -10,7 +10,7 @@
     @endphp
     <li class="flex flex-wrap items-center gap-sm p-sm rounded-lg border-[1.5px] {{ $entry['actionable'] ? 'border-outline-variant bg-surface-container-lowest' : 'border-surface-container bg-surface-container-low' }}">
         <span class="material-symbols-outlined text-primary" aria-hidden="true">flag</span>
-        <div class="flex-1 min-w-56">
+        <div class="flex-1 min-w-[min(14rem,100%)]">
             <a href="{{ $url }}" class="text-[0.875rem] font-semibold text-primary underline">{{ $m->name }}</a>
             <p class="text-[0.8125rem] text-on-surface-variant">
                 Assigned to you · {{ $last ? 'last assessed '.$last->format('M Y').' · no assessment under way' : 'not assessed yet' }}
@@ -33,7 +33,7 @@
 @endphp
 <li class="flex flex-wrap items-center gap-sm p-sm rounded-lg border-[1.5px] {{ $entry['actionable'] ? 'border-outline-variant bg-surface-container-lowest' : 'border-surface-container bg-surface-container-low' }}">
     <span class="material-symbols-outlined text-primary" aria-hidden="true">{{ ['form' => 'table_view', 'report' => 'description', 'odp' => 'checklist'][$artefact->kind->value] }}</span>
-    <div class="flex-1 min-w-56">
+    <div class="flex-1 min-w-[min(14rem,100%)]">
         <a href="{{ $url }}" class="text-[0.875rem] font-semibold text-primary underline">{{ $assessment->movement->name }} · {{ $assessment->period_label }}</a>
         <p class="text-[0.8125rem] text-on-surface-variant">
             {{ $artefact->kind->label() }} · {{ $entry['holder'] }}

@@ -1,7 +1,7 @@
 <x-layouts.app :title="__('oha.nav.profile')" subtitle="Your photo and details. Your password and sign-ins are under Security.">
     <div class="grid lg:grid-cols-2 gap-md items-start">
         {{-- Profile photo: shown wherever the person's name appears. --}}
-        <section class="bg-surface-container-lowest border-[1.5px] border-outline-variant rounded-lg p-lg flex flex-col gap-md">
+        <section class="min-w-0 bg-surface-container-lowest border-[1.5px] border-outline-variant rounded-lg p-md sm:p-lg flex flex-col gap-md">
             <div>
                 <h2 class="text-[1.125rem] font-bold text-primary">Profile photo</h2>
                 <p class="text-[0.875rem] text-on-surface-variant">Shown beside your name across the platform: the top bar, Users &amp; Roles, and the movements you assess or represent.</p>
@@ -30,10 +30,10 @@
                     <div x-ref="frame" tabindex="0" role="img" aria-label="Photo preview. Drag, or use the arrow keys, to move it; plus and minus to zoom."
                          x-on:pointerdown="start($event)" x-on:pointermove="move($event)" x-on:pointerup="stop()" x-on:pointercancel="stop()" x-on:keydown="key($event)"
                          :class="dragging ? 'cursor-grabbing' : 'cursor-grab'"
-                         class="relative w-56 h-56 rounded-full overflow-hidden bg-surface-container border-[1.5px] border-outline-variant touch-none select-none focus-visible:outline-2 focus-visible:outline-primary">
+                         class="relative w-56 max-w-full aspect-square rounded-full overflow-hidden bg-surface-container border-[1.5px] border-outline-variant touch-none select-none focus-visible:outline-2 focus-visible:outline-primary">
                         <img :src="src" alt="" draggable="false" :style="style" class="absolute left-0 top-0 max-w-none origin-top-left pointer-events-none">
                     </div>
-                    <label class="flex items-center gap-sm text-[0.875rem] w-56">
+                    <label class="flex items-center gap-sm text-[0.875rem] w-56 max-w-full">
                         <span class="material-symbols-outlined text-[1.125rem] text-on-surface-variant" aria-hidden="true">zoom_out</span>
                         <input type="range" min="1" max="4" step="0.01" :value="zoom" x-on:input="setZoom($event.target.value)" aria-label="Zoom" class="flex-1 accent-primary">
                         <span class="material-symbols-outlined text-[1.125rem] text-on-surface-variant" aria-hidden="true">zoom_in</span>
@@ -52,7 +52,7 @@
         </section>
 
         {{-- Details: the name and title are theirs to correct; the rest is set by the Administrators. --}}
-        <section class="bg-surface-container-lowest border-[1.5px] border-outline-variant rounded-lg p-lg flex flex-col gap-md">
+        <section class="min-w-0 bg-surface-container-lowest border-[1.5px] border-outline-variant rounded-lg p-md sm:p-lg flex flex-col gap-md">
             <h2 class="text-[1.125rem] font-bold text-primary">Your details</h2>
             <form method="POST" action="{{ route('profile.update') }}" class="flex flex-col gap-sm">
                 @csrf

@@ -21,7 +21,7 @@
         <div x-show="menu" x-cloak x-on:click="menu = false" class="lg:hidden fixed inset-0 z-30 bg-primary/40" aria-hidden="true"></div>
         <div id="sidebar" class="sidebar-shell w-60 max-w-[85vw] shrink-0 lg:relative bg-surface-container-lowest border-r-[1.5px] border-outline-variant hidden lg:block"
              :class="menu ? '!block fixed inset-y-0 left-0 z-40 shadow-lg' : ''" x-on:keydown.escape.window="menu = false">
-            <aside class="bg-surface-container-lowest text-on-surface flex flex-col sticky top-0 h-screen" aria-label="Main menu">
+            <aside class="bg-surface-container-lowest text-on-surface flex flex-col sticky top-0 h-visible-screen" aria-label="Main menu">
                 <a href="{{ route('dashboard') }}" class="block px-md pt-md pb-sm border-b border-surface-container">
                     <img src="{{ asset('images/aaymca-logo.png') }}" alt="{{ __('oha.app.org') }}" width="1200" height="452" class="w-full max-w-[14rem] h-auto">
                     <span class="block mt-sm text-[0.875rem] font-semibold text-on-surface-variant leading-tight">{{ __('oha.app.title') }}</span>
@@ -61,24 +61,35 @@
         <div class="flex-1 min-w-0 flex flex-col">
             {{-- Top bar --}}
             <header class="sticky top-0 z-30 bg-surface-container-lowest/95 backdrop-blur border-b-[1.5px] border-outline-variant">
-                <div class="flex items-center gap-sm sm:gap-md px-md sm:px-lg py-2">
+                {{--
+                    On phones the search box is a button: it opens a full-width search row beneath,
+                    so the menu, logo, notifications and account stay clear of each other.
+                --}}
+                <div class="flex flex-wrap items-center gap-x-sm gap-y-2 sm:gap-md px-md sm:px-lg py-2" x-data="{ find: false }">
                     <button type="button" x-on:click="toggleSidebar()" aria-controls="sidebar" :aria-expanded="sidebarOpen()"
                             :aria-label="sidebarOpen() ? 'Hide the menu' : 'Show the menu'" :title="sidebarOpen() ? 'Hide the menu' : 'Show the menu'"
-                            class="p-1.5 rounded border-[1.5px] border-outline-variant hover:border-primary flex items-center">
+                            class="p-1.5 rounded border-[1.5px] border-outline-variant hover:border-primary flex items-center shrink-0">
                         <span class="material-symbols-outlined" aria-hidden="true" x-text="sidebarOpen() ? 'left_panel_close' : 'left_panel_open'">menu</span>
                     </button>
-                    <a href="{{ route('dashboard') }}" class="topbar-logo shrink-0">
-                        <img src="{{ asset('images/aaymca-logo.png') }}" alt="{{ __('oha.app.org') }}" width="1200" height="452" class="h-8 w-auto">
+                    <a href="{{ route('dashboard') }}" class="topbar-logo shrink min-w-0">
+                        <img src="{{ asset('images/aaymca-logo.png') }}" alt="{{ __('oha.app.org') }}" width="1200" height="452" class="h-8 w-auto max-w-full">
                     </a>
 
-                    <form method="GET" action="{{ route('search') }}" role="search" class="relative flex-1 min-w-0 max-w-[28rem]">
+                    <form method="GET" action="{{ route('search') }}" role="search" id="top-search"
+                          :class="find ? 'flex order-last basis-full' : 'hidden sm:flex'"
+                          class="hidden sm:flex relative flex-1 min-w-0 sm:max-w-[28rem]">
                         <label for="q" class="sr-only">Search movements and assessments</label>
                         <span class="material-symbols-outlined absolute left-2 top-1/2 -translate-y-1/2 text-[1.125rem] text-on-surface-variant" aria-hidden="true">search</span>
-                        <input id="q" name="q" type="search" value="{{ request('q') }}" placeholder="Search movements, assessments…"
+                        <input id="q" name="q" type="search" value="{{ request('q') }}" placeholder="Search movements, assessments…" x-ref="q"
                                class="w-full pl-8 pr-3 py-1.5 text-[0.9375rem] rounded border-[1.5px] border-outline bg-surface-container-lowest focus:border-primary">
                     </form>
 
                     <div class="ml-auto flex items-center gap-sm sm:gap-md shrink-0">
+                    <button type="button" class="sm:hidden p-1.5 rounded-full hover:bg-surface-container flex items-center" aria-controls="top-search"
+                            :aria-expanded="find" :aria-label="find ? 'Close search' : 'Search'" aria-label="Search"
+                            x-on:click="find = ! find; if (find) $nextTick(() => $refs.q.focus())">
+                        <span class="material-symbols-outlined" aria-hidden="true" x-text="find ? 'close' : 'search'">search</span>
+                    </button>
                     <a href="{{ route('notifications.index') }}" class="relative p-1.5 rounded-full hover:bg-surface-container" aria-label="Notifications{{ $unread ? ', '.$unread.' unread' : '' }}">
                         <span class="material-symbols-outlined" aria-hidden="true">notifications</span>
                         @if ($unread)
@@ -88,15 +99,16 @@
 
                     <div class="relative" x-data="{ open: false }" x-on:click.outside="open = false" x-on:keydown.escape="open = false">
                         <button type="button" x-on:click="open = ! open" :aria-expanded="open" aria-haspopup="true"
-                                class="flex items-center gap-sm pl-1 pr-2 py-1 rounded-full border-[1.5px] border-outline-variant hover:border-primary">
+                                aria-label="Your account: {{ auth()->user()->name }}"
+                                class="flex items-center gap-sm p-1 sm:pr-2 rounded-full border-[1.5px] border-outline-variant hover:border-primary">
                             <x-avatar :user="auth()->user()" />
                             <span class="text-left leading-tight hidden md:block">
                                 <span class="block text-[0.875rem] font-semibold text-primary">{{ auth()->user()->name }}</span>
                                 <span class="block text-[0.8125rem] text-on-surface-variant">{{ auth()->user()->role->label() }}{{ auth()->user()->movement ? ' · '.auth()->user()->movement->name : '' }}</span>
                             </span>
-                            <span class="material-symbols-outlined text-[1.125rem] text-on-surface-variant" aria-hidden="true">expand_more</span>
+                            <span class="material-symbols-outlined text-[1.125rem] text-on-surface-variant hidden sm:inline" aria-hidden="true">expand_more</span>
                         </button>
-                        <div x-show="open" x-cloak class="absolute right-0 mt-1 w-64 bg-surface-container-lowest border-[1.5px] border-outline-variant rounded-lg py-xs text-[0.9375rem] shadow-md">
+                        <div x-show="open" x-cloak class="absolute right-0 mt-1 w-64 max-w-[calc(100vw-2rem)] bg-surface-container-lowest border-[1.5px] border-outline-variant rounded-lg py-xs text-[0.9375rem] shadow-md">
                             {{-- Text size: remembered on this device. Everything is sized in rem, so it all scales. --}}
                             <div class="px-md py-2 border-b border-surface-container" role="group" aria-labelledby="text-size-label">
                                 <p id="text-size-label" class="text-[0.8125rem] font-semibold text-on-surface-variant mb-xs">Text size</p>
@@ -124,7 +136,7 @@
                 </div>
             </header>
 
-            <main id="main" class="flex-1 px-lg py-lg w-full max-w-[1280px] flex flex-col gap-md">
+            <main id="main" class="flex-1 px-md py-md sm:px-lg sm:py-lg w-full max-w-[1280px] flex flex-col gap-md">
                 @if (! $health['ok'] && \App\Support\SystemHealth::shouldWarn(auth()->user()))
                     <div role="alert" @class([
                         'flex flex-wrap items-center gap-sm p-md rounded-lg border-[1.5px]',
@@ -132,7 +144,7 @@
                         'border-band-atrisk bg-serious-wash text-serious-ink' => $health['severity'] !== 'critical',
                     ])>
                         <span class="material-symbols-outlined" aria-hidden="true">warning</span>
-                        <div class="flex-1 min-w-60">
+                        <div class="flex-1 min-w-[min(15rem,100%)]">
                             <p class="text-[0.9375rem] font-semibold">Roles still to be appointed</p>
                             <p class="text-[0.875rem]">{{ implode(' ', $health['problems']) }}</p>
                             @if ($health['movements_without_chair'] !== [])
@@ -150,7 +162,7 @@
                 @endif
 
                 <div class="flex flex-wrap items-start gap-md">
-                    <div class="flex-1 min-w-60">
+                    <div class="flex-1 min-w-[min(15rem,100%)]">
                         <h1 class="text-[1.5rem] font-bold text-primary leading-tight">{{ $title }}</h1>
                         @if ($subtitle)
                             <p class="text-[0.9375rem] text-on-surface-variant mt-1">{{ $subtitle }}</p>

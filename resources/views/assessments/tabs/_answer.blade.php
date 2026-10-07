@@ -62,7 +62,7 @@
             @foreach ($group as $code)
                 <label class="flex flex-wrap items-center gap-sm">
                     <span class="w-14 font-semibold">{{ $code }}</span>
-                    <span class="flex-1 min-w-48">{{ ltrim($labels[$code] ?? '', '- ') ?: $code }}</span>
+                    <span class="flex-1 min-w-[min(12rem,100%)]">{{ ltrim($labels[$code] ?? '', '- ') ?: $code }}</span>
                     <span class="inline-flex items-center gap-xs">
                         <input name="shares[{{ $code }}]" inputmode="decimal" autocomplete="off" class="{{ $input }} w-24 py-1"
                                x-on:input="shares['{{ $code }}'] = parseFloat($event.target.value) || 0" aria-label="{{ $code }} percentage">
