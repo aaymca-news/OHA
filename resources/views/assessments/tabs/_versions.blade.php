@@ -12,7 +12,7 @@
 @if ($shown)
     @php([$label, $icon, $tone] = VersionLabel::of($shown, $artefact, $latestId))
     <x-card :title="'Version '.$shown->number.' · '.$shown->original_name"
-            :subtitle="($shown->fromDrive() ? 'Taken from Google Drive' : 'Uploaded by '.$shown->creator->name).', '.$shown->created_at->format('j M Y, H:i').' · '.number_format($shown->size_bytes / 1024).' KB'">
+            :subtitle="($shown->fromDrive() ? 'Taken from Google Drive' : ($shown->fromPlatform() ? 'Fixed in the platform by '.$shown->creator->name : 'Uploaded by '.$shown->creator->name)).', '.$shown->created_at->format('j M Y, H:i').' · '.number_format($shown->size_bytes / 1024).' KB'">
         <x-slot:actions>
             <div class="flex flex-wrap items-center gap-sm">
                 <x-chip :tone="$tone" :icon="$icon">{{ $label }}</x-chip>
@@ -88,6 +88,8 @@
                     </span>
                     @if ($v->fromDrive())
                         <x-chip tone="info" icon="sync">Google Drive</x-chip>
+                    @elseif ($v->fromPlatform())
+                        <x-chip tone="info" icon="auto_fix_high">Fixed in the platform</x-chip>
                     @endif
                     <x-chip :tone="$tone" :icon="$icon">{{ $label }}</x-chip>
                     @if ($v->id !== $shown?->id)

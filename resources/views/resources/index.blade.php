@@ -109,6 +109,22 @@
                                     </li>
                                 @endforeach
                             </ul>
+                            {{-- The ODP's supporting documents, stored once and never overwritten. --}}
+                            @php($references = $r['references']->filter(fn ($doc) => Gate::allows('download', $doc)))
+                            @if ($references->isNotEmpty())
+                                <div class="flex flex-col gap-xs pl-sm border-l-2 border-surface-container text-[0.875rem]">
+                                    <p class="text-[0.8125rem] font-semibold text-on-surface-variant">ODP reference files</p>
+                                    @foreach ($references as $doc)
+                                        <p class="flex flex-wrap items-center gap-x-sm">
+                                            <a href="{{ route('downloads.document', $doc) }}" class="inline-flex items-center gap-xs text-primary min-w-0">
+                                                <span class="material-symbols-outlined text-[1.125rem]" aria-hidden="true">attach_file</span>
+                                                <span class="underline break-words">{{ $doc->original_name }}</span>
+                                            </a>
+                                            <span class="text-[0.8125rem] text-on-surface-variant">{{ number_format($doc->size_bytes / 1024) }} KB · {{ $doc->created_at->format('j M Y') }}</span>
+                                        </p>
+                                    @endforeach
+                                </div>
+                            @endif
                         </div>
                         @if ($i > 0 && $loop->last)
                                 </div>

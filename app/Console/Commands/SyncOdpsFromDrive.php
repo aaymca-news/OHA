@@ -13,9 +13,10 @@ use Illuminate\Console\Command;
 use Throwable;
 
 /**
- * Takes the changes made in Google Drive to every linked, unsigned ODP as new
- * versions. Scheduled every five minutes once the platform has access to Google
- * Drive; each run is recorded, so the dashboard can show when it last worked.
+ * Takes the changes made in Google Drive to every linked ODP as new versions; once
+ * the ODP is signed, notes them as changes after signing instead. Scheduled every five
+ * minutes once the platform has access to Google Drive; each run is recorded, so the
+ * dashboard can show when it last worked.
  */
 #[Signature('oha:sync-drive')]
 #[Description('Take changes made to the ODPs in Google Drive as new versions')]
@@ -32,8 +33,9 @@ class SyncOdpsFromDrive extends Command
             return self::SUCCESS;
         }
 
+        // Signed ODPs too: a change after signing is noted for Stage 2 (never a version).
         $odps = Artefact::query()->where('kind', ArtefactKind::Odp)->whereNotNull('drive_file_id')
-            ->whereDoesntHave('signature')->with('assessment.movement')->orderBy('id')->get();
+            ->with('assessment.movement')->orderBy('id')->get();
 
         try {
             foreach ($odps as $odp) {

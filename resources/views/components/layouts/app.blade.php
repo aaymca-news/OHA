@@ -22,10 +22,20 @@
         <div id="sidebar" class="sidebar-shell w-60 max-w-[85vw] shrink-0 lg:relative bg-surface-container-lowest border-r-[1.5px] border-outline-variant hidden lg:block"
              :class="menu ? '!block fixed inset-y-0 left-0 z-40 shadow-lg' : ''" x-on:keydown.escape.window="menu = false">
             <aside class="bg-surface-container-lowest text-on-surface flex flex-col sticky top-0 h-visible-screen" aria-label="Main menu">
-                <a href="{{ route('dashboard') }}" class="block px-md pt-md pb-sm border-b border-surface-container">
-                    <img src="{{ asset('images/aaymca-logo.png') }}" alt="{{ __('oha.app.org') }}" width="1200" height="452" class="w-full max-w-[14rem] h-auto">
-                    <span class="block mt-sm text-[0.875rem] font-semibold text-on-surface-variant leading-tight">{{ __('oha.app.title') }}</span>
-                </a>
+                {{-- The menu's own header: the logo, and the button that hides the menu (closes it on phones). --}}
+                <div class="flex items-start gap-xs px-md pt-md pb-sm border-b border-surface-container">
+                    <a href="{{ route('dashboard') }}" class="block flex-1 min-w-0">
+                        <img src="{{ asset('images/aaymca-logo.png') }}" alt="{{ __('oha.app.org') }}" width="1200" height="452" class="w-full max-w-[12rem] h-auto">
+                        <span class="block mt-sm text-[0.875rem] font-semibold text-on-surface-variant leading-tight">{{ __('oha.app.title') }}</span>
+                    </a>
+                    <button type="button" x-on:click="toggleSidebar()" aria-controls="sidebar"
+                            aria-label="Hide the menu" title="Hide the menu"
+                            class="-mr-1.5 shrink-0 w-9 h-9 grid place-items-center rounded-full text-on-surface-variant hover:bg-surface-container hover:text-primary">
+                        {{-- The icon font sets its own display, so showing or hiding goes on a wrapper. --}}
+                        <span class="lg:hidden"><span class="material-symbols-outlined text-[1.375rem] align-middle" aria-hidden="true">close</span></span>
+                        <span class="hidden lg:inline"><span class="material-symbols-outlined text-[1.375rem] align-middle" aria-hidden="true">left_panel_close</span></span>
+                    </button>
+                </div>
                 <nav class="p-sm flex flex-col gap-0.5 flex-1 overflow-y-auto" aria-label="Main">
                     @foreach ($navigation as $item)
                         @php($isActive = request()->routeIs($item['active']))
@@ -66,10 +76,15 @@
                     so the menu, logo, notifications and account stay clear of each other.
                 --}}
                 <div class="flex flex-wrap items-center gap-x-sm gap-y-2 sm:gap-md px-md sm:px-lg py-2" x-data="{ find: false }">
+                    {{--
+                        Opening the menu: on phones and tablets a menu button; on wide screens only
+                        once the menu has been hidden (the button to hide it is in the menu itself).
+                    --}}
                     <button type="button" x-on:click="toggleSidebar()" aria-controls="sidebar" :aria-expanded="sidebarOpen()"
-                            :aria-label="sidebarOpen() ? 'Hide the menu' : 'Show the menu'" :title="sidebarOpen() ? 'Hide the menu' : 'Show the menu'"
-                            class="p-1.5 rounded border-[1.5px] border-outline-variant hover:border-primary flex items-center shrink-0">
-                        <span class="material-symbols-outlined" aria-hidden="true" x-text="sidebarOpen() ? 'left_panel_close' : 'left_panel_open'">menu</span>
+                            aria-label="Show the menu" title="Show the menu"
+                            class="topbar-expand shrink-0 w-9 h-9 grid place-items-center rounded-full text-on-surface-variant hover:bg-surface-container hover:text-primary">
+                        <span class="lg:hidden"><span class="material-symbols-outlined text-[1.5rem] align-middle" aria-hidden="true">menu</span></span>
+                        <span class="hidden lg:inline"><span class="material-symbols-outlined text-[1.375rem] align-middle" aria-hidden="true">left_panel_open</span></span>
                     </button>
                     <a href="{{ route('dashboard') }}" class="topbar-logo shrink min-w-0">
                         <img src="{{ asset('images/aaymca-logo.png') }}" alt="{{ __('oha.app.org') }}" width="1200" height="452" class="h-8 w-auto max-w-full">
@@ -106,7 +121,7 @@
                                 <span class="block text-[0.875rem] font-semibold text-primary">{{ auth()->user()->name }}</span>
                                 <span class="block text-[0.8125rem] text-on-surface-variant">{{ auth()->user()->role->label() }}{{ auth()->user()->movement ? ' · '.auth()->user()->movement->name : '' }}</span>
                             </span>
-                            <span class="material-symbols-outlined text-[1.125rem] text-on-surface-variant hidden sm:inline" aria-hidden="true">expand_more</span>
+                            <span class="hidden sm:inline"><span class="material-symbols-outlined text-[1.125rem] text-on-surface-variant align-middle" aria-hidden="true">expand_more</span></span>
                         </button>
                         <div x-show="open" x-cloak class="absolute right-0 mt-1 w-64 max-w-[calc(100vw-2rem)] bg-surface-container-lowest border-[1.5px] border-outline-variant rounded-lg py-xs text-[0.9375rem] shadow-md">
                             {{-- Text size: remembered on this device. Everything is sized in rem, so it all scales. --}}

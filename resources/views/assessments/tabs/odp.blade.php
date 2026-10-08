@@ -36,6 +36,18 @@
     <x-empty-state icon="lock">The ODP unlocks once a version of the report is saved. The report does not need to be approved first.</x-empty-state>
 @endif
 
+{{-- The link to Google Drive no longer works: said at the top, with what to do. --}}
+@if ($artefact->drive_problem && $me->isSecretariat())
+    <div role="alert" class="flex flex-wrap items-start gap-sm p-md rounded-lg border-[1.5px] border-band-atrisk bg-serious-wash text-serious-ink text-[0.875rem]">
+        <span class="material-symbols-outlined" aria-hidden="true">link_off</span>
+        <div class="flex-1 min-w-[min(15rem,100%)]">
+            <p class="font-semibold">The ODP’s Google Drive link is not working</p>
+            <p>{{ $artefact->drive_problem }}</p>
+            <p class="text-[0.8125rem] mt-xs">If the document was moved to another folder, the link still works once it is shared again. If the staff now work in a new copy, change the link below so the platform reads that copy.</p>
+        </div>
+    </div>
+@endif
+
 @if ($signature)
     <div class="flex items-start gap-sm p-md rounded-lg bg-good-wash text-good-ink text-[0.875rem]">
         <span class="material-symbols-outlined" aria-hidden="true">verified</span>
@@ -59,8 +71,10 @@
             <dd>{{ $artefact->driveLinker?->name ?? '—' }}{{ $artefact->drive_linked_at ? ', '.$artefact->drive_linked_at->format('j M Y') : '' }}</dd>
             <dt class="text-on-surface-variant">Updates</dt>
             <dd>
-                @if ($signature)
-                    Stopped: the signed ODP is frozen.
+                @if ($signature && $connected)
+                    The signed ODP is frozen. Changes made in Google Drive are still read, and noted below as changes after signing, never as versions.
+                @elseif ($signature)
+                    The signed ODP is frozen. Once AAYMCA’s Google administrator connects the platform, changes made in Google Drive are noted below.
                 @elseif (! $connected)
                     By upload only, for now. Changes in Google Drive are taken automatically once AAYMCA’s Google administrator connects the platform.
                 @elseif ($artefact->drive_checked_at)
@@ -71,12 +85,12 @@
             </dd>
         </dl>
 
-        @if ($artefact->drive_problem && ! $signature)
+        @if ($artefact->drive_problem)
             <p class="flex items-start gap-xs p-sm rounded bg-warning-wash text-warning-ink text-[0.875rem]">
                 <span class="material-symbols-outlined text-[1.125rem]" aria-hidden="true">warning</span>
                 <span>{{ $artefact->drive_problem }}</span>
             </p>
-        @elseif ($connected && $seesDrafts && ! $signature)
+        @elseif ($connected && $seesDrafts)
             <p class="text-[0.8125rem] text-on-surface-variant">
                 The platform reads the document as {{ $drive->serviceAccountEmail() }}. Keep it in the OHA shared drive, or share it with that address (Viewer is enough).
             </p>
@@ -215,6 +229,75 @@
             {{ Gate::inspect('sign', $artefact)->message() }}
         @endif
     </x-empty-state>
+@endif
+
+{{-- Stage 2: the signed ODP as changed in Google Drive since; noted, never versions. --}}
+@if ($signature)
+    @php
+        $after = $artefact->changesAfterSigning()->with('creator')->get()->reverse()->values();
+    @endphp
+    <x-card id="after-signing" title="Changes made after signing"
+            :subtitle="$after->isEmpty()
+                ? 'None yet. Changes made to the ODP in Google Drive after the Board Chairperson signed are noted here, with what changed. The signed version stays the plan of record.'
+                : 'Noted from Google Drive since the Board Chairperson signed. The signed version (version '.$signature->document?->versionNumber().') stays the plan of record.'">
+        @if ($after->isNotEmpty())
+            <ul class="flex flex-col gap-sm text-[0.875rem]">
+                @foreach ($after as $change)
+                    @php
+                        $c = $change->changes ?? ['kind' => 'file', 'count' => 1];
+                        $what = match ($c['kind'] ?? 'file') {
+                            'cells' => $c['count'].' '.($c['count'] === 1 ? 'cell changed' : 'cells changed'),
+                            'lines' => $c['count'].' '.($c['count'] === 1 ? 'line changed' : 'lines changed'),
+                            default => 'The file changed',
+                        };
+                    @endphp
+                    <li class="p-sm rounded-lg border-[1.5px] border-outline-variant flex flex-col gap-xs" x-data="{ open: false }">
+                        <div class="flex flex-wrap items-center gap-sm">
+                            <span class="material-symbols-outlined text-primary" aria-hidden="true">history_edu</span>
+                            <span class="flex-1 min-w-[min(12rem,100%)]">
+                                <span class="font-semibold">{{ $change->created_at->format('j M Y, H:i') }}</span> · {{ $what }}
+                                <span class="block text-[0.8125rem] text-on-surface-variant">Changed in Google Drive{{ $change->edited_by_email ? ' by '.$change->edited_by_email : '' }}</span>
+                            </span>
+                            @if (in_array($c['kind'] ?? 'file', ['cells', 'lines'], true) && $c['count'] > 0)
+                                <button type="button" x-on:click="open = ! open" :aria-expanded="open" class="text-primary underline">What changed</button>
+                            @endif
+                            <a href="{{ route('downloads.document', $change) }}" class="inline-flex items-center gap-xs text-primary">
+                                <span class="material-symbols-outlined text-[1.125rem]" aria-hidden="true">download</span><span class="underline">Download this copy</span>
+                            </a>
+                        </div>
+                        @if (($c['kind'] ?? '') === 'cells')
+                            <div x-show="open" x-cloak class="overflow-x-auto">
+                                <table class="w-full text-[0.8125rem]">
+                                    <thead class="text-left text-on-surface-variant"><tr><th class="py-1 pr-sm">Sheet · cell</th><th class="py-1 pr-sm">Before</th><th class="py-1">After</th></tr></thead>
+                                    <tbody>
+                                        @foreach ($c['cells'] as $cell)
+                                            <tr class="border-t border-surface-container align-top">
+                                                <td class="py-1 pr-sm whitespace-nowrap">{{ $cell['sheet'] }} · {{ $cell['cell'] }}</td>
+                                                <td class="py-1 pr-sm text-on-surface-variant break-words">{{ $cell['before'] !== '' ? $cell['before'] : '(empty)' }}</td>
+                                                <td class="py-1 font-semibold break-words">{{ $cell['after'] !== '' ? $cell['after'] : '(empty)' }}</td>
+                                            </tr>
+                                        @endforeach
+                                    </tbody>
+                                </table>
+                                @if ($c['truncated'] ?? false)
+                                    <p class="text-[0.8125rem] text-on-surface-variant mt-xs">Only the first changes are listed. Download the copy to see all of it.</p>
+                                @endif
+                            </div>
+                        @elseif (($c['kind'] ?? '') === 'lines')
+                            <div x-show="open" x-cloak class="flex flex-col gap-xs text-[0.8125rem]">
+                                @foreach ($c['added'] as $line)
+                                    <p class="pl-sm border-l-4 border-band-strong">Added: {{ $line }}</p>
+                                @endforeach
+                                @foreach ($c['removed'] as $line)
+                                    <p class="pl-sm border-l-4 border-band-critical text-on-surface-variant">Removed: {{ $line }}</p>
+                                @endforeach
+                            </div>
+                        @endif
+                    </li>
+                @endforeach
+            </ul>
+        @endif
+    </x-card>
 @endif
 
 @include('assessments.tabs._versions')

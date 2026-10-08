@@ -116,7 +116,7 @@ class AssessmentController extends Controller
             'provisional' => $upload !== null ? array_sum(array_filter($scorer->score($upload->answers, $upload->form_meta['missing_sheets'] ?? []))) : null,
             'dqa' => $upload !== null ? DqaSummary::of($upload->findings, (bool) ($formMilestone?->overdue || $formMilestone?->completed_late)) : null,
             'openGaps' => $upload?->findings->where('severity', FindingSeverity::Missing)->whereNull('resolved_at')->count() ?? 0,
-            'documents' => fn (string $kind) => $artefacts[$kind]->documents()->where('purpose', '!=', DocumentPurpose::Uploaded)->latest('id')->get(),
+            'documents' => fn (string $kind) => $artefacts[$kind]->documents()->where('purpose', DocumentPurpose::Reference)->latest('id')->get(),
             // The report check for a version: worked out now, against the current OHA form.
             // Only for those who see the movement's gaps (its assessors and the Administrators).
             'reportCheck' => fn (Document $version) => $version->extracted !== null && Gate::forUser($user)->allows('viewGaps', $assessment)

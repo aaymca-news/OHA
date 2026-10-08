@@ -43,12 +43,15 @@ it('closes a gap only with a note, and only by the movement’s assessors or an 
         ->and(AuditEvent::query()->where('action', 'gap.reopened')->first()->payload['previous_note'])->toBe('NGS confirmed ZMW 40,000 by email.');
 });
 
-it('does not let a warning be "resolved" like a gap', function () {
+it('lets an item for review be marked as reviewed with a note, which changes no answer', function () {
     $this->j->assessmentAt('form_uploaded');
     $warning = FormFinding::query()->where('severity', 'warning')->firstOrFail();
+    $answers = $warning->formUpload->answers;
 
-    expect(fn () => app(ResolveGap::class)->resolve($warning, $this->j->assessor, 'Seen.'))
-        ->toThrow(WorkflowRuleBroken::class, 'Only missing information');
+    app(ResolveGap::class)->resolve($warning, $this->j->assessor, 'Checked with the NGS: the head count is right.');
+
+    expect($warning->refresh()->resolved_note)->toBe('Checked with the NGS: the head count is right.')
+        ->and($warning->formUpload->refresh()->answers)->toBe($answers);
 });
 
 it('lets a set deadline drive the due date, and tells the assessor when someone else sets it', function () {

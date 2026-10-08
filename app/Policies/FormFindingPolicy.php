@@ -5,23 +5,21 @@ namespace App\Policies;
 use App\Enums\FindingSeverity;
 use App\Models\FormFinding;
 use App\Models\User;
+use App\Oha\FindingFields;
 use Illuminate\Auth\Access\Response;
 use Illuminate\Support\Facades\Gate;
 
 class FormFindingPolicy
 {
-    /** Warnings that are about one answer, which can be corrected by typing it. */
-    private const CORRECTABLE = ['non_numeric', 'wrong_unit', 'invalid_option'];
-
     /**
-     * A gap can be closed off the file with a note (e.g. the NGS confirms a figure
-     * by email) by the movement's assessors or the Administrators. The file itself is
-     * never changed.
+     * A gap can be closed off with a note (e.g. the NGS confirms a figure by email), and
+     * an item for review marked as reviewed, by the movement's assessors or the
+     * Administrators. A note changes no answer and no score; typing the answer does.
      */
     public function resolve(User $user, FormFinding $finding): Response
     {
-        if ($finding->severity !== FindingSeverity::Missing) {
-            return Response::deny('Only missing information can be resolved; warnings are for review.');
+        if ($finding->severity === FindingSeverity::Error) {
+            return Response::deny('This upload was refused. Upload the right form instead.');
         }
 
         $upload = $finding->formUpload;
@@ -43,12 +41,9 @@ class FormFindingPolicy
      */
     public function answer(User $user, FormFinding $finding): Response
     {
-        $kind = $finding->ref !== null ? explode(':', $finding->ref, 2)[0] : null;
-        $answerable = $finding->severity === FindingSeverity::Missing
-            ? in_array($kind, ['q', 'g', 'c', 's'], true)
-            : $finding->severity === FindingSeverity::Warning && $finding->question_code !== null && in_array($finding->rule, self::CORRECTABLE, true);
+        if (FindingFields::for($finding) === null) {
+            $kind = $finding->ref !== null ? explode(':', $finding->ref, 2)[0] : null;
 
-        if (! $answerable) {
             return Response::deny($kind === 'sheet'
                 ? 'A whole missing sheet cannot be typed in. Ask the movement for the complete form and upload it.'
                 : 'This cannot be answered by typing.');

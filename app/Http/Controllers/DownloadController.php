@@ -6,6 +6,7 @@ use App\Enums\DocumentFormat;
 use App\Models\BoardSignature;
 use App\Models\Document;
 use App\Models\FormUpload;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Storage;
 use Symfony\Component\HttpFoundation\BinaryFileResponse;
@@ -17,9 +18,14 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
  */
 class DownloadController extends Controller
 {
-    public function form(FormUpload $formUpload): StreamedResponse
+    /** The OHA form as corrected in the platform; with ?original=1, the file exactly as uploaded. */
+    public function form(Request $request, FormUpload $formUpload): StreamedResponse
     {
-        return Storage::disk($formUpload->disk)->download($formUpload->path, $formUpload->original_name);
+        $file = $request->boolean('original')
+            ? ['disk' => $formUpload->disk, 'path' => $formUpload->path, 'name' => $formUpload->original_name]
+            : $formUpload->shownFile();
+
+        return Storage::disk($file['disk'])->download($file['path'], $file['name']);
     }
 
     public function document(Document $document): StreamedResponse

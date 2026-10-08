@@ -139,7 +139,7 @@ final class ReportChecker
         } elseif (! in_array($year, $years, true)) {
             $this->add(FindingSeverity::Warning, FindingRule::ReportPeriodMismatch,
                 'The report’s title says '.implode(', ', $years).", but this assessment is for {$year}.",
-                location: 'Title', hint: 'Update the period, or check this is the report for this assessment.');
+                location: 'Title', hint: 'Update the period, or check this is the report for this assessment.', ref: 'r:period');
         }
 
         if (preg_match('/\b(report(ed)?\s+by|prepared\s+by|author)\b/i', $opening.' '.$report->text()) !== 1) {
@@ -154,11 +154,12 @@ final class ReportChecker
         $titles = array_column(array_filter($report->paragraphs, [ReadReport::class, 'isTitle']), 'text');
         $has = fn (string $pattern) => array_filter($titles, fn ($t) => preg_match($pattern, $t) === 1) !== [];
 
+        // Strengths and opportunities are one requirement: a movement that is developing is
+        // written up by its opportunities, one that is strong by its strengths. Either will do.
         $sections = [
-            'overview' => ['/overview|introduction|current\s+status|general\s+information/i', 'an overview of the movement', 'Describe the movement: its registration, structure, branches and reach.'],
-            'strengths' => ['/strength/i', 'the key strengths', 'List what the movement does well.'],
-            'risks' => ['/\brisks?\b|concern/i', 'the key risks', 'List the risks the assessment found.'],
-            'opportunities' => ['/opportunit|priorit/i', 'the opportunities for growth', 'List where the movement can grow; these feed the ODP.'],
+            'overview' => ['/overview|introduction|current\s+status|general\s+information|background/i', 'an overview of the movement', 'Describe the movement: its registration, structure, branches and reach.'],
+            'strengths' => ['/\bstrengths?\b|opportunit|priorit|areas?\s+of\s+growth/i', 'the key strengths or opportunities for growth', 'List what the movement does well, or where it can grow; these feed the ODP.'],
+            'risks' => ['/\brisks?\b|concern|challenge|weakness|threat|\bgaps?\b/i', 'the key risks', 'List the risks or challenges the assessment found.'],
         ];
 
         foreach ($sections as $key => [$pattern, $label, $hint]) {
@@ -203,10 +204,13 @@ final class ReportChecker
     private function checkScore(array $stated, ?array $baseline): void
     {
         if ($stated['pct'] === null) {
-            $this->add(FindingSeverity::Missing, FindingRule::ReportSectionMissing,
-                'The report does not state the overall score.',
-                hint: $baseline !== null ? 'The OHA form gives '.$this->points($baseline['points']).' of '.$baseline['available'].' points ('.$baseline['pct'].'%).' : 'State the overall score from the OHA form.',
-                ref: 'r:score');
+            // The form has it: not missing, only not written in the report yet. It can be added from the form.
+            $baseline !== null
+                ? $this->add(FindingSeverity::Warning, FindingRule::ReportSectionMissing,
+                    'The report does not state the overall score; the OHA form gives '.$this->points($baseline['points']).' of '.$baseline['available'].' points ('.$baseline['pct'].'%).',
+                    hint: 'Add it to the report from the form.', ref: 'r:score')
+                : $this->add(FindingSeverity::Missing, FindingRule::ReportSectionMissing,
+                    'The report does not state the overall score.', hint: 'State the overall score from the OHA form.', ref: 'r:score');
 
             return;
         }
@@ -214,7 +218,7 @@ final class ReportChecker
         if ($stated['out_of'] !== null && $baseline !== null && (int) $stated['out_of'] !== $baseline['available']) {
             $this->add(FindingSeverity::Warning, FindingRule::ReportScoreMismatch,
                 'The report scores out of '.$this->points($stated['out_of']).'; the OHA form scores out of '.$baseline['available'].'.',
-                hint: 'Use the form’s own total: '.$this->points($baseline['points']).' of '.$baseline['available'].'.');
+                hint: 'Use the form’s own total: '.$this->points($baseline['points']).' of '.$baseline['available'].'.', ref: 'r:score-fix');
         }
 
         if ($baseline === null) {
@@ -229,7 +233,8 @@ final class ReportChecker
                 'The report gives an overall score of '.$this->points($stated['pct']).'%, but the OHA form gives '.$this->points($baseline['points']).' of '.$baseline['available'].' points ('.$baseline['pct'].'%).',
                 hint: $averaged
                     ? 'The report’s figure is the average of the category percentages ('.$mean.'%). The form scores points out of '.$baseline['available'].', so the categories weigh differently.'
-                    : 'Use the score from the '.($baseline['source'] === 'approved' ? 'approved' : 'uploaded').' OHA form.');
+                    : 'Use the score from the '.($baseline['source'] === 'approved' ? 'approved' : 'uploaded').' OHA form.',
+                ref: 'r:score-fix');
         }
     }
 
@@ -252,7 +257,8 @@ final class ReportChecker
             }
 
             $body = $sections[$code];
-            $hasGrowth = array_filter($body, fn ($p) => preg_match('/opportunit|priorit|recommend/i', $p['text']) === 1) !== [];
+            // A strong category may be written up by its strengths rather than its opportunities.
+            $hasGrowth = array_filter($body, fn ($p) => preg_match('/opportunit|priorit|recommend|\bstrengths?\b/i', $p['text']) === 1) !== [];
             $hasPoints = array_filter($body, fn ($p) => $p['list']) !== [];
             if (! $hasGrowth && ! $hasPoints) {
                 $this->add(FindingSeverity::Missing, FindingRule::ReportCategoryMissing,
@@ -271,7 +277,7 @@ final class ReportChecker
                 if (abs((float) $m[1] - $baseline['categories'][$code]) > 1.0 && (float) $m[1] <= 100) {
                     $this->add(FindingSeverity::Warning, FindingRule::ReportScoreMismatch,
                         "{$name}: the report says {$m[1]}%, the OHA form gives {$baseline['categories'][$code]}%.",
-                        location: $name, hint: 'Check the figure against the form.', category: $code);
+                        location: $name, hint: 'Check the figure against the form.', ref: 'r:catscore:'.$code.':'.$m[1], category: $code);
                 }
             }
         }
@@ -279,7 +285,7 @@ final class ReportChecker
         if ($report->images > 0 && ! $numbersInText) {
             $this->add(FindingSeverity::Warning, FindingRule::ReportScoreUnreadable,
                 'The category scores are only in a picture, so they could not be checked against the form.',
-                hint: 'Paste the score table as a Word table (or write each category’s score in its section), so it can be checked.');
+                hint: 'Each category’s score can be written into its section from the form; or paste the score table as a Word table.', ref: 'r:catscores');
         }
     }
 
@@ -294,7 +300,7 @@ final class ReportChecker
         $current = null;
 
         foreach ($report->paragraphs as $p) {
-            $code = ReadReport::isTitle($p) ? $this->categoryNamedBy($p['text']) : null;
+            $code = ReadReport::isTitle($p) ? self::categoryNamedBy($p['text']) : null;
             if ($code !== null) {
                 $current = $code;
                 $sections[$code] ??= [];
@@ -313,7 +319,7 @@ final class ReportChecker
      * The category a title introduces. "Key strengths…" and other summary titles are
      * not category titles, and a title naming several categories picks the first.
      */
-    private function categoryNamedBy(string $title): ?string
+    public static function categoryNamedBy(string $title): ?string
     {
         if (preg_match('/^(key|strategic|summary|consolidated|overall)\b/i', $title) === 1) {
             return null;

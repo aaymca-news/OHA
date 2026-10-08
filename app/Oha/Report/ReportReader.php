@@ -33,14 +33,36 @@ final class ReportReader
         if ($zip->open($path) !== true || ($xml = $zip->getFromName('word/document.xml')) === false) {
             return new ReadReport('docx', [], problem: 'This does not look like a Word document.');
         }
-        $headingStyles = $this->headingStyles((string) $zip->getFromName('word/styles.xml'));
+        $headingStyles = self::headingStyles((string) $zip->getFromName('word/styles.xml'));
         $zip->close();
 
         $doc = new DOMDocument;
         $doc->loadXML($xml, LIBXML_NONET | LIBXML_COMPACT);
+        $x = self::xpath($doc);
+
+        $paragraphs = array_column(self::paragraphs($x, $headingStyles), 'p');
+        $images = $x->query('//w:drawing | //w:pict')->length;
+
+        return new ReadReport('docx', $paragraphs, $images);
+    }
+
+    public static function xpath(DOMDocument $doc): DOMXPath
+    {
         $x = new DOMXPath($doc);
         $x->registerNamespace('w', self::W);
 
+        return $x;
+    }
+
+    /**
+     * Every paragraph with text, in order (in tables too), with the element it comes from:
+     * the report check reads the paragraphs, and the editor writes beside the elements.
+     *
+     * @param  array<string, int>  $headingStyles
+     * @return list<array{node: DOMElement, p: array{text: string, heading: int|null, bold: bool, list: bool}}>
+     */
+    public static function paragraphs(DOMXPath $x, array $headingStyles): array
+    {
         $paragraphs = [];
         foreach ($x->query('//w:body//w:p') as $p) {
             if (! $p instanceof DOMElement) {
@@ -54,17 +76,15 @@ final class ReportReader
             $runs = $x->query('.//w:r[w:t]', $p);
             $boldRuns = $x->query('.//w:r[w:t][w:rPr/w:b[not(@w:val="0") and not(@w:val="false")]]', $p);
 
-            $paragraphs[] = [
+            $paragraphs[] = ['node' => $p, 'p' => [
                 'text' => $text,
                 'heading' => $style !== null ? ($headingStyles[$style] ?? null) : null,
                 'bold' => $runs->length > 0 && $boldRuns->length === $runs->length,
                 'list' => $x->query('./w:pPr/w:numPr', $p)->length > 0 || preg_match('/^[•\-–·▪●]\s/u', $text) === 1,
-            ];
+            ]];
         }
 
-        $images = $x->query('//w:drawing | //w:pict')->length;
-
-        return new ReadReport('docx', $paragraphs, $images);
+        return $paragraphs;
     }
 
     /**
@@ -72,7 +92,7 @@ final class ReportReader
      *
      * @return array<string, int>
      */
-    private function headingStyles(string $stylesXml): array
+    public static function headingStyles(string $stylesXml): array
     {
         $levels = [];
         if ($stylesXml === '') {

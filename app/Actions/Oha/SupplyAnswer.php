@@ -10,9 +10,11 @@ use App\Models\FormFinding;
 use App\Models\FormUpload;
 use App\Models\User;
 use App\Oha\Answer;
+use App\Oha\FindingFields;
 use App\Oha\FormChecker;
 use App\Oha\FormDefinition;
 use App\Oha\FormReader;
+use App\Oha\FormWorkbookWriter;
 use App\Oha\Interpreter;
 use App\Oha\Question;
 use App\Support\Audit;
@@ -38,24 +40,68 @@ final class SupplyAnswer
     public function __construct(
         private readonly FormReader $reader,
         private readonly FormChecker $checker,
+        private readonly FormWorkbookWriter $writer,
     ) {}
 
     /**
-     * @param  string|array<string, string|null>  $input  one answer, or a percentage per line of a group
+     * @param  string|array<string, string|null>  $input  one answer; or, by question code, several
+     *                                                    answers or the percentages of a group
      */
     public function handle(FormFinding $finding, User $user, string|array $input): FormUpload
     {
         $this->ensure($user, 'answer', $finding);
 
         $upload = $finding->formUpload;
-        $ref = $finding->ref ?? 'q:'.$finding->question_code;
-        $value = $this->value($ref, $input, $upload);
+        $fields = FindingFields::for($finding) ?? throw new WorkflowRuleBroken('This cannot be settled by typing. Mark it as reviewed with a note instead.');
+        $entries = $this->entries($fields, $input, $upload);
 
-        return $this->recheck($upload, $user, function (array $supplied) use ($ref, $value, $user): array {
-            $supplied[$ref] = ['value' => $value, 'by' => $user->id, 'by_name' => $user->name, 'at' => now()->toIso8601String()];
+        return $this->recheck($upload, $user, function (array $supplied) use ($entries, $user): array {
+            foreach ($entries as $ref => $value) {
+                $supplied[$ref] = ['value' => $value, 'by' => $user->id, 'by_name' => $user->name, 'at' => now()->toIso8601String()];
+            }
 
             return $supplied;
-        }, 'typed an answer in', 'form.answer_supplied', ['ref' => $ref, 'value' => $value, 'finding' => $finding->message]);
+        }, 'typed an answer in', 'form.answer_supplied', ['answers' => $entries, 'finding' => $finding->message]);
+    }
+
+    /**
+     * What was typed, by the reference it is kept under: "q:Q246" for an answer, "g:income"
+     * for a group of percentages, "c:financial" for areas of improvement, "s:…" for a sign-off.
+     *
+     * @param  array{kind: string, key: string, codes: list<string>}  $fields
+     * @param  string|array<string, string|null>  $input
+     * @return array<string, int|float|string|array<string, int|float>>
+     */
+    private function entries(array $fields, string|array $input, FormUpload $upload): array
+    {
+        if ($fields['kind'] === 'answers') {
+            $typed = is_array($input) ? $input : [$fields['codes'][0] => $input];
+            $entries = [];
+            foreach ($fields['codes'] as $code) {
+                $text = trim((string) ($typed[$code] ?? ''));
+                if ($text === '') {
+                    continue;
+                }
+                $q = Interpreter::question($code) ?? throw new WorkflowRuleBroken('This question is not on the form.');
+                try {
+                    $entries['q:'.$code] = $this->answer($q, $text, $upload);
+                } catch (WorkflowRuleBroken $e) {
+                    throw new WorkflowRuleBroken(count($fields['codes']) > 1 ? $q->displayCode().': '.$e->getMessage() : $e->getMessage());
+                }
+            }
+            if ($entries === []) {
+                throw new WorkflowRuleBroken(count($fields['codes']) > 1 ? 'Type at least one of the answers.' : 'Type the answer.');
+            }
+
+            return $entries;
+        }
+
+        return match ($fields['kind']) {
+            'shares' => ['g:'.$fields['key'] => $this->shares($fields['key'], is_array($input) ? $input : [])],
+            'comment' => ['c:'.$fields['key'] => $this->comment($input)],
+            'signoff' => ['s:'.$fields['key'] => $this->yesNo($input)],
+            default => throw new WorkflowRuleBroken('This cannot be typed in: upload a corrected form instead.'),
+        };
     }
 
     /** Takes back an answer typed in the platform: the form is checked again without it. */
@@ -96,7 +142,7 @@ final class SupplyAnswer
         }
         $result = $this->checker->check($read, $assessment->movement);
 
-        return DB::transaction(function () use ($form, $upload, $user, $supplied, $read, $result, $what, $action, $payload, $assessment): FormUpload {
+        $upload = DB::transaction(function () use ($form, $upload, $user, $supplied, $read, $result, $what, $action, $payload, $assessment): FormUpload {
             $form = $this->lock($form);
             $this->ensure($user, 'supply', $upload);
 
@@ -116,33 +162,35 @@ final class SupplyAnswer
 
             return $upload->refresh();
         });
+
+        $this->writeCorrectedCopy($upload);
+
+        return $upload->refresh();
     }
 
     /**
-     * What was typed, as the question asks for it; refused with a plain reason otherwise.
-     *
-     * @param  string|array<string, string|null>  $input
-     * @return int|float|string|array<string, int|float>
+     * The typed answers written into a copy of the workbook: what is previewed and
+     * downloaded. The copy before is removed when nothing else uses it.
      */
-    private function value(string $ref, string|array $input, FormUpload $upload): int|float|string|array
+    private function writeCorrectedCopy(FormUpload $upload): void
     {
-        [$kind, $key] = explode(':', $ref, 2) + [1 => ''];
+        $before = $upload->edited_path !== null ? [$upload->edited_disk, $upload->edited_path] : null;
+        $stored = $this->writer->write($upload);
 
-        return match ($kind) {
-            'q' => $this->answer(Interpreter::question($key) ?? throw new WorkflowRuleBroken('This question is not on the form.'), $input, $upload),
-            'g' => $this->shares($key, $input),
-            'c' => $this->comment($input),
-            's' => $this->yesNo($input),
-            default => throw new WorkflowRuleBroken('This cannot be typed in: upload a corrected form instead.'),
-        };
+        $upload->update($stored !== null
+            ? ['edited_disk' => $stored['disk'], 'edited_path' => $stored['path'], 'edited_sha256' => $stored['sha256'], 'edited_size_bytes' => $stored['size_bytes']]
+            : ['edited_disk' => null, 'edited_path' => null, 'edited_sha256' => null, 'edited_size_bytes' => null]);
+
+        if ($before !== null && $before[1] !== ($stored['path'] ?? null)
+            && ! FormUpload::query()->where('edited_disk', $before[0])->where('edited_path', $before[1])->exists()) {
+            Storage::disk((string) $before[0])->delete((string) $before[1]);
+        }
     }
 
-    /**
-     * @param  string|array<string, string|null>  $input
-     */
-    private function answer(Question $q, string|array $input, FormUpload $upload): int|float|string
+    /** One answer, as its question asks for it; refused with a plain reason otherwise. */
+    private function answer(Question $q, string $input, FormUpload $upload): int|float|string
     {
-        $text = is_array($input) ? '' : trim($input);
+        $text = trim($input);
         if ($text === '') {
             throw new WorkflowRuleBroken($q->type === 'choice' ? 'Choose an answer.' : 'Type the answer.');
         }

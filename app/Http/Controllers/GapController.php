@@ -31,17 +31,22 @@ class GapController extends Controller
         return $this->back($finding->formUpload->artefact->assessment_id, 'Reopened.');
     }
 
-    /** The answer the form asks for, typed in: one value, or a percentage per line of a group. */
+    /**
+     * What the form asks for, typed in: one value (an answer, the areas of improvement, a
+     * sign-off), several answers by question code, or a percentage per line of a group.
+     */
     public function answer(Request $request, FormFinding $finding, SupplyAnswer $supply): RedirectResponse
     {
         $data = $request->validate([
-            'value' => ['nullable', 'required_without:shares', 'string', 'max:2000'],
+            'value' => ['nullable', 'required_without_all:shares,answers', 'string', 'max:2000'],
+            'answers' => ['nullable', 'array'],
+            'answers.*' => ['nullable', 'string', 'max:2000'],
             'shares' => ['nullable', 'array'],
             'shares.*' => ['nullable', 'string', 'max:20'],
-        ], ['value.required_without' => 'Type the answer.']);
+        ], ['value.required_without_all' => 'Type the answer.']);
 
         $assessment = $finding->formUpload->artefact->assessment_id;
-        $supply->handle($finding, $request->user(), $data['shares'] ?? (string) $data['value']);
+        $supply->handle($finding, $request->user(), $data['answers'] ?? $data['shares'] ?? (string) $data['value']);
 
         return $this->back($assessment, 'Answer saved. The form has been checked again with it.');
     }

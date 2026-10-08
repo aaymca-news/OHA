@@ -2,6 +2,21 @@
 @php($canEdit = Gate::allows('editTimeline', $assessment))
 
 <x-card title="Gate deadlines" subtitle="Each gate is done when its document is. A date set here replaces the default for that gate.">
+    {{-- How the platform works the deadlines out: from the rules below, never from the documents. --}}
+    <details class="text-[0.875rem] rounded bg-surface-container-low px-sm py-xs">
+        <summary class="cursor-pointer font-semibold text-primary py-1">How these deadlines are worked out</summary>
+        <div class="flex flex-col gap-xs pt-xs pb-sm">
+            <p>Deadlines are not read from the uploaded documents. Each one starts from the day the assessment was opened ({{ $assessment->opened_at->format('j M Y') }}) plus a fixed number of days for that gate:</p>
+            <ul class="list-disc pl-md">
+                @foreach (\App\Models\Gate::query()->orderBy('sort_order')->get() as $gate)
+                    <li>{{ $gate->milestone_label }}: {{ $gate->sla_days }} days after opening</li>
+                @endforeach
+            </ul>
+            <p>The movement’s assessors or an Administrator can set a different date for any gate below; that date then counts instead. Clearing it returns the gate to its default.</p>
+            <p>A gate is done the moment its document is: the OHA form, report or ODP when an Administrator first approves it, and the last gate when the Board Chairperson signs the ODP. Done after its date shows as late; not done by its date shows as overdue.</p>
+            <p>When the next assessment is due is a separate rule, set by the movement’s health band: the weaker the band, the sooner it is re-assessed.</p>
+        </div>
+    </details>
     <div class="overflow-x-auto">
         <table class="w-full text-[0.875rem]">
             <thead class="text-left text-[0.8125rem] uppercase tracking-wider text-on-surface-variant">

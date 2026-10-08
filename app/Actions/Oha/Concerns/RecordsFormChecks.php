@@ -9,6 +9,7 @@ use App\Models\FormFinding;
 use App\Models\FormUpload;
 use App\Models\User;
 use App\Oha\CheckResult;
+use App\Oha\FormDefinition;
 use App\Oha\ReadForm;
 use App\Support\ChangedAfterApproval;
 use Illuminate\Support\Collection;
@@ -41,7 +42,40 @@ trait RecordsFormChecks
             'wrong_units' => $read->wrongUnits,
             // Each question's wording, to label the boxes where a missing answer is typed.
             'labels' => array_map(fn ($l) => $l['text'], $read->locations),
+            // Where each answer sits in the workbook, so a typed answer is written into the right cell.
+            'cells' => $this->cells($read),
         ];
+    }
+
+    /**
+     * The cell of every answer, improvement comment and sign-off line, as "sheet" and "cell".
+     *
+     * @return array{answers: array<string, array{sheet: string, cell: string}>, comments: array<string, array{sheet: string, cell: string}>, signoff: array<string, array{sheet: string, cell: string}>}
+     */
+    private function cells(ReadForm $read): array
+    {
+        $answers = [];
+        foreach ($read->locations as $code => $where) {
+            $column = $where['sheet'] === $read->generalSheet ? FormDefinition::GENERAL_COLUMNS['answer'] : FormDefinition::CATEGORY_COLUMNS['answer'];
+            $answers[$code] = ['sheet' => $where['sheet'], 'cell' => $column.$where['row']];
+        }
+
+        $comments = [];
+        foreach ($read->comments as $code => $comment) {
+            $sheet = $read->categorySheets[$code] ?? null;
+            if ($sheet !== null && ($comment['row'] ?? null) !== null) {
+                $comments[$code] = ['sheet' => $sheet, 'cell' => 'D'.$comment['row']];
+            }
+        }
+
+        $signoff = [];
+        foreach ($read->signoff as $label => $line) {
+            if ($read->generalSheet !== null && $line['row'] > 0) {
+                $signoff[$label] = ['sheet' => $read->generalSheet, 'cell' => 'D'.$line['row']];
+            }
+        }
+
+        return ['answers' => $answers, 'comments' => $comments, 'signoff' => $signoff];
     }
 
     /**

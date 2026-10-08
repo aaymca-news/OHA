@@ -89,27 +89,59 @@ class ArtefactPolicy
             : Response::allow();
     }
 
+    /**
+     * Fixing what the report check found, in the report itself (a new version), or marking
+     * a finding as reviewed: the movement's assessors and the Administrators, while the
+     * report is not with the Administrators, and until the ODP is signed.
+     */
+    public function fix(User $user, Artefact $artefact): Response
+    {
+        if ($artefact->kind !== ArtefactKind::Report) {
+            return Response::deny('Only the report is fixed this way.');
+        }
+        if (! $user->active || ! ($user->oversees() || $user->canAssess($artefact->assessment->movement))) {
+            return Response::deny('Only the assessors on this movement and the Administrators fix the report.');
+        }
+        if ($artefact->assessment->isFrozen()) {
+            return Response::deny('The Board Chairperson has signed the ODP, so the OHA form, the report and the ODP are frozen.');
+        }
+        if ($artefact->status?->isLocked()) {
+            return Response::deny('The report unlocks once the OHA form is uploaded and read.');
+        }
+
+        return $artefact->state === ArtefactState::PendingApproval
+            ? Response::deny('This report is with the Administrators for approval. It can be fixed once they decide.')
+            : Response::allow();
+    }
+
     /** Linking (or re-linking) the Google Drive document the ODP is written in. */
+    /**
+     * Linking (or re-linking) the Google Drive document. Also after signing: Stage 2 is
+     * followed in that document, and if the staff move to another copy, the link follows.
+     */
     public function linkDrive(User $user, Artefact $artefact): Response
     {
         if ($artefact->kind !== ArtefactKind::Odp) {
             return Response::deny('Only the ODP is linked to Google Drive.');
         }
 
-        return $this->odpClosed($user, $artefact) ?? Response::allow();
+        return $this->odpTeam($user, $artefact) ?? Response::allow();
     }
 
-    /** Asking the platform to read the linked document in Google Drive now. */
+    /**
+     * Asking the platform to read the linked document in Google Drive now. After signing,
+     * a change is noted (not a version).
+     */
     public function syncDrive(User $user, Artefact $artefact): Response
     {
         if ($artefact->kind !== ArtefactKind::Odp || $artefact->drive_file_id === null) {
             return Response::deny('The ODP has no Google Drive document linked.');
         }
-        if ($denied = $this->odpClosed($user, $artefact)) {
+        if ($denied = $this->odpTeam($user, $artefact)) {
             return $denied;
         }
 
-        return $artefact->state === ArtefactState::PendingApproval
+        return ! $artefact->isSigned() && $artefact->state === ArtefactState::PendingApproval
             ? Response::deny('While the ODP is with the Administrators, changes in Google Drive wait. They are taken once the Administrators decide.')
             : Response::allow();
     }
@@ -199,6 +231,18 @@ class ArtefactPolicy
         }
 
         return null;
+    }
+
+    /** Why someone may not work with the ODP's Google Drive document, or null: its assessors and the Administrators, once it is open. */
+    private function odpTeam(User $user, Artefact $odp): ?Response
+    {
+        if (! $user->oversees() && ($denied = $this->notAssessorOf($user, $odp))) {
+            return $denied;
+        }
+
+        return $odp->status?->isLocked()
+            ? Response::deny('The ODP unlocks once a version of the report is saved. The report does not need to be approved first.')
+            : null;
     }
 
     private function notAssessorOf(User $user, Artefact $artefact): ?Response

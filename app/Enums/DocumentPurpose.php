@@ -10,4 +10,6 @@ enum DocumentPurpose: string
 {
     case Reference = 'reference';
     case Uploaded = 'uploaded';
+    /** The signed ODP as changed in Google Drive afterwards: noted, never a version. */
+    case AfterSigning = 'after_signing';
 }

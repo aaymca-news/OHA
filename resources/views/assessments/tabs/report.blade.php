@@ -73,9 +73,15 @@
 --}}
 @php
     $check = $shown ? $reportCheck($shown) : null;
-    $gaps = collect($check['findings'] ?? [])->filter(fn ($f) => $f->severity->value === 'missing');
-    $review = collect($check['findings'] ?? [])->reject(fn ($f) => $f->severity->value === 'missing');
+    $reviewed = $artefact->reviewed_findings ?? [];
+    $isReviewed = fn ($f) => isset($reviewed[\App\Oha\Report\ReportFixes::key($f)]);
+    $open = collect($check['findings'] ?? [])->reject($isReviewed);
+    $gaps = $open->filter(fn ($f) => $f->severity->value === 'missing');
+    $review = $open->reject(fn ($f) => $f->severity->value === 'missing');
     $baseline = $check['baseline'] ?? null;
+    // Fixes are written into the newest version, while the report can be changed.
+    $canFix = $shown && $shown->id === $latestId && Gate::allows('fix', $artefact);
+    $fromForm = collect($check['findings'] ?? [])->reject($isReviewed)->filter(fn ($f) => (\App\Oha\Report\ReportFixes::for($f)['kind'] ?? null) === 'form');
 @endphp
 @if ($check !== null)
     <x-card id="report-check" :title="'Report check · version '.$shown->number"
@@ -107,19 +113,130 @@
 
         <x-dqa-checklist for="report" :summary="\App\Oha\DqaSummary::ofFindings($check['findings'])" />
 
+        @if ($canFix && $shown->format->value === 'pdf' && $open->isNotEmpty())
+            <p class="flex items-start gap-xs p-sm rounded bg-surface-container text-[0.875rem]">
+                <span class="material-symbols-outlined text-[1.125rem]" aria-hidden="true">info</span>
+                <span>This version is a PDF, which cannot be written into. Upload the report as a Word (.docx) file to fix what is flagged here; or mark items as reviewed.</span>
+            </p>
+        @elseif ($canFix && $fromForm->count() > 1)
+            <form method="POST" action="{{ route('report-check.from-form', $artefact) }}" class="flex flex-wrap items-center gap-sm p-sm rounded bg-surface-container-low">
+                @csrf
+                <span class="flex-1 min-w-[min(15rem,100%)] text-[0.875rem]">{{ $fromForm->count() }} of these can be filled in from the OHA form and the assessment, in one new version.</span>
+                <x-button>
+                    <span class="inline-flex items-center gap-xs"><span class="material-symbols-outlined text-[1.125rem]" aria-hidden="true">auto_fix_high</span> Fill them in from the form</span>
+                </x-button>
+            </form>
+        @endif
+
         @if ($check['findings'] !== [])
             <ul class="flex flex-col gap-sm">
-                @foreach ($gaps->merge($review) as $finding)
-                    <li class="p-sm rounded border-l-4 {{ $finding->severity->value === 'missing' ? 'border-band-atrisk bg-serious-wash' : 'border-band-developing bg-warning-wash' }}">
+                @foreach (collect($check['findings'])->sortBy(fn ($f) => [$isReviewed($f) ? 1 : 0, $f->severity->value === 'missing' ? 0 : 1]) as $finding)
+                    @php
+                        $key = \App\Oha\Report\ReportFixes::key($finding);
+                        $mark = $reviewed[$key] ?? null;
+                        $fix = \App\Oha\Report\ReportFixes::for($finding);
+                        $writable = $canFix && $shown->format->value === 'docx' && $fix !== null && ! $mark;
+                        $input = 'px-sm py-2 rounded border-[1.5px] border-outline-variant bg-surface-container-lowest focus:border-primary outline-none';
+                    @endphp
+                    <li class="p-sm rounded border-l-4 {{ $mark ? 'border-outline-variant bg-surface-container-low' : ($finding->severity->value === 'missing' ? 'border-band-atrisk bg-serious-wash' : 'border-band-developing bg-warning-wash') }}"
+                        x-data="{ open: false, note: false }">
                         <p class="text-[0.875rem] font-semibold flex flex-wrap items-center gap-xs">
-                            <x-chip :tone="$finding->severity->value === 'missing' ? 'serious' : 'warning'">{{ __('oha.severity.'.$finding->severity->value) }}</x-chip>
+                            @if ($mark)
+                                <x-chip tone="good" icon="task_alt">Reviewed</x-chip>
+                            @else
+                                <x-chip :tone="$finding->severity->value === 'missing' ? 'serious' : 'warning'">{{ __('oha.severity.'.$finding->severity->value) }}</x-chip>
+                            @endif
                             {{ $finding->message }}
                         </p>
-                        @if ($finding->hint)
-                            <p class="text-[0.875rem] mt-xs">{{ $finding->hint }}</p>
+                        @if ($mark)
+                            <p class="text-[0.8125rem] mt-xs">Reviewed by {{ $mark['by_name'] }}, {{ \Illuminate\Support\Carbon::parse($mark['at'])->format('j M Y') }}: “{{ $mark['note'] }}”</p>
+                        @else
+                            @if ($finding->hint)
+                                <p class="text-[0.875rem] mt-xs">{{ $finding->hint }}</p>
+                            @endif
+                            @if ($finding->location)
+                                <p class="text-[0.8125rem] text-on-surface-variant mt-xs">{{ $finding->location }}</p>
+                            @endif
                         @endif
-                        @if ($finding->location)
-                            <p class="text-[0.8125rem] text-on-surface-variant mt-xs">{{ $finding->location }}</p>
+
+                        @if ($canFix)
+                            <div class="flex flex-wrap items-center gap-sm mt-sm text-[0.875rem]">
+                                @if ($writable && $fix['kind'] === 'form')
+                                    <form method="POST" action="{{ route('report-check.fix', $artefact) }}">
+                                        @csrf
+                                        <input type="hidden" name="ref" value="{{ $finding->ref }}">
+                                        <button class="inline-flex items-center gap-xs px-sm py-1 rounded border-[1.5px] border-primary text-primary font-semibold hover:bg-surface-container-lowest">
+                                            <span class="material-symbols-outlined text-[1.125rem]" aria-hidden="true">auto_fix_high</span> Add it from the OHA form
+                                        </button>
+                                    </form>
+                                @elseif ($writable)
+                                    <button type="button" x-show="! open" x-on:click="open = true; note = false"
+                                            class="inline-flex items-center gap-xs px-sm py-1 rounded border-[1.5px] border-primary text-primary font-semibold hover:bg-surface-container-lowest">
+                                        <span class="material-symbols-outlined text-[1.125rem]" aria-hidden="true">edit</span> Write it into the report
+                                    </button>
+                                @endif
+                                @if ($mark)
+                                    <form method="POST" action="{{ route('report-check.reopen', $artefact) }}">
+                                        @csrf
+                                        @method('DELETE')
+                                        <input type="hidden" name="key" value="{{ $key }}">
+                                        <button class="text-primary underline">Reopen</button>
+                                    </form>
+                                @else
+                                    <button type="button" x-show="! note" x-on:click="note = true; open = false" class="text-primary underline">Mark as reviewed</button>
+                                @endif
+                            </div>
+
+                            @if ($writable && $fix['kind'] !== 'form')
+                                <form method="POST" action="{{ route('report-check.fix', $artefact) }}" x-show="open" x-cloak class="flex flex-col gap-sm mt-sm p-sm rounded bg-surface-container-lowest">
+                                    @csrf
+                                    <input type="hidden" name="ref" value="{{ $finding->ref }}">
+                                    @if ($fix['kind'] === 'author')
+                                        <label class="flex flex-col gap-xs text-[0.875rem]">
+                                            <span class="font-semibold">Who wrote the report?</span>
+                                            <input name="value" required maxlength="300" class="{{ $input }}"
+                                                   value="{{ $assessment->movement->assessors->pluck('name')->join(' and ') }}{{ $assessment->movement->assessors->isNotEmpty() ? ', AAYMCA' : '' }}">
+                                        </label>
+                                    @elseif ($fix['kind'] === 'category')
+                                        <label class="flex flex-col gap-xs text-[0.875rem]">
+                                            <span class="font-semibold">Analysis of {{ \App\Models\Category::query()->where('code', $fix['key'])->value('name') }}</span>
+                                            <textarea name="value" rows="4" required class="{{ $input }}"></textarea>
+                                        </label>
+                                        <label class="flex flex-col gap-xs text-[0.875rem]">
+                                            <span class="font-semibold">Opportunities for growth (one per line)</span>
+                                            <textarea name="growth" rows="3" required class="{{ $input }}"></textarea>
+                                        </label>
+                                    @else
+                                        <label class="flex flex-col gap-xs text-[0.875rem]">
+                                            <span class="font-semibold">{{ $fix['kind'] === 'section' ? $fix['title'] : 'Opportunities for growth (one per line)' }}</span>
+                                            <textarea name="value" rows="4" required class="{{ $input }}"></textarea>
+                                        </label>
+                                    @endif
+                                    <p class="text-[0.8125rem] flex flex-wrap gap-x-sm">
+                                        <span class="inline-flex items-center gap-xs font-semibold text-primary"><span class="material-symbols-outlined text-[1rem]" aria-hidden="true">info</span>Answer: {{ $fix['kind'] === 'author' ? 'names and roles' : 'text' }}</span>
+                                        <span class="text-on-surface-variant">{{ $fix['guide'] ?? '' }}</span>
+                                    </p>
+                                    <p class="text-[0.8125rem] text-on-surface-variant">It is written into the report, saved as a new version made by the platform, and checked again. Every earlier version is kept.</p>
+                                    <div class="flex flex-wrap items-center gap-sm">
+                                        <x-button>Write it into the report</x-button>
+                                        <button type="button" x-on:click="open = false" class="text-[0.875rem] text-primary underline">Cancel</button>
+                                    </div>
+                                </form>
+                            @endif
+
+                            @unless ($mark)
+                                <form method="POST" action="{{ route('report-check.review', $artefact) }}" x-show="note" x-cloak class="flex flex-wrap items-end gap-xs mt-sm">
+                                    @csrf
+                                    <input type="hidden" name="key" value="{{ $key }}">
+                                    <input type="hidden" name="message" value="{{ $finding->message }}">
+                                    <label class="flex flex-col gap-xs text-[0.875rem] flex-1 min-w-[min(15rem,100%)]">
+                                        <span class="font-semibold">What did you check?</span>
+                                        <input name="note" required maxlength="2000" class="{{ $input }} py-1.5" placeholder="For example: the other YMCA is named as a partner; this is the right report.">
+                                    </label>
+                                    <x-button variant="secondary">Mark as reviewed</x-button>
+                                    <button type="button" x-on:click="note = false" class="text-[0.875rem] text-primary underline py-2">Cancel</button>
+                                </form>
+                            @endunless
                         @endif
                     </li>
                 @endforeach

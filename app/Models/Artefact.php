@@ -27,6 +27,7 @@ use Illuminate\Database\Eloquent\Relations\HasOne;
     'submitted_by', 'submitted_at', 'returned_at', 'approved_by', 'approved_at',
     'gap_ack', 'gap_ack_reason',
     'drive_file_id', 'drive_url', 'drive_linked_by', 'drive_linked_at', 'drive_version', 'drive_checked_at', 'drive_problem',
+    'reviewed_findings',
 ])]
 class Artefact extends Model
 {
@@ -157,6 +158,17 @@ class Artefact extends Model
     }
 
     /**
+     * The signed ODP as changed in Google Drive since the Board Chairperson signed it,
+     * oldest first: noted for Stage 2, never versions.
+     *
+     * @return HasMany<Document, $this>
+     */
+    public function changesAfterSigning(): HasMany
+    {
+        return $this->hasMany(Document::class)->where('purpose', DocumentPurpose::AfterSigning)->orderBy('id');
+    }
+
+    /**
      * @return HasMany<ArtefactComment, $this>
      */
     public function comments(): HasMany
@@ -184,6 +196,7 @@ class Artefact extends Model
             'drive_linked_at' => 'datetime',
             'drive_checked_at' => 'datetime',
             'drive_version' => 'integer',
+            'reviewed_findings' => 'array',
         ];
     }
 }

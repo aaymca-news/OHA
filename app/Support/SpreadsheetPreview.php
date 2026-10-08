@@ -36,11 +36,13 @@ final class SpreadsheetPreview
      */
     public static function of(Document|FormUpload $file, int $maxRows = 400, int $maxColumns = 30): ?array
     {
-        $key = 'xlsx-preview:v'.self::CACHE_VERSION.":{$file->sha256}:{$maxRows}:{$maxColumns}";
+        // An OHA form is shown as corrected: with the answers typed in the platform written in.
+        $shown = $file instanceof FormUpload ? $file->shownFile() : ['disk' => $file->disk, 'path' => $file->path, 'sha256' => $file->sha256];
+        $key = 'xlsx-preview:v'.self::CACHE_VERSION.":{$shown['sha256']}:{$maxRows}:{$maxColumns}";
 
-        return Cache::remember($key, now()->addDay(), function () use ($file, $maxRows, $maxColumns): ?array {
+        return Cache::remember($key, now()->addDay(), function () use ($shown, $maxRows, $maxColumns): ?array {
             try {
-                $book = IOFactory::createReader('Xlsx')->load(Storage::disk($file->disk)->path($file->path));
+                $book = IOFactory::createReader('Xlsx')->load(Storage::disk($shown['disk'])->path($shown['path']));
             } catch (Throwable) {
                 return null;
             }

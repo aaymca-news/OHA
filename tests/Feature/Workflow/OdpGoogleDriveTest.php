@@ -6,6 +6,7 @@ use App\Actions\Oha\SubmitForApproval;
 use App\Actions\Oha\TakeOdpFromDrive;
 use App\Enums\ArtefactState;
 use App\Enums\DocumentFormat;
+use App\Enums\DocumentPurpose;
 use App\Enums\DocumentSource;
 use App\Exceptions\WorkflowRuleBroken;
 use App\Models\AssessmentMilestone;
@@ -140,7 +141,7 @@ it('sends an approved ODP changed in Google Drive back for approval, showing the
     expect($signature->document->versionNumber())->toBe(2);
 });
 
-it('takes nothing while the ODP is with the Administrators, and nothing once it is signed', function () {
+it('takes nothing while the ODP is with the Administrators, and once it is signed only notes changes, never versions', function () {
     $assessment = $this->j->assessmentAt('odp_submitted');
     $this->drive->edit('edited while waiting', $this->j->assessor->email);
 
@@ -150,10 +151,40 @@ it('takes nothing while the ODP is with the Administrators, and nothing once it 
     app(ApproveArtefact::class)->handle($this->j->odp($assessment), $this->j->admin);
     $this->j->sign($this->j->odp($assessment));
 
-    expect(($this->take)($assessment)['outcome'])->toBe(TakeOdpFromDrive::SKIPPED)
+    // Signed: the change is noted for Stage 2, and the signed version stays the only one approved.
+    $result = ($this->take)($assessment);
+    expect($result['outcome'])->toBe(TakeOdpFromDrive::SAVED)
+        ->and($result['version']->purpose)->toBe(DocumentPurpose::AfterSigning)
         ->and($this->j->odp($assessment)->versions()->count())->toBe(1)
-        ->and(fn () => $this->j->uploadOdp($assessment, 'after signing'))->toThrow(WorkflowRuleBroken::class, 'it is frozen')
-        ->and(fn () => app(LinkOdpToDrive::class)->handle($this->j->odp($assessment), Journey::DRIVE_URL, $this->j->assessor))->toThrow(WorkflowRuleBroken::class, 'it is frozen');
+        ->and($this->j->odp($assessment)->changesAfterSigning()->count())->toBe(1)
+        ->and(($this->take)($assessment)['outcome'])->toBe(TakeOdpFromDrive::UNCHANGED)
+        ->and(fn () => $this->j->uploadOdp($assessment, 'after signing'))->toThrow(WorkflowRuleBroken::class, 'frozen');
+
+    // The link can still follow the document if the staff move to another copy.
+    expect(app(LinkOdpToDrive::class)->handle($this->j->odp($assessment), Journey::DRIVE_URL, $this->j->assessor)->drive_url)->toBe(Journey::DRIVE_URL);
+
+    $this->actingAs($this->j->assessor)->get(route('assessments.show', ['assessment' => $assessment, 'tab' => 'odp']))
+        ->assertSee('Changes made after signing')->assertSee('Changed in Google Drive by '.$this->j->assessor->email);
+});
+
+it('tells the assessors when the Google Drive link stops working, and when it works again', function () {
+    $assessment = $this->j->assessmentAt('odp_uploaded');
+    $this->drive->failure = 'The ODP document is in the Google Drive bin. Restore it, or link the document that replaced it.';
+    $this->drive->edit('deleted', null);
+
+    ($this->take)($assessment);
+    ($this->take)($assessment); // told once, not at every check
+    $stopped = Notification::sent($this->j->assessor, WorkflowNotice::class, fn (WorkflowNotice $n) => str_contains($n->subject, 'Google Drive link has stopped working'));
+    expect($stopped)->toHaveCount(1)
+        ->and($stopped->first()->body)->toContain('in the Google Drive bin');
+
+    $this->actingAs($this->j->assessor)->get(route('assessments.show', ['assessment' => $assessment, 'tab' => 'odp']))
+        ->assertSee('The ODP’s Google Drive link is not working');
+
+    $this->drive->failure = null;
+    $this->drive->edit('restored', null);
+    ($this->take)($assessment, $this->j->assessor);
+    Notification::assertSentTo($this->j->assessor, WorkflowNotice::class, fn (WorkflowNotice $n) => str_contains($n->subject, 'link works again'));
 });
 
 it('records why a document could not be read, and shows it on the ODP tab', function () {

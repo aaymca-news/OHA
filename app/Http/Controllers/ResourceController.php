@@ -3,8 +3,10 @@
 namespace App\Http\Controllers;
 
 use App\Enums\ArtefactKind;
+use App\Enums\DocumentPurpose;
 use App\Models\Artefact;
 use App\Models\Assessment;
+use App\Models\Document;
 use App\Models\Movement;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
@@ -40,6 +42,7 @@ class ResourceController extends Controller
                 'artefacts.signature',
                 'artefacts.uploads' => fn ($q) => $q->whereNotNull('approved_at')->latest('id'),
                 'artefacts.approvedVersion',
+                'artefacts.documents' => fn ($q) => $q->where('purpose', DocumentPurpose::Reference)->orderBy('id'),
             ])
             ->latest('opened_at')->latest('id')
             ->get()
@@ -61,7 +64,7 @@ class ResourceController extends Controller
     /**
      * The approved form upload, and the approved versions of the report and ODP.
      *
-     * @return array{assessment: Assessment, form: mixed, report: mixed, odp: mixed, signature: mixed}
+     * @return array{assessment: Assessment, form: mixed, report: mixed, odp: mixed, signature: mixed, references: Collection<int, Document>}
      */
     private function resources(Assessment $assessment): array
     {
@@ -75,6 +78,8 @@ class ResourceController extends Controller
             'report' => ($artefacts[ArtefactKind::Report->value] ?? null)?->approvedVersion,
             'odp' => $odp?->approvedVersion,
             'signature' => $odp?->signature,
+            // The ODP's supporting documents, to whoever may see the approved ODP.
+            'references' => $odp !== null && $odp->approvedVersion !== null ? $odp->documents : collect(),
         ];
     }
 }

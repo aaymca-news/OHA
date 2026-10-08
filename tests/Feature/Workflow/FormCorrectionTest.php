@@ -15,6 +15,7 @@ use App\Models\CategoryScore;
 use App\Models\FormFinding;
 use App\Models\FormUpload;
 use App\Notifications\WorkflowNotice;
+use App\Oha\FindingFields;
 use App\Oha\Scorer;
 use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Facades\Storage;
@@ -72,11 +73,29 @@ it('takes a typed answer for what is missing, keeps who typed it, and checks the
         ->and($upload->findings()->where('ref', 'q:Q911')->exists())->toBeTrue()
         ->and($upload->sha256)->toBe($file)
         ->and(Storage::disk('oha')->exists($upload->path))->toBeTrue()
-        ->and(AuditEvent::query()->where('action', 'form.answer_supplied')->value('payload')['ref'])->toBe('q:Q246');
+        ->and(AuditEvent::query()->where('action', 'form.answer_supplied')->value('payload')['answers'])->toBe(['q:Q246' => 12500]);
 
     // The areas of improvement, and a text answer.
     ($this->supply)(($this->gap)($assessment, 'c:financial'), 'Diversify income and build a cash reserve of six months.');
     ($this->supply)(($this->gap)($assessment, 'q:Q911'), "Plot 12, Lusaka\nCamp site, Kafue");
+
+    // All three are written into a corrected copy of the workbook, in the form's own cells.
+    $upload = ($this->upload)($assessment);
+    $cells = $upload->form_meta['cells'];
+    $copy = IOFactory::createReader('Xlsx')->load(Storage::disk('oha')->path($upload->edited_path));
+    $at = fn (array $where) => $copy->getSheetByName($where['sheet'])->getCell($where['cell'])->getValue();
+    expect($upload->hasEdits())->toBeTrue()
+        ->and($upload->edited_sha256)->not->toBe($upload->sha256)
+        ->and($at($cells['answers']['Q246']))->toEqual(12500)
+        ->and($at($cells['answers']['Q911']))->toBe("Plot 12, Lusaka\nCamp site, Kafue")
+        ->and($at($cells['comments']['financial']))->toContain('Diversify income');
+
+    // Downloaded as corrected; the file as uploaded is still there, unchanged.
+    $this->actingAs($this->j->assessor)->get(route('downloads.form', $upload))->assertOk()
+        ->assertDownload('ZAM26 OHA Form (with answers typed in the platform).xlsx');
+    $this->actingAs($this->j->assessor)->get(route('downloads.form', ['formUpload' => $upload, 'original' => 1]))->assertOk()
+        ->assertDownload('ZAM26 OHA Form.xlsx');
+
     expect(($this->upload)($assessment)->form_meta['comments']['financial'])->toContain('Diversify income')
         ->and(($this->upload)($assessment)->findings()->where('severity', 'missing')->count())->toBe(0);
 });
@@ -236,4 +255,29 @@ it('shows the uploaded form as a workbook, and what was read from words, on the 
         ->assertSee('Preview · ZAM26.xlsx')->assertSee('1 General Information')->assertSee('2 Financial Stability')
         ->assertSee('Fit to width')
         ->assertSee('Type the answer')->assertSee('Delete this upload');
+});
+
+it('corrects an item for review by typing, through the answers it is about', function () {
+    $assessment = $this->j->assessmentAt('form_uploaded');
+    $staff = FormFinding::query()->where('rule', 'inconsistent')->where('message', 'like', 'Permanent%')->firstOrFail();
+
+    // Permanent + temporary + project staff must make the total: the four head counts open together.
+    expect(FindingFields::for($staff)['codes'])->toBe(['Q1008', 'Q1009', 'Q1010', 'Q1011']);
+
+    app(SupplyAnswer::class)->handle($staff, $this->j->assessor, ['Q1008' => '22', 'Q1009' => '', 'Q1010' => '', 'Q1011' => '']);
+
+    $upload = ($this->upload)($assessment);
+    expect($upload->answers['Q1008'])->toBe(22)
+        ->and($upload->findings()->where('rule', 'inconsistent')->where('message', 'like', 'Permanent%')->exists())->toBeFalse();
+});
+
+it('guides each box with the kind of answer it takes', function () {
+    $assessment = $this->j->assessmentAt('form_uploaded');
+
+    $this->actingAs($this->j->admin)->get(route('assessments.show', ['assessment' => $assessment, 'tab' => 'form']))
+        ->assertOk()
+        ->assertSee('Answer: An amount of money')   // Q246, fundraising cost
+        ->assertSee('Answer: Text')                 // Q911, the properties
+        ->assertSee('Answer: A whole number of people')
+        ->assertSee('Mark as reviewed');
 });

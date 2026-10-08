@@ -18,7 +18,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * one waits. An ODP version taken from Google Drive records the Drive version it was
  * read at, and which Google account last changed the document.
  */
-#[Fillable(['artefact_id', 'purpose', 'source', 'format', 'disk', 'path', 'original_name', 'size_bytes', 'sha256', 'note', 'created_by', 'created_at', 'approved_by', 'approved_at', 'extracted', 'drive_version', 'edited_by_email'])]
+#[Fillable(['artefact_id', 'purpose', 'source', 'format', 'disk', 'path', 'original_name', 'size_bytes', 'sha256', 'note', 'created_by', 'created_at', 'approved_by', 'approved_at', 'extracted', 'drive_version', 'edited_by_email', 'changes'])]
 #[WithoutTimestamps]
 class Document extends Model
 {
@@ -59,6 +59,12 @@ class Document extends Model
         return $this->source === DocumentSource::GoogleDrive;
     }
 
+    /** A version the platform made: the one before, with fixes typed here written in. */
+    public function fromPlatform(): bool
+    {
+        return $this->source === DocumentSource::Platform;
+    }
+
     /** Its version number among the document's versions (1 = the first). */
     public function versionNumber(): int
     {
@@ -83,6 +89,7 @@ class Document extends Model
             'created_at' => 'datetime',
             'approved_at' => 'datetime',
             'extracted' => 'array',
+            'changes' => 'array',
         ];
     }
 }

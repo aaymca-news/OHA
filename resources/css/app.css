@@ -194,11 +194,15 @@ html[data-text-size='larger'] {
     html[data-sidebar='collapsed'] .sidebar-shell {
         display: none;
     }
-    .topbar-logo {
+    .topbar-logo,
+    .topbar-expand {
         display: none;
     }
     html[data-sidebar='collapsed'] .topbar-logo {
         display: block;
+    }
+    html[data-sidebar='collapsed'] .topbar-expand {
+        display: grid;
     }
 }
 

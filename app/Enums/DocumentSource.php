@@ -10,4 +10,6 @@ enum DocumentSource: string
 {
     case Upload = 'upload';
     case GoogleDrive = 'google_drive';
+    /** Made by the platform: the previous version with fixes typed here written in. */
+    case Platform = 'platform';
 }

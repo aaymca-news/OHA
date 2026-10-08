@@ -11,6 +11,7 @@ use App\Http\Controllers\MovementController;
 use App\Http\Controllers\MyWorkController;
 use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\ProfileController;
+use App\Http\Controllers\ReportFixController;
 use App\Http\Controllers\ResourceController;
 use App\Http\Controllers\SearchController;
 use App\Http\Controllers\SecurityController;
@@ -73,6 +74,14 @@ Route::middleware('auth')->group(function () {
     Route::post('findings/{finding}/answer', [GapController::class, 'answer'])->name('findings.answer');
     Route::delete('form-uploads/{formUpload}/answers', [GapController::class, 'withdraw'])->name('form-uploads.withdraw');
     Route::delete('form-uploads/{formUpload}', [GapController::class, 'destroyUpload'])->name('form-uploads.destroy');
+
+    // What the report check found, fixed in the report (a new version) or marked as reviewed.
+    Route::prefix('artefacts/{artefact}/report-check')->name('report-check.')->controller(ReportFixController::class)->group(function () {
+        Route::post('fix', 'fix')->name('fix');
+        Route::post('from-form', 'fromForm')->name('from-form');
+        Route::post('review', 'review')->name('review');
+        Route::delete('review', 'reopen')->name('reopen');
+    });
 
     Route::get('resources', ResourceController::class)->name('resources');
 

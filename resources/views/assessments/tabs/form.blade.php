@@ -71,8 +71,11 @@
                     <span class="material-symbols-outlined text-[1.125rem]" aria-hidden="true">table_view</span> Preview
                 </a>
                 <a href="{{ route('downloads.form', $upload) }}" class="inline-flex items-center gap-xs text-primary underline">
-                    <span class="material-symbols-outlined text-[1.125rem]" aria-hidden="true">download</span> Download this file
+                    <span class="material-symbols-outlined text-[1.125rem]" aria-hidden="true">download</span> {{ $upload->hasEdits() ? 'Download, with the typed answers' : 'Download this file' }}
                 </a>
+                @if ($upload->hasEdits())
+                    <a href="{{ route('downloads.form', ['formUpload' => $upload, 'original' => 1]) }}" class="text-primary underline">The file as uploaded</a>
+                @endif
                 @can('delete', $upload)
                     <form method="POST" action="{{ route('form-uploads.destroy', $upload) }}"
                           x-data x-on:submit="if (! confirm(@js('Delete '.$upload->original_name.'? Use this for a file uploaded by mistake. It cannot be undone.'))) $event.preventDefault()">
@@ -169,7 +172,7 @@
                     <p class="font-semibold">{{ $finding->message }}</p>
                     <p class="text-[0.8125rem] text-on-surface-variant">{{ $finding->location }}{{ $finding->hint ? ' · '.$finding->hint : '' }}</p>
                     @if ($finding->resolved_at)
-                        <p class="text-[0.8125rem] mt-xs"><span class="font-semibold">Resolved</span> by {{ $finding->resolver->name }}, {{ $finding->resolved_at->format('j M Y') }}: “{{ $finding->resolved_note }}”</p>
+                        <p class="text-[0.8125rem] mt-xs"><span class="font-semibold">{{ $finding->severity->value === 'missing' ? 'Resolved' : 'Reviewed' }}</span> by {{ $finding->resolver->name }}, {{ $finding->resolved_at->format('j M Y') }}: “{{ $finding->resolved_note }}”</p>
                     @endif
                 </div>
                 <div class="flex flex-wrap items-center gap-sm text-[0.875rem]">
@@ -185,7 +188,7 @@
                                 <x-button variant="secondary">Reopen</x-button>
                             </form>
                         @else
-                            <button type="button" x-show="! note" x-on:click="note = true; open = false" class="text-primary underline">Resolve with a note</button>
+                            <button type="button" x-show="! note" x-on:click="note = true; open = false" class="text-primary underline">{{ $finding->severity->value === 'missing' ? 'Resolve with a note' : 'Mark as reviewed' }}</button>
                         @endif
                     @endcan
                 </div>
@@ -195,8 +198,9 @@
                         <form method="POST" action="{{ route('findings.resolve', $finding) }}" x-show="note" x-cloak class="basis-full flex flex-wrap items-end gap-xs">
                             @csrf
                             <label class="flex flex-col gap-xs text-[0.875rem] flex-1 min-w-[min(15rem,100%)]">
-                                <span class="font-semibold">How was it resolved?</span>
-                                <input name="note" required class="px-sm py-1.5 rounded border-[1.5px] border-outline-variant" placeholder="For example: the NGS confirmed by email that…">
+                                <span class="font-semibold">{{ $finding->severity->value === 'missing' ? 'How was it resolved?' : 'What did you check?' }}</span>
+                                <input name="note" required class="px-sm py-1.5 rounded border-[1.5px] border-outline-variant"
+                                       placeholder="{{ $finding->severity->value === 'missing' ? 'For example: the NGS confirmed by email that…' : 'For example: checked with the finance lead; the figures are right.' }}">
                                 <span class="text-[0.8125rem] text-on-surface-variant">A note records how it was settled; it does not change the answers or the score. To change the score, type the answer instead.</span>
                             </label>
                             <x-button>Save the note</x-button>
@@ -246,7 +250,8 @@
         $workbook = \App\Support\SpreadsheetPreview::of($previewing);
     @endphp
     <x-card id="form-preview" :title="'Preview · '.$previewing->original_name"
-            :subtitle="'Uploaded '.$previewing->uploaded_at->format('j M Y, H:i').' by '.$previewing->uploader->name.($previewing->id !== $upload?->id ? '. An earlier upload.' : '.').' As in the file: answers typed in the platform are not shown here.'">
+            :subtitle="'Uploaded '.$previewing->uploaded_at->format('j M Y, H:i').' by '.$previewing->uploader->name.($previewing->id !== $upload?->id ? '. An earlier upload.' : '.')
+                .($previewing->hasEdits() ? ' Shown with the answers typed in the platform written in.' : '')">
         <x-slot:actions>
             <a href="{{ route('downloads.form', $previewing) }}" class="inline-flex items-center gap-xs text-[0.875rem] text-primary underline">
                 <span class="material-symbols-outlined text-[1.125rem]" aria-hidden="true">download</span> Download
