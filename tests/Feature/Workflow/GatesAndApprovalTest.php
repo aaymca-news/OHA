@@ -147,6 +147,26 @@ it('approves the ODP only once the OHA form and the report are approved, so it c
     expect($this->j->odp($assessment)->state)->toBe(ArtefactState::Approved);
 });
 
+it('lets an Administrator send the ODP back before the OHA form and report are approved', function () {
+    $assessment = $this->j->assessmentAt('report_submitted');
+    $this->j->uploadOdp($assessment, 'Zambia ODP, first version');
+    app(SubmitForApproval::class)->handle($this->j->odp($assessment), $this->j->assessor);
+
+    $this->actingAs($this->j->admin)->get(route('assessments.show', ['assessment' => $assessment, 'tab' => 'odp']))->assertOk()
+        ->assertSee('The ODP can be approved only once the report is approved.')
+        ->assertSee('Send it back')
+        ->assertDontSee('Your approval');
+    expect(fn () => app(SendBack::class)->handle($this->j->odp($assessment), $this->j->assessor, 'Not mine to send back.'))
+        ->toThrow(WorkflowRuleBroken::class, 'Only an Administrator sends work back.');
+
+    app(SendBack::class)->handle($this->j->odp($assessment), $this->j->admin, 'The objectives need targets.');
+
+    expect($this->j->odp($assessment)->state)->toBe(ArtefactState::Rejected)
+        ->and($this->j->report($assessment)->state)->toBe(ArtefactState::PendingApproval)
+        ->and(fn () => app(SendBack::class)->handle($this->j->odp($assessment), $this->j->admin, 'Again.'))
+        ->toThrow(WorkflowRuleBroken::class, 'This is not awaiting approval.');
+});
+
 it('tells every Administrator except the submitter that something awaits approval', function () {
     $this->j->assessmentAt('form_submitted');
     $told = fn ($user) => Notification::sent($user, WorkflowNotice::class)->pluck('subject')->contains('Approval needed: OHA form, Zambia YMCA');

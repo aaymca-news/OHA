@@ -36,14 +36,7 @@
                 <x-button class="self-start" x-bind:disabled="! ack">Approve</x-button>
             </form>
             @unless ($own)
-                <form method="POST" action="{{ route('artefacts.send-back', $artefact) }}" class="flex flex-col gap-sm">
-                    @csrf
-                    <label class="flex flex-col gap-xs text-[0.875rem]">
-                        <span class="font-semibold">Why is it going back? (required)</span>
-                        <textarea name="reason" rows="3" required class="px-sm py-2 rounded border-[1.5px] border-outline-variant">{{ old('reason') }}</textarea>
-                    </label>
-                    <x-button variant="danger" class="self-start">Send back</x-button>
-                </form>
+                @include('assessments.tabs._send-back')
             @endunless
         </div>
     </x-card>
@@ -52,6 +45,12 @@
     @if (auth()->user()->isAdmin() && ($artefact->state->value === 'pending_approval' || (auth()->user()->canAssess($assessment->movement) && in_array($artefact->state->value, ['drafted', 'ready', 'rejected'], true))))
         <x-empty-state icon="lock">{{ Gate::inspect('approve', $artefact)->message() }}</x-empty-state>
     @endif
+    {{-- It can still go back now, if something in it is wrong. --}}
+    @can('sendBack', $artefact)
+        <x-card title="Send it back" subtitle="Submitted by {{ $artefact->submitter?->name }}. If something in it needs changing, it can go back to the assessor now, without waiting.">
+            @include('assessments.tabs._send-back')
+        </x-card>
+    @endcan
 @endcan
 
 @php($history = $comments($artefact->kind->value))

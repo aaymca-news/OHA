@@ -30,7 +30,7 @@ final class SendBack
 
         return DB::transaction(function () use ($artefact, $approver, $reason): Artefact {
             $artefact = $this->lock($artefact);
-            $this->ensure($approver, 'approve', $artefact);
+            $this->ensure($approver, 'sendBack', $artefact);
 
             $assessment = $artefact->assessment;
             $from = $artefact->state;

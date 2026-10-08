@@ -155,7 +155,8 @@ class ArtefactPolicy
     }
 
     /**
-     * Any Administrator may approve, except the person who submitted it.
+     * Any Administrator may approve what was submitted, the submitter included, and their
+     * own work without submitting it. The ODP only once the OHA form and report are approved.
      */
     public function approve(User $user, Artefact $artefact): Response
     {
@@ -184,6 +185,25 @@ class ArtefactPolicy
             if ($missing !== []) {
                 return Response::deny('The ODP can be approved only once '.implode(' and ', $missing).' '.(count($missing) === 1 ? 'is' : 'are').' approved.');
             }
+        }
+
+        return Response::allow();
+    }
+
+    /**
+     * Any Administrator may send back what was submitted, with a reason. Unlike approval, also
+     * an ODP whose OHA form or report is not approved yet: what is wrong with it can go back now.
+     */
+    public function sendBack(User $user, Artefact $artefact): Response
+    {
+        if (! $user->active || ! $user->isAdmin()) {
+            return Response::deny('Only an Administrator sends work back.');
+        }
+        if ($artefact->assessment->isFrozen()) {
+            return Response::deny('The Board Chairperson has signed the ODP, so the assessment is final.');
+        }
+        if ($artefact->state !== ArtefactState::PendingApproval) {
+            return Response::deny('This is not awaiting approval.');
         }
 
         return Response::allow();
