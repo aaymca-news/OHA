@@ -4,7 +4,6 @@ namespace App\Actions\Oha;
 
 use App\Actions\Oha\Concerns\StoresVersions;
 use App\Enums\ArtefactKind;
-use App\Enums\ArtefactState;
 use App\Enums\DocumentPurpose;
 use App\Enums\DocumentSource;
 use App\Exceptions\WorkflowRuleBroken;
@@ -29,10 +28,9 @@ use Illuminate\Support\Facades\Storage;
  *
  * - A document still being edited is left until nobody has changed it for a while
  *   (oha.drive.quiet_minutes), so one sitting of edits becomes one version.
- * - Nothing is taken while the ODP is with the Administrators: the change is taken
- *   once they decide. Nothing is taken once the Board Chairperson has signed.
- * - A change after approval needs approval again; everyone else keeps seeing the last
- *   approved version meanwhile.
+ * - A change while the Administrators decide stays with them (they are told); a change
+ *   after approval needs approval again; everyone else keeps seeing the last approved
+ *   version meanwhile. Once the Board Chairperson has signed, a change is only noted.
  * - The version records the Google account that last changed the document. If that
  *   person has an account here, the version is theirs; if not, it is recorded under
  *   whoever linked the document, with the Google address kept.
@@ -65,7 +63,6 @@ final class TakeOdpFromDrive
         $signed = $odp->isSigned();
         $skip = match (true) {
             $odp->kind !== ArtefactKind::Odp || $odp->drive_file_id === null => 'No Google Drive document is linked.',
-            ! $signed && $odp->state === ArtefactState::PendingApproval => 'The ODP is with the Administrators: changes in Google Drive are taken once they decide.',
             ! $this->drive->configured() => 'The platform is not connected to Google Drive yet, so changes there are not taken automatically. Upload the ODP to add a version.',
             default => null,
         };

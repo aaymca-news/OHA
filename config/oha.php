@@ -22,6 +22,9 @@ return [
     */
     'drive' => [
         'credentials' => env('GOOGLE_SERVICE_ACCOUNT_JSON'),
+        // Optional: an africaymca.org account the service account acts as (domain-wide
+        // delegation), for when Workspace does not allow sharing with outside addresses.
+        'act_as' => env('GOOGLE_DRIVE_ACT_AS'),
         'quiet_minutes' => (int) env('OHA_DRIVE_QUIET_MINUTES', 10),
     ],
 

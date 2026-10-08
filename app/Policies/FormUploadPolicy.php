@@ -27,7 +27,7 @@ class FormUploadPolicy
 
     /**
      * Typing answers for what the current upload lacks: the movement's assessors and the
-     * Administrators, while it is not with the Administrators and until the ODP is signed.
+     * Administrators, until the ODP is signed.
      */
     public function supply(User $user, FormUpload $formUpload): Response
     {
@@ -78,13 +78,11 @@ class FormUploadPolicy
         if (! $user->active || ! ($user->oversees() || $user->canAssess($movement))) {
             return Response::deny("Only the assessors on {$movement->name} and the Administrators change the OHA form.");
         }
-        if ($form->assessment->isFrozen()) {
-            return Response::deny('The Board Chairperson has signed the ODP, so the OHA form, the report and the ODP are frozen.');
-        }
-        if ($form->state === ArtefactState::PendingApproval) {
-            return Response::deny('The form is with the Administrators for approval. It can be changed once they decide.');
-        }
 
-        return null;
+        // While the Administrators decide it may still be changed; they are told. Only the
+        // signed ODP closes it.
+        return $form->assessment->isFrozen()
+            ? Response::deny('The Board Chairperson has signed the ODP, so the OHA form, the report and the ODP are frozen.')
+            : null;
     }
 }

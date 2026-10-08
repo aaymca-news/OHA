@@ -145,7 +145,7 @@ it('keeps a refused upload on record, but it cannot be submitted', function () {
         ->toThrow(WorkflowRuleBroken::class, 'refused');
 });
 
-it('refuses uploads from anyone not assigned to the movement, and while the Administrators decide', function () {
+it('refuses uploads from anyone not assigned to the movement, and takes a corrected one while the Administrators decide', function () {
     $stranger = User::factory()->create();
     $form = ($this->openForm)();
 
@@ -154,7 +154,10 @@ it('refuses uploads from anyone not assigned to the movement, and while the Admi
     ($this->upload)($form);
     app(SubmitForApproval::class)->handle($form->refresh(), $this->assessor, acknowledgeGaps: true);
 
-    expect(fn () => ($this->upload)($form->refresh()))->toThrow(WorkflowRuleBroken::class, 'with the Administrators');
+    // A corrected form while it waits: still with the Administrators; only the newest upload is kept.
+    ($this->upload)($form->refresh());
+    expect($form->refresh()->state)->toBe(ArtefactState::PendingApproval)
+        ->and($form->uploads()->count())->toBe(1);
 
     // Once approved, a corrected form may be uploaded: it goes back for approval (see FormCorrectionTest).
     app(ApproveArtefact::class)->handle($form->refresh(), $this->admin);

@@ -139,7 +139,8 @@ it('reads the Zimbabwe report’s score as an average of the category percentage
 it('shows the report check to the assessors and the Administrators only', function () {
     $assessment = $this->j->assessmentAt('report_approved');
     $this->j->uploadWordReport($assessment, WordDocument::zambiaReport(['### Key Risks' => null]));
-    $tab = route('assessments.show', ['assessment' => $assessment, 'tab' => 'report']);
+    // The newer, unapproved version is the working one: opened from the switch.
+    $tab = route('assessments.show', ['assessment' => $assessment, 'tab' => 'report', 'view' => 'working']);
 
     foreach ([$this->j->assessor, $this->j->admin] as $user) {
         $this->actingAs($user)->get($tab)->assertSee('Report check · version 2')->assertSee('The report has no section on the key risks.');

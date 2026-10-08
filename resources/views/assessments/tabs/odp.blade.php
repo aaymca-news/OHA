@@ -8,11 +8,15 @@
     $status = $artefact->status;
     $effective = $status->effective_state;
     $latestId = $artefact->latestVersion?->id;
-    $shown = $versions->firstWhere('id', (int) request('version')) ?? $versions->first();
     $docs = $documents('odp');
     $signature = $artefact->signature;
     $me = auth()->user();
     $seesDrafts = $me->oversees() || $me->canAssess($assessment->movement);
+    // The last approved version is current for everyone; those working on it can open the newer one.
+    $approvedShown = $versions->first(fn ($v) => $v->isApproved());
+    $workingVersion = $seesDrafts && $approvedShown && $versions->first()?->id !== $approvedShown->id ? $versions->first() : null;
+    $shown = $versions->firstWhere('id', (int) request('version'))
+        ?? (request('view') === 'working' && $workingVersion ? $workingVersion : ($approvedShown ?? $versions->first()));
     $drive = app(\App\Support\Google\GoogleDrive::class);
     $connected = $drive->configured();
 @endphp
@@ -34,6 +38,15 @@
 
 @if ($effective === 'locked')
     <x-empty-state icon="lock">The ODP unlocks once a version of the report is saved. The report does not need to be approved first.</x-empty-state>
+@endif
+
+@if ($workingVersion && ! $signature)
+    @include('assessments.tabs._current-or-working', [
+        'tab' => 'odp',
+        'working' => $shown?->id === $workingVersion->id,
+        'approvedLabel' => 'version '.$approvedShown->number,
+        'workingLabel' => 'version '.$workingVersion->number,
+    ])
 @endif
 
 {{-- The link to Google Drive no longer works: said at the top, with what to do. --}}
@@ -129,7 +142,7 @@
     <x-card :title="$versions->isEmpty() ? 'Upload the ODP' : 'Upload a new version'"
             :subtitle="$artefact->drive_file_id && $connected
                 ? 'Changes made in Google Drive are saved as versions by themselves. Upload here only to add a version by hand, as an Excel (.xlsx), Word (.docx) or PDF file.'
-                : 'The ODP as an Excel (.xlsx), Word (.docx) or PDF file, as in AAYMCA’s ODP template. Every version is kept; the newest one is what you submit for approval.'">
+                : 'The ODP as an Excel (.xlsx), Word (.docx) or PDF file, as in AAYMCA’s ODP template. The newest is what you submit for approval; the approved version is kept until a newer one is approved.'">
         <form method="POST" action="{{ route('artefacts.versions', $artefact) }}" enctype="multipart/form-data"
               x-data="{ name: '', over: false }" class="flex flex-col gap-sm">
             @csrf

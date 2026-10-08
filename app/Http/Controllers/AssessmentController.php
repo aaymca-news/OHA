@@ -99,7 +99,12 @@ class AssessmentController extends Controller
         $seesDrafts = $user->oversees() || $user->canAssess($assessment->movement);
         $uploads = $tabs->contains('form') ? $form->uploads()->with('uploader', 'approver')->latest('id')->get()
             ->filter(fn (FormUpload $u) => $seesDrafts || $u->isApproved())->values() : collect();
-        $upload = $uploads->first()?->load('findings.category', 'findings.resolver');
+        // The last approved upload is what everyone sees as current; those working on it can
+        // open the newer working upload (?view=working) to correct it.
+        $approvedUpload = $uploads->first(fn (FormUpload $u) => $u->isApproved());
+        $working = $uploads->first();
+        $upload = ($request->query('view') === 'working' || $approvedUpload === null ? $working : $approvedUpload)
+            ?->load('findings.category', 'findings.resolver');
         $formMilestone = $milestones->firstWhere('gate_code', 'form');
 
         return view('assessments.show', [
@@ -112,6 +117,8 @@ class AssessmentController extends Controller
             'upload' => $upload,
             'uploads' => $uploads,
             'previewing' => $uploads->firstWhere('id', (int) $request->query('upload')) ?? $upload,
+            // A newer upload than the approved one, being worked on: seen only by those working on it.
+            'workingUpload' => $approvedUpload !== null && $working !== null && $working->id !== $approvedUpload->id ? $working : null,
             // Before validation the score is provisional: recomputed from the answers, not yet recorded.
             'provisional' => $upload !== null ? array_sum(array_filter($scorer->score($upload->answers, $upload->form_meta['missing_sheets'] ?? []))) : null,
             'dqa' => $upload !== null ? DqaSummary::of($upload->findings, (bool) ($formMilestone?->overdue || $formMilestone?->completed_late)) : null,
@@ -125,7 +132,7 @@ class AssessmentController extends Controller
             // Report and ODP versions, newest first. Staff and the Chairperson see only approved ones.
             'versions' => collect(['report', 'odp'])->mapWithKeys(fn (string $kind) => [$kind => $tabs->contains($kind)
                 ? $artefacts[$kind]->versions()->with('creator', 'approver')->get()
-                    ->each(fn (Document $d, int $i) => $d->setAttribute('number', $i + 1))
+                    ->each(fn (Document $d) => $d->setAttribute('number', $d->versionNumber()))
                     ->filter(fn (Document $d) => Gate::forUser($user)->allows('download', $d))
                     ->reverse()->values()
                 : collect()]),

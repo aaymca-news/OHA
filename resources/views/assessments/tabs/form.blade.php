@@ -34,6 +34,15 @@
     @endif
 </div>
 
+@if ($workingUpload && ($me->oversees() || $me->canAssess($assessment->movement)))
+    @include('assessments.tabs._current-or-working', [
+        'tab' => 'form',
+        'working' => $upload?->id === $workingUpload->id,
+        'approvedLabel' => 'approved '.$approvedUpload?->approved_at?->format('j M Y'),
+        'workingLabel' => 'uploaded '.$workingUpload->uploaded_at->format('j M Y'),
+    ])
+@endif
+
 @if ($frozen && ($me->oversees() || $me->canAssess($assessment->movement)))
     <div class="flex items-start gap-sm p-md rounded-lg bg-good-wash text-good-ink text-[0.875rem]">
         <span class="material-symbols-outlined" aria-hidden="true">lock</span>
@@ -266,7 +275,7 @@
 @endif
 
 @if ($uploads->count() > 1)
-    <x-card title="All uploads" subtitle="Every file is kept unchanged, unless deleted as uploaded by mistake.">
+    <x-card title="Uploads" subtitle="Until the ODP is signed, only the approved upload and the newest are kept; the audit trail records every one.">
         <ul class="flex flex-col gap-xs text-[0.875rem]">
             @foreach ($uploads as $u)
                 <li @class(['flex flex-wrap items-center gap-sm p-sm rounded-lg border-[1.5px]',

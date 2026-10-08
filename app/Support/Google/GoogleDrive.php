@@ -32,9 +32,20 @@ class GoogleDrive
     }
 
     /** The address to share a document with, so the platform can read it. */
+    /**
+     * The address the platform reads Google Drive as, which documents are shared with: the
+     * africaymca.org account it acts as, if one is set, else the service account itself.
+     */
     public function serviceAccountEmail(): ?string
     {
-        return $this->credentials()['client_email'] ?? null;
+        return $this->actAs() ?? $this->credentials()['client_email'] ?? null;
+    }
+
+    private function actAs(): ?string
+    {
+        $address = config('oha.drive.act_as');
+
+        return is_string($address) && trim($address) !== '' ? trim($address) : null;
     }
 
     public function file(string $fileId): DriveFile
@@ -107,17 +118,21 @@ class GoogleDrive
     {
         $credentials = $this->credentials() ?? throw new DriveUnavailable('The platform is not connected to Google Drive yet.');
 
-        return Cache::remember('google-drive-token:'.$credentials['client_email'], now()->addMinutes(50), function () use ($credentials): string {
+        $actAs = $this->actAs();
+
+        return Cache::remember('google-drive-token:'.$credentials['client_email'].':'.$actAs, now()->addMinutes(50), function () use ($credentials, $actAs): string {
             $now = time();
             $segments = [
                 self::base64url((string) json_encode(['alg' => 'RS256', 'typ' => 'JWT'])),
-                self::base64url((string) json_encode([
+                self::base64url((string) json_encode(array_filter([
                     'iss' => $credentials['client_email'],
+                    // Acting as an africaymca.org account (domain-wide delegation), when one is set.
+                    'sub' => $actAs,
                     'scope' => self::SCOPE,
                     'aud' => $credentials['token_uri'] ?? 'https://oauth2.googleapis.com/token',
                     'iat' => $now,
                     'exp' => $now + 3600,
-                ])),
+                ]))),
             ];
             if (! openssl_sign(implode('.', $segments), $signature, $credentials['private_key'], OPENSSL_ALGO_SHA256)) {
                 throw new DriveUnavailable('The service account key could not be used. An Administrator should check it.');

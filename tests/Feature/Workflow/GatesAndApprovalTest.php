@@ -90,7 +90,8 @@ it('needs the ODP’s Google Drive link with its first version, and refuses link
     expect($odp->drive_file_id)->toBe('1ZaMbIaOdP2026xYzAbCdEfGhIjKlMnOpQr')
         ->and($odp->drive_url)->toBe(Journey::DRIVE_URL)
         ->and($odp->drive_linked_by)->toBe($this->j->assessor->id)
-        ->and($odp->versions()->count())->toBe(2);
+        // Neither was approved: in Stage 1 only the newest is kept, as version 2.
+        ->and($odp->versions()->pluck('version_number')->all())->toBe([2]);
 });
 
 it('lets any Administrator approve, except the one who submitted it', function () {
@@ -181,8 +182,9 @@ it('needs a reason to send work back, and returns it to the assessor', function 
 it('makes a sent-back ODP be revised before it is resubmitted', function () {
     $assessment = $this->j->assessmentAt('odp_submitted');
 
-    expect(fn () => $this->j->uploadOdp($assessment, 'while it waits'))
-        ->toThrow(WorkflowRuleBroken::class, 'with the Administrators for approval');
+    // A new version while it waits stays with the Administrators.
+    $this->j->uploadOdp($assessment, 'while it waits');
+    expect($this->j->odp($assessment)->state)->toBe(ArtefactState::PendingApproval);
 
     app(SendBack::class)->handle($this->j->odp($assessment), $this->j->admin, 'Add the March board elections.');
 

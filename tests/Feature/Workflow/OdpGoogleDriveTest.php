@@ -83,7 +83,8 @@ it('saves a change made in Google Drive as a new version, recorded under the per
     // Nothing changed since: nothing is read again.
     expect(($this->take)($assessment)['outcome'])->toBe(TakeOdpFromDrive::UNCHANGED)
         ->and($this->drive->reads)->toBe(1)
-        ->and($odp->versions()->count())->toBe(2);
+        // Version 1 was never approved, so only the newest is kept in Stage 1.
+        ->and($odp->versions()->pluck('version_number')->all())->toBe([2]);
 });
 
 it('takes a change to an ODP written as a Google Sheet as an Excel version', function () {
@@ -141,14 +142,19 @@ it('sends an approved ODP changed in Google Drive back for approval, showing the
     expect($signature->document->versionNumber())->toBe(2);
 });
 
-it('takes nothing while the ODP is with the Administrators, and once it is signed only notes changes, never versions', function () {
+it('takes a change while the ODP is with the Administrators, keeping it with them, and once it is signed only notes changes', function () {
     $assessment = $this->j->assessmentAt('odp_submitted');
     $this->drive->edit('edited while waiting', $this->j->assessor->email);
 
-    expect(($this->take)($assessment)['outcome'])->toBe(TakeOdpFromDrive::SKIPPED)
-        ->and(fn () => ($this->take)($assessment, $this->j->assessor))->toThrow(WorkflowRuleBroken::class, 'taken once the Administrators decide');
+    expect(($this->take)($assessment)['outcome'])->toBe(TakeOdpFromDrive::SAVED)
+        ->and($this->j->odp($assessment)->state)->toBe(ArtefactState::PendingApproval);
 
     app(ApproveArtefact::class)->handle($this->j->odp($assessment), $this->j->admin);
+    $this->drive->edit('edited after approval, before signing', $this->j->assessor->email);
+    ($this->take)($assessment);
+    app(SubmitForApproval::class)->handle($this->j->odp($assessment), $this->j->assessor);
+    app(ApproveArtefact::class)->handle($this->j->odp($assessment), $this->j->admin);
+    $this->drive->edit('edited after signing', $this->j->assessor->email);
     $this->j->sign($this->j->odp($assessment));
 
     // Signed: the change is noted for Stage 2, and the signed version stays the only one approved.
@@ -233,7 +239,7 @@ it('checks every linked, unsigned ODP on a schedule and records each run', funct
 
     $run = DriveSyncRun::query()->latest('id')->firstOrFail();
     expect($run->checked)->toBe(1)->and($run->saved)->toBe(1)->and($run->failed)->toBe(0)->and($run->finished_at)->not->toBeNull()
-        ->and($this->j->odp($saved)->versions()->count())->toBe(2);
+        ->and($this->j->odp($saved)->latestVersion()->firstOrFail()->versionNumber())->toBe(2);
 
     $this->drive->connected = false;
     $this->artisan('oha:sync-drive')->assertSuccessful();

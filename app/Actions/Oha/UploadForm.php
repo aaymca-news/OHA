@@ -20,6 +20,7 @@ use App\Oha\ReadForm;
 use App\Oha\UnreadableForm;
 use App\Support\Audit;
 use App\Support\FileVault;
+use App\Support\VersionPruner;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -86,6 +87,9 @@ final class UploadForm
                 'gaps' => count($result->withSeverity(FindingSeverity::Missing)),
                 'read_from_words' => count($read->interpreted ?? []),
             ]);
+
+            // Only the approved upload and this one are kept in Stage 1.
+            VersionPruner::uploads($form);
 
             return $upload;
         });

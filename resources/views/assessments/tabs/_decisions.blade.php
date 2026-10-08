@@ -11,6 +11,8 @@
         <div class="grid md:grid-cols-2 gap-md">
             <form method="POST" action="{{ route('artefacts.approve', $artefact) }}" class="flex flex-col gap-sm">
                 @csrf
+                {{-- What you are looking at: if it is changed meanwhile, the approval is refused so you can look again. --}}
+                <input type="hidden" name="revision" value="{{ \App\Actions\Oha\ApproveArtefact::revision($artefact) }}">
                 <label class="flex flex-col gap-xs text-[0.875rem]">
                     <span class="font-semibold">Note (optional)</span>
                     <textarea name="note" rows="3" class="px-sm py-2 rounded border-[1.5px] border-outline-variant">{{ old('note') }}</textarea>

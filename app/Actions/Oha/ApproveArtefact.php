@@ -16,6 +16,7 @@ use App\Notifications\WorkflowNotice;
 use App\Oha\Scorer;
 use App\Support\Audit;
 use App\Support\Notify;
+use App\Support\VersionPruner;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -35,15 +36,37 @@ final class ApproveArtefact
 
     public function __construct(private readonly Scorer $scorer) {}
 
-    public function handle(Artefact $artefact, User $approver, ?string $note = null): Artefact
+    /**
+     * What is being approved, as the approver saw it: the newest version, or the form's
+     * upload with its typed answers. Since it can still be changed while it waits, an
+     * approval of something that changed meanwhile is refused.
+     */
+    public static function revision(Artefact $artefact): string
     {
-        return DB::transaction(function () use ($artefact, $approver, $note): Artefact {
+        if ($artefact->kind === ArtefactKind::Form) {
+            $upload = $artefact->currentUpload()->first();
+
+            return 'form:'.($upload->id ?? 0).':'.md5((string) json_encode($upload->supplied ?? []));
+        }
+
+        return $artefact->kind->value.':'.($artefact->latestVersion()->value('id') ?? 0);
+    }
+
+    public function handle(Artefact $artefact, User $approver, ?string $note = null, ?string $revision = null): Artefact
+    {
+        return DB::transaction(function () use ($artefact, $approver, $note, $revision): Artefact {
             $artefact = $this->lock($artefact);
             $this->ensure($approver, 'approve', $artefact);
+            if ($revision !== null && $revision !== self::revision($artefact)) {
+                throw new WorkflowRuleBroken('It was changed after you opened it. Look at it again before approving.');
+            }
 
             $assessment = $artefact->assessment;
             $scores = $artefact->kind === ArtefactKind::Form ? $this->freezeScores($artefact, $approver) : null;
             $version = $artefact->kind !== ArtefactKind::Form ? $this->approveLatestVersion($artefact, $approver) : null;
+
+            // Only the version now approved is kept in Stage 1 (with any newer one).
+            $artefact->kind === ArtefactKind::Form ? VersionPruner::uploads($artefact) : VersionPruner::versions($artefact);
 
             $from = $artefact->state;
             $artefact->update([
@@ -97,6 +120,18 @@ final class ApproveArtefact
         // The answers as recorded: read from the file, with any typed in the platform.
         $points = $this->scorer->score($upload->answers, $upload->form_meta['missing_sheets'] ?? []);
         $upload->update(['approved_by' => $approver->id, 'approved_at' => now()]);
+
+        // Approved with answers typed in the platform: the corrected copy becomes the form's
+        // file everywhere (previews, downloads, Resources); the copy as uploaded goes.
+        if ($upload->hasEdits()) {
+            [$disk, $path] = [$upload->disk, $upload->path];
+            $upload->update([
+                'disk' => $upload->edited_disk, 'path' => $upload->edited_path,
+                'sha256' => $upload->edited_sha256, 'size_bytes' => $upload->edited_size_bytes,
+                'edited_disk' => null, 'edited_path' => null, 'edited_sha256' => null, 'edited_size_bytes' => null,
+            ]);
+            VersionPruner::removeFileIfUnused($disk, $path);
+        }
 
         // A corrected form approved again replaces the score recorded before; the audit trail keeps both.
         CategoryScore::query()->where('assessment_id', $form->assessment_id)->delete();

@@ -32,4 +32,22 @@ final class ChangedAfterApproval
             Notify::link($assessment), 'action',
         ));
     }
+
+    /**
+     * Changed while it waits for the Administrators' decision: it stays with them, and what
+     * they approve is now the changed one.
+     */
+    public static function whileWaiting(Artefact $artefact, User $by, string $happened): void
+    {
+        $assessment = $artefact->assessment;
+        $name = SubmitForApproval::label($artefact);
+        $movement = $assessment->movement->name;
+
+        Notify::send(Approvers::for($by), new WorkflowNotice(
+            "Changed while waiting for approval: {$name}, {$movement}",
+            "{$happened} the ".SubmitForApproval::inSentence($name)." for {$movement} ({$assessment->period_label}) while it waits for your approval. "
+                .'It is still with you; look again before deciding: what you approve is the changed one.',
+            Notify::link($assessment), 'action',
+        ));
+    }
 }

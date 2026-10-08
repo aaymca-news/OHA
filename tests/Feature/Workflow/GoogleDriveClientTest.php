@@ -74,6 +74,31 @@ it('signs in with a signed token, reads the file and exports a Google Doc as Wor
     Http::assertNotSent(fn (Request $r) => str_contains($r->url(), '/drive/') && $r->method() !== 'GET');
 });
 
+it('can act as an africaymca.org account, for a Workspace that does not share with outside addresses', function () {
+    config(['oha.drive.act_as' => 'oha.platform@africaymca.org']);
+    Http::fake([
+        'oauth2.googleapis.com/token' => Http::response(['access_token' => 'ya29.test']),
+        'www.googleapis.com/drive/v3/files/*' => Http::response([
+            'id' => 'abc12345678901234567890', 'name' => 'Zambia ODP 2026', 'mimeType' => DriveFile::GOOGLE_DOC,
+            'version' => '3', 'modifiedTime' => '2026-10-05T09:30:00Z', 'trashed' => false,
+        ]),
+    ]);
+
+    $drive = app(GoogleDrive::class);
+    $drive->file('abc12345678901234567890');
+
+    // Documents are shared with that account, and the platform signs in as it.
+    expect($drive->serviceAccountEmail())->toBe('oha.platform@africaymca.org');
+    Http::assertSent(function (Request $r) {
+        if ($r->url() !== 'https://oauth2.googleapis.com/token') {
+            return false;
+        }
+        $claims = json_decode(base64_decode(strtr(explode('.', $r['assertion'])[1], '-_', '+/')), true);
+
+        return $claims['sub'] === 'oha.platform@africaymca.org' && $claims['iss'] === 'oha-platform@aaymca-oha.iam.gserviceaccount.com';
+    });
+});
+
 it('exports a Google Sheet as an Excel workbook', function () {
     Http::fake([
         'oauth2.googleapis.com/token' => Http::response(['access_token' => 'ya29.test']),

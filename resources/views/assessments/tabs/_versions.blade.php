@@ -71,7 +71,7 @@
 @endif
 
 @if ($versions->count() > 1 || ($versions->isNotEmpty() && auth()->user()->isSecretariat()))
-    <x-card title="Versions" subtitle="Every version is kept, never overwritten. Choose one to preview it.">
+    <x-card title="Versions" subtitle="Until the ODP is signed, only the approved version and the newest are kept (to save space); the audit trail records every one. Choose one to preview it.">
         <ul class="flex flex-col gap-xs">
             @foreach ($versions as $v)
                 @php([$label, $icon, $tone] = VersionLabel::of($v, $artefact, $latestId))

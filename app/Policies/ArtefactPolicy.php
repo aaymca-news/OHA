@@ -54,17 +54,15 @@ class ArtefactPolicy
         return Response::deny("Only the assessors on {$movement->name} and the Administrators see work in progress. It becomes visible to all staff once approved.");
     }
 
-    /** Uploading the completed OHA form, or a version of the report or ODP. */
+    /**
+     * Uploading the completed OHA form, or a version of the report or ODP: until the ODP is
+     * signed, also while the Administrators decide (they are told of the change), and after
+     * approval (it goes back to them).
+     */
     public function upload(User $user, Artefact $artefact): Response
     {
         if ($artefact->kind === ArtefactKind::Odp) {
-            if ($denied = $this->odpClosed($user, $artefact)) {
-                return $denied;
-            }
-
-            return $artefact->state === ArtefactState::PendingApproval
-                ? Response::deny('This ODP is with the Administrators for approval. You can add a new version once they decide.')
-                : Response::allow();
+            return $this->odpClosed($user, $artefact) ?? Response::allow();
         }
         if ($denied = $this->notAssessorOf($user, $artefact)) {
             return $denied;
@@ -73,26 +71,15 @@ class ArtefactPolicy
             return Response::deny('The Board Chairperson has signed the ODP, so the OHA form, the report and the ODP are frozen. Its implementation is followed in Stage 2.');
         }
 
-        if ($artefact->kind === ArtefactKind::Report) {
-            if ($artefact->status?->isLocked()) {
-                return Response::deny('The report unlocks once the OHA form is uploaded and read. It does not need to be approved first.');
-            }
-
-            return $artefact->state === ArtefactState::PendingApproval
-                ? Response::deny('This report is with the Administrators for approval. You can upload a new version if it is sent back.')
-                : Response::allow();
-        }
-
-        // An approved form may be corrected until the ODP is signed; it then goes back for approval.
-        return $artefact->state === ArtefactState::PendingApproval
-            ? Response::deny('This form is with the Administrators. It can be replaced only if it is sent back.')
+        return $artefact->kind === ArtefactKind::Report && $artefact->status?->isLocked()
+            ? Response::deny('The report unlocks once the OHA form is uploaded and read. It does not need to be approved first.')
             : Response::allow();
     }
 
     /**
      * Fixing what the report check found, in the report itself (a new version), or marking
-     * a finding as reviewed: the movement's assessors and the Administrators, while the
-     * report is not with the Administrators, and until the ODP is signed.
+     * a finding as reviewed: the movement's assessors and the Administrators, until the ODP
+     * is signed.
      */
     public function fix(User $user, Artefact $artefact): Response
     {
@@ -105,16 +92,12 @@ class ArtefactPolicy
         if ($artefact->assessment->isFrozen()) {
             return Response::deny('The Board Chairperson has signed the ODP, so the OHA form, the report and the ODP are frozen.');
         }
-        if ($artefact->status?->isLocked()) {
-            return Response::deny('The report unlocks once the OHA form is uploaded and read.');
-        }
 
-        return $artefact->state === ArtefactState::PendingApproval
-            ? Response::deny('This report is with the Administrators for approval. It can be fixed once they decide.')
+        return $artefact->status?->isLocked()
+            ? Response::deny('The report unlocks once the OHA form is uploaded and read.')
             : Response::allow();
     }
 
-    /** Linking (or re-linking) the Google Drive document the ODP is written in. */
     /**
      * Linking (or re-linking) the Google Drive document. Also after signing: Stage 2 is
      * followed in that document, and if the staff move to another copy, the link follows.
@@ -137,13 +120,8 @@ class ArtefactPolicy
         if ($artefact->kind !== ArtefactKind::Odp || $artefact->drive_file_id === null) {
             return Response::deny('The ODP has no Google Drive document linked.');
         }
-        if ($denied = $this->odpTeam($user, $artefact)) {
-            return $denied;
-        }
 
-        return ! $artefact->isSigned() && $artefact->state === ArtefactState::PendingApproval
-            ? Response::deny('While the ODP is with the Administrators, changes in Google Drive wait. They are taken once the Administrators decide.')
-            : Response::allow();
+        return $this->odpTeam($user, $artefact) ?? Response::allow();
     }
 
     public function submit(User $user, Artefact $artefact): Response

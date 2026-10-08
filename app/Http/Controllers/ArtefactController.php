@@ -111,8 +111,8 @@ class ArtefactController extends Controller
 
     public function approve(Request $request, Artefact $artefact, ApproveArtefact $approve): RedirectResponse
     {
-        $data = $request->validate(['note' => ['nullable', 'string', 'max:2000']]);
-        $approve->handle($artefact, $request->user(), $data['note'] ?? null);
+        $data = $request->validate(['note' => ['nullable', 'string', 'max:2000'], 'revision' => ['nullable', 'string', 'max:100']]);
+        $approve->handle($artefact, $request->user(), $data['note'] ?? null, $data['revision'] ?? null);
 
         return $this->back($artefact, match ($artefact->kind) {
             ArtefactKind::Form => 'Approved. The assessor can go on to the report, and all AAYMCA staff can now see the form.',

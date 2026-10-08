@@ -26,6 +26,9 @@ class FormFindingPolicy
         if ($upload->artefact->assessment->isFrozen()) {
             return Response::deny('The Board Chairperson has signed the ODP, so the OHA form is frozen.');
         }
+        if ($upload->artefact->currentUpload()->value('id') !== $upload->id) {
+            return Response::deny('This is the approved upload. Open the working version to settle what it found.');
+        }
 
         $movement = $upload->artefact->assessment->movement;
 

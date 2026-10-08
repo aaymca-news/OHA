@@ -18,7 +18,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * one waits. An ODP version taken from Google Drive records the Drive version it was
  * read at, and which Google account last changed the document.
  */
-#[Fillable(['artefact_id', 'purpose', 'source', 'format', 'disk', 'path', 'original_name', 'size_bytes', 'sha256', 'note', 'created_by', 'created_at', 'approved_by', 'approved_at', 'extracted', 'drive_version', 'edited_by_email', 'changes'])]
+#[Fillable(['artefact_id', 'purpose', 'source', 'format', 'disk', 'path', 'original_name', 'size_bytes', 'sha256', 'note', 'created_by', 'created_at', 'approved_by', 'approved_at', 'extracted', 'drive_version', 'edited_by_email', 'changes', 'version_number'])]
 #[WithoutTimestamps]
 class Document extends Model
 {
@@ -65,10 +65,13 @@ class Document extends Model
         return $this->source === DocumentSource::Platform;
     }
 
-    /** Its version number among the document's versions (1 = the first). */
+    /**
+     * Its version number (1 = the first), given when it was saved and kept when earlier
+     * versions are removed.
+     */
     public function versionNumber(): int
     {
-        return Document::query()->where('artefact_id', $this->artefact_id)
+        return $this->version_number ?? Document::query()->where('artefact_id', $this->artefact_id)
             ->where('purpose', DocumentPurpose::Uploaded)->where('id', '<=', $this->id)->count();
     }
 
@@ -86,6 +89,7 @@ class Document extends Model
             'drive_version' => 'integer',
             'format' => DocumentFormat::class,
             'size_bytes' => 'integer',
+            'version_number' => 'integer',
             'created_at' => 'datetime',
             'approved_at' => 'datetime',
             'extracted' => 'array',

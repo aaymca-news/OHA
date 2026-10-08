@@ -9,6 +9,7 @@ use App\Exceptions\WorkflowRuleBroken;
 use App\Models\AssessmentMilestone;
 use App\Models\AuditEvent;
 use App\Models\Document;
+use App\Notifications\WorkflowNotice;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Facades\Storage;
@@ -40,19 +41,26 @@ it('saves an uploaded report as version 1, stored unchanged, ready to submit', f
         ->and(Gate::forUser($this->j->assessor)->allows('submit', $report))->toBeTrue();
 });
 
-it('keeps every version, and submits and approves the newest', function () {
+it('keeps only the approved and the newest version in Stage 1, each keeping its number', function () {
     $assessment = $this->j->assessmentAt('report_uploaded');
+    $first = $this->j->report($assessment)->latestVersion()->firstOrFail();
     $this->j->uploadReport($assessment, 'second draft', note: 'Added the March board elections.');
+
+    // Version 1 was never approved: the newer draft replaces it, file and all.
+    expect($this->j->report($assessment)->versions()->pluck('version_number')->all())->toBe([2])
+        ->and(Storage::disk('oha')->exists($first->path))->toBeFalse();
+
     app(SubmitForApproval::class)->handle($this->j->report($assessment), $this->j->assessor);
     app(ApproveArtefact::class)->handle($this->j->report($assessment), $this->j->admin);
+    $this->j->uploadReport($assessment, 'third draft');
+    $this->j->uploadReport($assessment, 'fourth draft');
 
+    // The approved version 2 stays, with the newest (4); 3 goes.
     $versions = $this->j->report($assessment)->versions()->get();
-
-    expect($versions)->toHaveCount(2)
-        ->and($versions[0]->isApproved())->toBeFalse()
-        ->and($versions[1]->isApproved())->toBeTrue()
-        ->and($versions[1]->approved_by)->toBe($this->j->admin->id)
-        ->and($versions[1]->note)->toBe('Added the March board elections.');
+    expect($versions->map->versionNumber()->all())->toBe([2, 4])
+        ->and($versions[0]->isApproved())->toBeTrue()
+        ->and($versions[0]->approved_by)->toBe($this->j->admin->id)
+        ->and($versions[0]->note)->toBe('Added the March board elections.');
 });
 
 it('accepts only Word and PDF, and refuses a file identical to an earlier version', function () {
@@ -77,11 +85,18 @@ it('lets only the movement’s assessors upload the report', function () {
     }
 });
 
-it('holds new versions while one is with the Administrators, and asks for one after a send-back', function () {
+it('takes a new version while the Administrators decide, keeping it with them, and asks for one after a send-back', function () {
     $assessment = $this->j->assessmentAt('report_submitted');
 
-    expect(fn () => $this->j->uploadReport($assessment, 'while pending'))
-        ->toThrow(WorkflowRuleBroken::class, 'with the Administrators for approval');
+    // Still with them, now as the newer version; they are told.
+    $this->j->uploadReport($assessment, 'while pending');
+    expect($this->j->report($assessment)->state)->toBe(ArtefactState::PendingApproval);
+    Notification::assertSentTo($this->j->admin, WorkflowNotice::class, fn (WorkflowNotice $n) => str_starts_with($n->subject, 'Changed while waiting for approval: Health assessment report'));
+
+    // An approval of what changed after it was opened is refused.
+    $seen = 'report:'.($this->j->report($assessment)->latestVersion()->value('id') - 1);
+    expect(fn () => app(ApproveArtefact::class)->handle($this->j->report($assessment), $this->j->admin, revision: $seen))
+        ->toThrow(WorkflowRuleBroken::class, 'changed after you opened it');
 
     app(SendBack::class)->handle($this->j->report($assessment), $this->j->admin, 'Correct the Financial Stability score.');
 
@@ -147,4 +162,20 @@ it('shows the report to the Board Chairperson once a version is approved, like t
         ->and(Gate::forUser($this->j->ghanaChair)->allows('view', $this->j->report($assessment)))->toBeFalse()
         ->and(Gate::forUser($this->j->ghanaChair)->allows('view', $assessment))->toBeFalse()
         ->and(Document::query()->count())->toBe(1);
+});
+
+it('shows the last approved version as current to everyone, and the working one only to those working on it', function () {
+    $assessment = $this->j->assessmentAt('report_approved');
+    $this->j->uploadReport($assessment, 'a correction in progress', name: 'Zambia OHA Report 2026, corrected.pdf');
+    $tab = route('assessments.show', ['assessment' => $assessment, 'tab' => 'report']);
+
+    // Everyone opens on the approved version.
+    foreach ([$this->j->admin, $this->j->assessor, $this->j->otherStaff, $this->j->chair] as $user) {
+        $this->actingAs($user)->get($tab)->assertOk()->assertSee('Version 1 · Zambia OHA Report 2026.pdf');
+    }
+    // Those working on it can open the working version; nobody else sees it.
+    $this->actingAs($this->j->assessor)->get($tab)->assertSee('Working version · version 2');
+    $this->actingAs($this->j->admin)->get($tab.'&view=working')->assertSee('Version 2 · Zambia OHA Report 2026, corrected.pdf');
+    $this->actingAs($this->j->otherStaff)->get($tab.'&view=working')->assertDontSee('corrected.pdf');
+    $this->actingAs($this->j->chair)->get($tab.'&view=working')->assertDontSee('corrected.pdf');
 });

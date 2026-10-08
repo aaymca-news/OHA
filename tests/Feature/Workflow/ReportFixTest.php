@@ -1,8 +1,8 @@
 <?php
 
-use App\Actions\Oha\ApproveArtefact;
 use App\Actions\Oha\FixReport;
 use App\Actions\Oha\ReviewReportFinding;
+use App\Actions\Oha\SubmitForApproval;
 use App\Enums\ArtefactState;
 use App\Enums\DocumentSource;
 use App\Exceptions\WorkflowRuleBroken;
@@ -105,12 +105,14 @@ it('fills in everything it can from the form in one version, and refuses empty t
         ->and($version->note)->toContain('corrected the figure in the text');
 });
 
-it('sends a fixed approved report back for approval, and fixes nothing while it is with the Administrators or once the ODP is signed', function () {
-    $assessment = $this->j->assessmentAt('report_submitted');
-    expect(fn () => app(FixReport::class)->fromForm($this->j->report($assessment), $this->j->assessor))
-        ->toThrow(WorkflowRuleBroken::class, 'with the Administrators');
+it('fixes a report while it waits for approval, keeping it with the Administrators, and nothing once the ODP is signed', function () {
+    $assessment = $this->j->assessmentAt('form_approved');
+    $this->j->uploadWordReport($assessment, WordDocument::zambiaReport(), picture: true);
+    app(SubmitForApproval::class)->handle($this->j->report($assessment), $this->j->assessor);
 
-    app(ApproveArtefact::class)->handle($this->j->report($assessment), $this->j->admin);
+    app(FixReport::class)->fromForm($this->j->report($assessment), $this->j->assessor);
+    expect($this->j->report($assessment)->state)->toBe(ArtefactState::PendingApproval)
+        ->and($this->j->report($assessment)->versions()->count())->toBe(1);
 
     $signed = $this->j->assessmentAt('odp_signed');
     expect(fn () => app(ReviewReportFinding::class)->mark($this->j->report($signed), $this->j->assessor, str_repeat('a', 32), 'Something', 'Checked.'))

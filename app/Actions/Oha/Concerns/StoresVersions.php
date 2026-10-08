@@ -12,6 +12,7 @@ use App\Models\User;
 use App\Support\Audit;
 use App\Support\ChangedAfterApproval;
 use App\Support\FileVault;
+use App\Support\VersionPruner;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -55,15 +56,14 @@ trait StoresVersions
             if ($ability !== null && $actor !== null) {
                 $this->ensure($actor, $ability, $artefact);
             }
-            // Whoever saves it: never while it is with the Administrators, never once signed.
-            if ($artefact->state === ArtefactState::PendingApproval) {
-                throw new WorkflowRuleBroken('It is with the Administrators for approval. A new version can be added once they decide.');
-            }
+            // Whoever saves it: never once the ODP is signed. While the Administrators decide, it
+            // may still be changed: it stays with them, and they are told.
             if ($artefact->assessment->isFrozen()) {
                 throw new WorkflowRuleBroken('The Board Chairperson has signed the ODP, so the OHA form, the report and the ODP are frozen.');
             }
 
             $version = $artefact->documents()->create($stored + $attributes + [
+                'version_number' => (int) $artefact->documents()->where('purpose', DocumentPurpose::Uploaded)->max('version_number') + 1,
                 'purpose' => DocumentPurpose::Uploaded,
                 'format' => $format,
                 'original_name' => $originalName,
@@ -72,14 +72,22 @@ trait StoresVersions
             ]);
 
             $from = $artefact->state;
-            $artefact->update(['state' => ArtefactState::Drafted]);
+            $waiting = $from === ArtefactState::PendingApproval;
+            $artefact->update(['state' => $waiting ? ArtefactState::PendingApproval : ArtefactState::Drafted]);
 
-            // Changed after approval: the Administrators are told it will need their approval again.
+            // The Administrators are told: after approval, it will need approving again; while
+            // they decide, what they approve is now this newer version.
+            $happened = $version->fromDrive()
+                ? 'A change made in Google Drive'.($version->edited_by_email ? ' by '.$version->edited_by_email : '').' was saved as version '.$version->versionNumber().' of'
+                : ($actor ?? $createdBy)->name.' saved version '.$version->versionNumber().' of';
             if ($from === ArtefactState::Approved) {
-                ChangedAfterApproval::tell($artefact, $actor ?? $createdBy, $version->fromDrive()
-                    ? 'A change made in Google Drive'.($version->edited_by_email ? ' by '.$version->edited_by_email : '').' was saved as version '.$version->versionNumber().' of'
-                    : ($actor ?? $createdBy)->name.' saved version '.$version->versionNumber().' of');
+                ChangedAfterApproval::tell($artefact, $actor ?? $createdBy, $happened);
+            } elseif ($waiting) {
+                ChangedAfterApproval::whileWaiting($artefact, $actor ?? $createdBy, $happened);
             }
+
+            // Only the approved version and this one are kept in Stage 1.
+            VersionPruner::versions($artefact);
 
             Audit::record($actor, $artefact->kind->value.'.version_'.($version->fromDrive() ? 'from_drive' : 'uploaded'), $version, $assessment, $from, $artefact->state,
                 payload: array_filter([

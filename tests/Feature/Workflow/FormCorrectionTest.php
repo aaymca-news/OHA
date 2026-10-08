@@ -150,7 +150,7 @@ it('takes back a typed answer, and the gap returns', function () {
         ->and(($this->gap)($assessment, 'q:Q246'))->toBeInstanceOf(FormFinding::class);
 });
 
-it('lets only the assessors and the Administrators type answers, and never while the form is with the Administrators', function () {
+it('lets only the assessors and the Administrators type answers, also while the form waits for approval', function () {
     $assessment = $this->j->assessmentAt('form_uploaded');
     $gap = ($this->gap)($assessment, 'q:Q246');
 
@@ -158,8 +158,28 @@ it('lets only the assessors and the Administrators type answers, and never while
         ->and(fn () => app(SupplyAnswer::class)->handle($gap, $this->j->chair, '100'))->toThrow(WorkflowRuleBroken::class, 'Only the assessors');
     app(SupplyAnswer::class)->handle($gap, $this->j->admin, '100');
 
+    // While it waits: the answer is taken, it stays with the Administrators, and they are told.
     app(SubmitForApproval::class)->handle($this->j->form($assessment), $this->j->assessor, acknowledgeGaps: true);
-    expect(fn () => ($this->supply)(($this->gap)($assessment, 'q:Q911'), 'A plot'))->toThrow(WorkflowRuleBroken::class, 'with the Administrators');
+    ($this->supply)(($this->gap)($assessment, 'q:Q911'), 'A plot in Lusaka');
+    expect($this->j->form($assessment)->state)->toBe(ArtefactState::PendingApproval);
+    Notification::assertSentTo($this->j->admin, WorkflowNotice::class, fn (WorkflowNotice $n) => $n->subject === 'Changed while waiting for approval: OHA form, Zambia YMCA');
+});
+
+it('makes the corrected workbook the form’s file once approved, and keeps only what is needed', function () {
+    $assessment = $this->j->assessmentAt('form_uploaded');
+    $asUploaded = ($this->upload)($assessment)->path;
+    ($this->supply)(($this->gap)($assessment, 'q:Q246'), '12500');
+    $corrected = ($this->upload)($assessment)->edited_path;
+
+    app(SubmitForApproval::class)->handle($this->j->form($assessment), $this->j->assessor, acknowledgeGaps: true);
+    app(ApproveArtefact::class)->handle($this->j->form($assessment), $this->j->admin, revision: ApproveArtefact::revision($this->j->form($assessment)));
+
+    $upload = ($this->upload)($assessment);
+    expect($upload->path)->toBe($corrected)
+        ->and($upload->hasEdits())->toBeFalse()
+        ->and(Storage::disk('oha')->exists($asUploaded))->toBeFalse()
+        ->and(Storage::disk('oha')->exists($corrected))->toBeTrue();
+    $this->actingAs($this->j->otherStaff)->get(route('downloads.form', $upload))->assertOk()->assertDownload('ZAM26 OHA Form.xlsx');
 });
 
 it('sends an approved form back for approval when it is corrected, telling the Administrators, and keeps the approved score until then', function () {

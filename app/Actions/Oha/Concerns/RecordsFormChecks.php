@@ -117,7 +117,10 @@ trait RecordsFormChecks
     private function settle(Artefact $form, CheckResult $result, User $by, string $change): void
     {
         $from = $form->state;
-        $form->update([
+        // Changed while the Administrators decide: it stays with them (as submitted, with its
+        // acknowledgement of gaps), unless the new file is refused.
+        $waiting = $from === ArtefactState::PendingApproval && $result->ok;
+        $form->update($waiting ? [] : [
             'state' => $result->ok ? ArtefactState::Ready : ArtefactState::RulesFailed,
             'gap_ack' => false,
             'gap_ack_reason' => null,
@@ -125,6 +128,8 @@ trait RecordsFormChecks
 
         if ($from === ArtefactState::Approved) {
             ChangedAfterApproval::tell($form, $by, "{$by->name} {$change}");
+        } elseif ($waiting) {
+            ChangedAfterApproval::whileWaiting($form, $by, "{$by->name} {$change}");
         }
     }
 }

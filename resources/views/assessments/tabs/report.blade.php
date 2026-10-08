@@ -3,9 +3,13 @@
     $status = $artefact->status;
     $effective = $status->effective_state;
     $latestId = $artefact->latestVersion?->id;
-    $shown = $versions->firstWhere('id', (int) request('version')) ?? $versions->first();
     $pending = $artefact->state->value === 'pending_approval';
     $seesDrafts = auth()->user()->oversees() || auth()->user()->canAssess($assessment->movement);
+    // The last approved version is current for everyone; those working on it can open the newer one.
+    $approvedShown = $versions->first(fn ($v) => $v->isApproved());
+    $workingVersion = $seesDrafts && $approvedShown && $versions->first()?->id !== $approvedShown->id ? $versions->first() : null;
+    $shown = $versions->firstWhere('id', (int) request('version'))
+        ?? (request('view') === 'working' && $workingVersion ? $workingVersion : ($approvedShown ?? $versions->first()));
 @endphp
 
 <div class="flex flex-wrap items-center gap-sm text-[0.875rem]">
@@ -26,9 +30,18 @@
     <x-empty-state icon="lock">The report unlocks once the OHA form is uploaded and read. It does not need to be approved first.</x-empty-state>
 @endif
 
+@if ($workingVersion)
+    @include('assessments.tabs._current-or-working', [
+        'tab' => 'report',
+        'working' => $shown?->id === $workingVersion->id,
+        'approvedLabel' => 'version '.$approvedShown->number,
+        'workingLabel' => 'version '.$workingVersion->number,
+    ])
+@endif
+
 @can('upload', $artefact)
     <x-card :title="$versions->isEmpty() ? 'Upload the report' : 'Upload a new version'"
-            subtitle="The report written for this assessment, as a Word (.docx) or PDF file. Every version is kept; the newest one is what you submit for approval.">
+            subtitle="The report written for this assessment, as a Word (.docx) or PDF file. The newest is what you submit for approval; the approved version is kept until a newer one is approved.">
         <form method="POST" action="{{ route('artefacts.versions', $artefact) }}" enctype="multipart/form-data"
               x-data="{ name: '', over: false }" class="flex flex-col gap-sm">
             @csrf
@@ -216,7 +229,7 @@
                                         <span class="inline-flex items-center gap-xs font-semibold text-primary"><span class="material-symbols-outlined text-[1rem]" aria-hidden="true">info</span>Answer: {{ $fix['kind'] === 'author' ? 'names and roles' : 'text' }}</span>
                                         <span class="text-on-surface-variant">{{ $fix['guide'] ?? '' }}</span>
                                     </p>
-                                    <p class="text-[0.8125rem] text-on-surface-variant">It is written into the report, saved as a new version made by the platform, and checked again. Every earlier version is kept.</p>
+                                    <p class="text-[0.8125rem] text-on-surface-variant">It is written into the report, saved as a new version made by the platform, and checked again. The approved version is kept until this one is approved.</p>
                                     <div class="flex flex-wrap items-center gap-sm">
                                         <x-button>Write it into the report</x-button>
                                         <button type="button" x-on:click="open = false" class="text-[0.875rem] text-primary underline">Cancel</button>
