@@ -18,6 +18,7 @@ use App\Oha\FormWorkbookWriter;
 use App\Oha\Interpreter;
 use App\Oha\Question;
 use App\Support\Audit;
+use App\Support\VersionPruner;
 use Closure;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
@@ -119,6 +120,43 @@ final class SupplyAnswer
 
             return $supplied;
         }, 'took back an answer typed in', 'form.answer_withdrawn', ['ref' => $ref, 'previous' => $previous]);
+    }
+
+    /**
+     * When the Board Chairperson signs the ODP: the approved upload goes back to the
+     * answers it was approved with, dropping any typed since. Its file already carries
+     * those (see ApproveArtefact), so the copy written since goes. Part of signing, not a
+     * person's step, so no policy is checked. Returns whether anything was dropped.
+     */
+    public function restoreApproved(FormUpload $upload): bool
+    {
+        $approved = $upload->approved_supplied ?? [];
+        if ($approved == ($upload->supplied ?? []) && ! $upload->hasEdits()) {
+            return false;
+        }
+
+        $copy = tempnam(sys_get_temp_dir(), 'oha');
+        file_put_contents($copy, Storage::disk($upload->disk)->get($upload->path));
+        try {
+            $read = $this->reader->read($copy)->withSupplied($approved);
+        } finally {
+            @unlink($copy);
+        }
+        $result = $this->checker->check($read, $upload->artefact->assessment->movement);
+
+        $previous = $upload->findings()->get();
+        $upload->findings()->delete();
+        [$disk, $path] = [$upload->edited_disk, $upload->edited_path];
+        $upload->update([
+            'answers' => $read->answers,
+            'form_meta' => $this->meta($read, $result),
+            'supplied' => $approved === [] ? null : $approved,
+            'edited_disk' => null, 'edited_path' => null, 'edited_sha256' => null, 'edited_size_bytes' => null,
+        ]);
+        $this->recordFindings($upload, $result, $previous);
+        VersionPruner::removeFileIfUnused($disk, $path);
+
+        return true;
     }
 
     /**

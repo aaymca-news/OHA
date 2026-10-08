@@ -1,6 +1,5 @@
 <?php
 
-use App\Actions\Oha\SubmitForApproval;
 use App\Enums\ArtefactState;
 use App\Models\ArtefactStatus;
 use App\Models\Assessment;
@@ -125,14 +124,12 @@ it('refuses a report that is not Word or PDF, saying why', function () {
 });
 
 it('explains a refused step instead of failing', function () {
-    $this->j->admin->assignedMovements()->attach($this->j->zambia);
-    $assessment = $this->j->assessmentAt('form_uploaded');
-    app(SubmitForApproval::class)->handle($this->j->form($assessment), $this->j->admin, acknowledgeGaps: true);
+    $assessment = $this->j->assessmentAt('form_submitted');
 
-    $this->actingAs($this->j->admin)->from(route('assessments.show', $assessment))
+    $this->actingAs($this->j->assessor)->from(route('assessments.show', $assessment))
         ->post(route('artefacts.approve', $this->j->form($assessment)))
         ->assertRedirect(route('assessments.show', $assessment))
-        ->assertSessionHasErrors(['action' => 'You submitted this, and nobody approves their own work. Another Administrator must approve it.']);
+        ->assertSessionHasErrors(['action' => 'Only an Administrator approves.']);
 
     expect($this->j->form($assessment)->state)->toBe(ArtefactState::PendingApproval);
 });

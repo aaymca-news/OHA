@@ -231,8 +231,9 @@
     <x-empty-state icon="upload_file">No form has been uploaded yet.</x-empty-state>
 @endif
 
-@can('submit', $form)
-    <x-card title="Submit for approval" subtitle="It goes to the Administrators. Any of them except you can approve it.">
+{{-- An Administrator approves their own work directly (below), so is not asked to submit it. --}}
+@if (Gate::allows('submit', $form) && Gate::denies('approve', $form))
+    <x-card title="Submit for approval" subtitle="It goes to the Administrators to approve.">
         <form method="POST" action="{{ route('artefacts.submit', $form) }}" class="flex flex-col gap-sm" x-data="{ ack: false }">
             @csrf
             @if ($openGaps > 0)
@@ -249,7 +250,7 @@
             <x-button class="self-start" x-bind:disabled="{{ $openGaps > 0 ? '! ack' : 'false' }}">Submit for approval</x-button>
         </form>
     </x-card>
-@endcan
+@endif
 
 @include('assessments.tabs._decisions', ['artefact' => $form])
 

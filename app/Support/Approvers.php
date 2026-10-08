@@ -8,9 +8,9 @@ use Illuminate\Auth\Access\Response;
 use Illuminate\Database\Eloquent\Collection;
 
 /**
- * Who approves a submission: any active Administrator or Super Administrator except
- * the person who submitted it. Nobody approves their own work, so an Administrator's
- * own submission needs a second Administrator.
+ * Who is asked to approve a submission: every active Administrator or Super Administrator
+ * other than the person who submitted it. An Administrator may approve their own work, so
+ * an Administrator can always hand work in, even when they are the only one.
  */
 final class Approvers
 {
@@ -32,12 +32,11 @@ final class Approvers
     /** Whether this person can hand work in for approval right now, and why not. */
     public static function availabilityFor(User $submitter): Response
     {
-        if (self::for($submitter)->isNotEmpty()) {
+        // An Administrator may approve their own work.
+        if ($submitter->isAdmin() || self::for($submitter)->isNotEmpty()) {
             return Response::allow();
         }
 
-        return Response::deny($submitter->isAdmin()
-            ? 'Nobody approves their own work, and there is no other Administrator to approve yours. Ask the Super Administrator to appoint another Administrator before you submit.'
-            : 'There is no Administrator to approve this. Ask the Super Administrator to appoint one before submitting.');
+        return Response::deny('There is no Administrator to approve this. Ask the Super Administrator to appoint one before submitting.');
     }
 }

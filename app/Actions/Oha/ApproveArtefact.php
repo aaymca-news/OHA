@@ -7,6 +7,7 @@ use App\Actions\Oha\Concerns\LocksArtefact;
 use App\Enums\ArtefactKind;
 use App\Enums\ArtefactState;
 use App\Enums\CommentKind;
+use App\Enums\FindingSeverity;
 use App\Exceptions\WorkflowRuleBroken;
 use App\Models\Artefact;
 use App\Models\Category;
@@ -52,13 +53,25 @@ final class ApproveArtefact
         return $artefact->kind->value.':'.($artefact->latestVersion()->value('id') ?? 0);
     }
 
-    public function handle(Artefact $artefact, User $approver, ?string $note = null, ?string $revision = null): Artefact
+    public function handle(Artefact $artefact, User $approver, ?string $note = null, ?string $revision = null, bool $acknowledgeGaps = false): Artefact
     {
-        return DB::transaction(function () use ($artefact, $approver, $note, $revision): Artefact {
+        return DB::transaction(function () use ($artefact, $approver, $note, $revision, $acknowledgeGaps): Artefact {
             $artefact = $this->lock($artefact);
             $this->ensure($approver, 'approve', $artefact);
             if ($revision !== null && $revision !== self::revision($artefact)) {
                 throw new WorkflowRuleBroken('It was changed after you opened it. Look at it again before approving.');
+            }
+
+            // An Administrator's own work, approved without being submitted: they hand it in and
+            // approve it at once. For the form, they acknowledge its open gaps, as a submitter would.
+            if ($artefact->state !== ArtefactState::PendingApproval) {
+                $gaps = $artefact->kind === ArtefactKind::Form
+                    ? (int) $artefact->currentUpload()->first()?->findings()->where('severity', FindingSeverity::Missing)->whereNull('resolved_at')->count()
+                    : 0;
+                if ($gaps > 0 && ! $acknowledgeGaps) {
+                    throw new WorkflowRuleBroken($gaps.' item'.($gaps === 1 ? ' is' : 's are').' missing from the form. Confirm you approve it without '.($gaps === 1 ? 'it' : 'them').'.');
+                }
+                $artefact->update(['gap_ack' => $gaps > 0, 'submitted_by' => $approver->id, 'submitted_at' => now()]);
             }
 
             $assessment = $artefact->assessment;
@@ -93,7 +106,7 @@ final class ApproveArtefact
                 "Approved: {$name}, {$movement}",
                 "{$approver->name} approved the ".SubmitForApproval::inSentence($name).". {$onwards}",
                 Notify::link($assessment), 'good',
-            ));
+            ), except: $approver);
 
             if ($artefact->kind !== ArtefactKind::Form) {
                 $toSign = $artefact->kind === ArtefactKind::Odp;
@@ -119,7 +132,7 @@ final class ApproveArtefact
 
         // The answers as recorded: read from the file, with any typed in the platform.
         $points = $this->scorer->score($upload->answers, $upload->form_meta['missing_sheets'] ?? []);
-        $upload->update(['approved_by' => $approver->id, 'approved_at' => now()]);
+        $upload->update(['approved_by' => $approver->id, 'approved_at' => now(), 'approved_supplied' => $upload->supplied]);
 
         // Approved with answers typed in the platform: the corrected copy becomes the form's
         // file everywhere (previews, downloads, Resources); the copy as uploaded goes.

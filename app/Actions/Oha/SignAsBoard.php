@@ -11,6 +11,7 @@ use App\Models\User;
 use App\Notifications\WorkflowNotice;
 use App\Support\Audit;
 use App\Support\Notify;
+use App\Support\VersionPruner;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -19,12 +20,15 @@ use Illuminate\Support\Facades\DB;
  * They sign by typing their initials or full name. Kept as evidence: what they typed,
  * who they are, when, from where, and the exact version signed: the last approved
  * one, with its file's SHA-256 fingerprint. From then on the ODP is frozen, and with
- * it the OHA form and the report it rests on; its implementation is followed in Stage 2.
+ * it the OHA form and the report it rests on, as they were approved: any work on them
+ * not approved is removed. Its implementation is followed in Stage 2.
  * Signing never holds the Secretariat back: it only changes the document's label.
  */
 final class SignAsBoard
 {
     use EnforcesPolicy, LocksArtefact;
+
+    public function __construct(private readonly SupplyAnswer $supply) {}
 
     public function handle(Artefact $artefact, User $chair, string $typedSignature, bool $confirmed, ?string $comment = null, ?string $ip = null, ?string $userAgent = null): BoardSignature
     {
@@ -58,13 +62,22 @@ final class SignAsBoard
                 'signed_at' => now(),
             ]);
 
+            // The OHA form and report the ODP rests on are final as approved: work on them since goes.
+            $form = $assessment->form()->firstOrFail();
+            $removed = VersionPruner::finalise($form, $assessment->report()->firstOrFail());
+            $approvedUpload = $form->uploads()->whereNotNull('approved_at')->orderByDesc('id')->first();
+            $restored = $approvedUpload !== null && $this->supply->restoreApproved($approvedUpload);
+
             Audit::record($chair, $artefact->kind->value.'.signed_by_board', $artefact, $assessment, payload: [
                 'signed_name' => $signature->signed_name,
                 'signature' => $mark,
                 'version' => $signed->versionNumber(),
                 'document_sha256' => $signature->document_sha256,
                 'comment' => $signature->comment,
-            ]);
+            ] + array_filter([
+                'unapproved_work_removed' => $removed,
+                'typed_answers_since_approval_dropped' => $restored,
+            ]));
 
             $name = SubmitForApproval::label($artefact);
             Notify::send(

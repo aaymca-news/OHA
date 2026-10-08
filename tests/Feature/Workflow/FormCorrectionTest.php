@@ -301,3 +301,41 @@ it('guides each box with the kind of answer it takes', function () {
         ->assertSee('Answer: A whole number of people')
         ->assertSee('Mark as reviewed');
 });
+
+it('keeps only what was approved when the ODP is signed: work on the form and report since is removed', function () {
+    $assessment = $this->j->assessmentAt('odp_approved');
+    // An answer typed in, approved with the form.
+    ($this->supply)(($this->gap)($assessment, 'q:Q246'), '12500');
+    app(SubmitForApproval::class)->handle($this->j->form($assessment), $this->j->assessor, acknowledgeGaps: true);
+    app(ApproveArtefact::class)->handle($this->j->form($assessment), $this->j->admin);
+    $approved = ($this->upload)($assessment);
+    $approvedReport = $this->j->report($assessment)->approvedVersion()->value('id');
+
+    // Since approval: an answer typed into the approved form, then a newer form submitted;
+    // a newer report version.
+    ($this->supply)(($this->gap)($assessment, 'q:Q911'), 'Plot 12, Lusaka');
+    $copy = ($this->upload)($assessment)->edited_path;
+    app(UploadForm::class)->handle($this->j->form($assessment), zambiaFormWith(['Q201' => 'No']), 'ZAM26 v2.xlsx', $this->j->assessor);
+    app(SubmitForApproval::class)->handle($this->j->form($assessment), $this->j->assessor, acknowledgeGaps: true);
+    $this->j->uploadReport($assessment, 'Zambia OHA report, not approved');
+    expect($this->j->form($assessment)->state)->toBe(ArtefactState::PendingApproval)
+        ->and($this->j->report($assessment)->state)->toBe(ArtefactState::Drafted);
+
+    $this->j->sign($this->j->odp($assessment));
+
+    $form = $this->j->form($assessment);
+    $report = $this->j->report($assessment);
+    $kept = $form->uploads()->sole();
+    expect($kept->id)->toBe($approved->id)
+        ->and($form->state)->toBe(ArtefactState::Approved)
+        ->and($form->approved_by)->toBe($this->j->admin->id)
+        // The answer typed before approval stays; the one typed since goes, with its copy.
+        ->and(array_keys($kept->supplied))->toBe(['q:Q246'])
+        ->and($kept->answers['Q911'] ?? null)->toBeNull()
+        ->and($kept->hasEdits())->toBeFalse()
+        ->and(Storage::disk('oha')->exists($copy))->toBeFalse()
+        ->and($report->state)->toBe(ArtefactState::Approved)
+        ->and($report->versions()->pluck('id')->all())->toBe([$approvedReport])
+        ->and(AuditEvent::query()->where('action', 'odp.signed_by_board')->value('payload'))
+        ->toMatchArray(['unapproved_work_removed' => 2, 'typed_answers_since_approval_dropped' => true]);
+});

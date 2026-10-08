@@ -55,7 +55,7 @@ it('flags a missing Administrator, Super Administrator or Board Chairperson', fu
     $health = SystemHealth::check();
 
     expect($health['severity'])->toBe('serious')
-        ->and(implode(' ', $health['problems']))->toContain('only one Administrator')->toContain('no Super Administrator')->toContain('have no Board Chairperson');
+        ->and(implode(' ', $health['problems']))->not->toContain('only one Administrator')->toContain('no Super Administrator')->toContain('have no Board Chairperson');
 
     $this->j->admin->update(['active' => false]);
 

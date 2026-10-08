@@ -9,10 +9,9 @@ use Illuminate\Support\Collection;
 
 /**
  * The roles the workflow cannot run without: a Super Administrator (who appoints
- * the Administrators), at least two Administrators of either kind (nobody approves
- * their own work, so one alone cannot have theirs approved), and a Board
- * Chairperson for every movement, who signs its ODP. Behind the warning banner and
- * the daily reminders.
+ * the Administrators), an Administrator of either kind (who approves; their own work
+ * too), and a Board Chairperson for every movement, who signs its ODP. Behind the
+ * warning banner and the daily reminders.
  */
 final class SystemHealth
 {
@@ -29,9 +28,6 @@ final class SystemHealth
         if ($administrators === 0) {
             $problems[] = 'There is no Administrator. Nothing can be approved.';
             $severity = 'critical';
-        } elseif ($administrators === 1) {
-            $problems[] = 'There is only one Administrator. Nobody approves their own work, so anything they submit cannot be approved.';
-            $severity = 'serious';
         }
 
         if (! User::query()->where('role', Role::SuperAdmin)->where('active', true)->exists()) {

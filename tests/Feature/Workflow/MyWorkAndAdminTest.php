@@ -33,16 +33,13 @@ it('puts a submitted form in every Administratorâ€™s queue, and no staff memberâ
         ->and(groupOf($this->j->assessor, 'watching')['items'])->toHaveCount(1);
 });
 
-it('shows an Administrator their own submission, locked, with why', function () {
+it('lets an Administrator approve their own submission, like any other', function () {
     $this->j->admin->assignedMovements()->attach($this->j->zambia);
     $assessment = $this->j->assessmentAt('opened');
     app(UploadForm::class)->handle($this->j->form($assessment), zambiaFormPath(), 'f.xlsx', $this->j->admin);
     app(SubmitForApproval::class)->handle($this->j->form($assessment), $this->j->admin, acknowledgeGaps: true);
 
-    $mine = groupOf($this->j->admin, 'approve')['items'][0];
-
-    expect($mine['actionable'])->toBeFalse()
-        ->and($mine['blocked'])->toContain('Another Administrator must approve it')
+    expect(groupOf($this->j->admin, 'approve')['items'][0]['actionable'])->toBeTrue()
         ->and(groupOf($this->j->secondAdmin, 'approve')['items'][0]['actionable'])->toBeTrue();
 });
 

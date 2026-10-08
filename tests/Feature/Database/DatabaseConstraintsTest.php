@@ -85,15 +85,6 @@ it('rejects a state that does not belong to the artefact kind', function () {
         ->toThrow(QueryException::class);
 });
 
-it('rejects anyone approving their own submission', function () {
-    $user = User::factory()->admin()->create();
-
-    expect(attempt(fn () => Artefact::factory()->inState(ArtefactState::Approved)->create([
-        'submitted_by' => $user->id,
-        'approved_by' => $user->id,
-    ])))->toThrow(QueryException::class);
-});
-
 it('keeps the audit trail append-only', function () {
     $event = AuditEvent::factory()->create();
 

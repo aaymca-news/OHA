@@ -76,13 +76,17 @@ it('accepts only Word and PDF, and refuses a file identical to an earlier versio
     expect($report->latestVersion()->firstOrFail()->format->value)->toBe('docx');
 });
 
-it('lets only the movement’s assessors upload the report', function () {
+it('lets the movement’s assessors and the Administrators upload the report, and nobody else', function () {
     $assessment = $this->j->assessmentAt('form_approved');
 
-    foreach ([$this->j->otherStaff, $this->j->admin, $this->j->chair] as $notAssessor) {
+    foreach ([$this->j->otherStaff, $this->j->chair] as $notAssessor) {
         expect(fn () => $this->j->uploadReport($assessment, 'not mine', $notAssessor))
             ->toThrow(WorkflowRuleBroken::class);
     }
+
+    $this->j->uploadReport($assessment, 'the Administrator’s changes', $this->j->admin);
+    expect($this->j->report($assessment)->latestVersion()->value('created_by'))->toBe($this->j->admin->id)
+        ->and(Gate::forUser($this->j->admin)->allows('submit', $this->j->report($assessment)))->toBeTrue();
 });
 
 it('takes a new version while the Administrators decide, keeping it with them, and asks for one after a send-back', function () {

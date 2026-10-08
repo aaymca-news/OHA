@@ -94,23 +94,57 @@ it('needs the ODP’s Google Drive link with its first version, and refuses link
         ->and($odp->versions()->pluck('version_number')->all())->toBe([2]);
 });
 
-it('lets any Administrator approve, except the one who submitted it', function () {
+it('lets any Administrator approve, the one who submitted it included', function () {
     $this->j->admin->assignedMovements()->attach($this->j->zambia);
 
     $byAdmin = $this->j->assessmentAt('opened');
     app(UploadForm::class)->handle($this->j->form($byAdmin), zambiaFormPath(), 'f.xlsx', $this->j->admin);
     app(SubmitForApproval::class)->handle($this->j->form($byAdmin), $this->j->admin, acknowledgeGaps: true);
-
-    expect(fn () => app(ApproveArtefact::class)->handle($this->j->form($byAdmin), $this->j->admin))
-        ->toThrow(WorkflowRuleBroken::class, 'You submitted this, and nobody approves their own work. Another Administrator must approve it.');
-
-    app(ApproveArtefact::class)->handle($this->j->form($byAdmin), $this->j->superAdmin);
+    app(ApproveArtefact::class)->handle($this->j->form($byAdmin), $this->j->admin);
 
     $staffs = $this->j->assessmentAt('form_submitted');
     app(ApproveArtefact::class)->handle($this->j->form($staffs), $this->j->secondAdmin);
 
-    expect($this->j->form($byAdmin)->approved_by)->toBe($this->j->superAdmin->id)
+    expect($this->j->form($byAdmin)->approved_by)->toBe($this->j->admin->id)
         ->and($this->j->form($staffs)->approved_by)->toBe($this->j->secondAdmin->id);
+});
+
+it('lets an Administrator approve their own report and ODP straight away, without submitting them', function () {
+    $this->j->admin->assignedMovements()->attach($this->j->zambia);
+    $assessment = $this->j->assessmentAt('form_approved');
+
+    $this->j->uploadReport($assessment, 'the Administrator’s report', $this->j->admin);
+    expect(Gate::forUser($this->j->admin)->allows('approve', $this->j->report($assessment)))->toBeTrue();
+    app(ApproveArtefact::class)->handle($this->j->report($assessment), $this->j->admin);
+
+    $this->j->uploadOdp($assessment, 'the Administrator’s ODP', $this->j->admin);
+    app(ApproveArtefact::class)->handle($this->j->odp($assessment), $this->j->admin);
+
+    expect($this->j->report($assessment)->state)->toBe(ArtefactState::Approved)
+        ->and($this->j->odp($assessment)->state)->toBe(ArtefactState::Approved)
+        ->and($this->j->odp($assessment)->submitted_by)->toBe($this->j->admin->id)
+        ->and(Gate::forUser($this->j->chair)->allows('sign', $this->j->odp($assessment)))->toBeTrue();
+
+    // Another Administrator does not approve work that was never submitted to them.
+    $other = $this->j->assessmentAt('report_uploaded');
+    expect(fn () => app(ApproveArtefact::class)->handle($this->j->report($other), $this->j->secondAdmin))
+        ->toThrow(WorkflowRuleBroken::class, 'This is not awaiting approval.');
+});
+
+it('approves the ODP only once the OHA form and the report are approved, so it cannot be signed before', function () {
+    $assessment = $this->j->assessmentAt('report_uploaded');
+    $this->j->uploadOdp($assessment, 'Zambia ODP, first version');
+    app(SubmitForApproval::class)->handle($this->j->odp($assessment), $this->j->assessor);
+
+    expect(fn () => app(ApproveArtefact::class)->handle($this->j->odp($assessment), $this->j->admin))
+        ->toThrow(WorkflowRuleBroken::class, 'The ODP can be approved only once the report is approved.')
+        ->and(Gate::forUser($this->j->chair)->allows('sign', $this->j->odp($assessment)))->toBeFalse();
+
+    app(SubmitForApproval::class)->handle($this->j->report($assessment), $this->j->assessor);
+    app(ApproveArtefact::class)->handle($this->j->report($assessment), $this->j->admin);
+    app(ApproveArtefact::class)->handle($this->j->odp($assessment), $this->j->admin);
+
+    expect($this->j->odp($assessment)->state)->toBe(ArtefactState::Approved);
 });
 
 it('tells every Administrator except the submitter that something awaits approval', function () {
@@ -133,15 +167,15 @@ it('never lets staff or the Board Chairperson approve', function () {
     }
 });
 
-it('blocks an Administrator from submitting when no other Administrator could approve it', function () {
+it('lets the only active Administrator approve their own work', function () {
     $this->j->secondAdmin->update(['active' => false]);
     $this->j->superAdmin->update(['active' => false]);
     $this->j->admin->assignedMovements()->attach($this->j->zambia);
     $assessment = $this->j->assessmentAt('opened');
     app(UploadForm::class)->handle($this->j->form($assessment), zambiaFormPath(), 'f.xlsx', $this->j->admin);
+    app(ApproveArtefact::class)->handle($this->j->form($assessment), $this->j->admin, acknowledgeGaps: true);
 
-    expect(fn () => app(SubmitForApproval::class)->handle($this->j->form($assessment), $this->j->admin, acknowledgeGaps: true))
-        ->toThrow(WorkflowRuleBroken::class, 'there is no other Administrator to approve yours');
+    expect($this->j->form($assessment)->state)->toBe(ArtefactState::Approved);
 });
 
 it('refuses a submission when there is no Administrator', function () {

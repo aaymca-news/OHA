@@ -16,7 +16,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * in words read as what they mean), with any answers typed in the platform for
  * what the file lacked on top ("supplied", with who typed them and when).
  */
-#[Fillable(['artefact_id', 'disk', 'path', 'original_name', 'size_bytes', 'sha256', 'uploaded_by', 'uploaded_at', 'answers', 'form_meta', 'printed_totals', 'supplied', 'approved_by', 'approved_at', 'edited_disk', 'edited_path', 'edited_sha256', 'edited_size_bytes'])]
+#[Fillable(['artefact_id', 'disk', 'path', 'original_name', 'size_bytes', 'sha256', 'uploaded_by', 'uploaded_at', 'answers', 'form_meta', 'printed_totals', 'supplied', 'approved_supplied', 'approved_by', 'approved_at', 'edited_disk', 'edited_path', 'edited_sha256', 'edited_size_bytes'])]
 #[WithoutTimestamps]
 class FormUpload extends Model
 {
@@ -88,6 +88,7 @@ class FormUpload extends Model
             'form_meta' => 'array',
             'printed_totals' => 'array',
             'supplied' => 'array',
+            'approved_supplied' => 'array',
             'uploaded_at' => 'datetime',
             'approved_at' => 'datetime',
             'size_bytes' => 'integer',

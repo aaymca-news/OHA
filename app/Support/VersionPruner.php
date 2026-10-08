@@ -2,6 +2,7 @@
 
 namespace App\Support;
 
+use App\Enums\ArtefactState;
 use App\Enums\DocumentPurpose;
 use App\Models\Artefact;
 use App\Models\BoardSignature;
@@ -15,8 +16,8 @@ use Illuminate\Support\Facades\Storage;
  * Stage 1 keeps only what is needed, to save space: of the OHA form, the report and the
  * ODP, the last approved version (what everyone sees) and the newest (what is being
  * worked on). Versions in between are removed, with their files once nothing else uses
- * them. What happened stays in the audit trail. Once the ODP is signed, nothing is
- * removed: the record is frozen.
+ * them. What happened stays in the audit trail. When the ODP is signed, only what was
+ * approved is kept (finalise()); from then on the record is frozen.
  */
 final class VersionPruner
 {
@@ -65,6 +66,52 @@ final class VersionPruner
                     self::removeFileIfUnused($disk, $path);
                 }
             }
+        }
+    }
+
+    /**
+     * When the Board Chairperson signs the ODP, the OHA form and report it rests on are
+     * final as approved: any work on them since (newer uploads or versions, a submission
+     * waiting for approval) is removed, and both go back to approved. Answers typed into
+     * the approved upload since are dropped by SupplyAnswer::restoreApproved(). Returns
+     * how many uploads and versions were removed.
+     */
+    public static function finalise(Artefact $form, Artefact $report): int
+    {
+        $removed = 0;
+
+        $approvedUpload = $form->uploads()->whereNotNull('approved_at')->orderByDesc('id')->first();
+        if ($approvedUpload !== null) {
+            $keep = [$approvedUpload->id, ...CategoryScore::query()->where('assessment_id', $form->assessment_id)->distinct()->pluck('form_upload_id')->all()];
+            foreach ($form->uploads()->whereNotIn('id', $keep)->get() as $upload) {
+                $files = [[$upload->disk, $upload->path], [$upload->edited_disk, $upload->edited_path]];
+                $upload->delete();
+                foreach ($files as [$disk, $path]) {
+                    self::removeFileIfUnused($disk, $path);
+                }
+                $removed++;
+            }
+            self::backToApproved($form, $approvedUpload->approved_by, $approvedUpload->approved_at);
+        }
+
+        $approvedVersion = $report->documents()->where('purpose', DocumentPurpose::Uploaded)->whereNotNull('approved_at')->orderByDesc('id')->first();
+        if ($approvedVersion !== null) {
+            foreach ($report->documents()->where('purpose', DocumentPurpose::Uploaded)->where('id', '>', $approvedVersion->id)->get() as $version) {
+                [$disk, $path] = [$version->disk, $version->path];
+                $version->delete();
+                self::removeFileIfUnused($disk, $path);
+                $removed++;
+            }
+            self::backToApproved($report, $approvedVersion->approved_by, $approvedVersion->approved_at);
+        }
+
+        return $removed;
+    }
+
+    private static function backToApproved(Artefact $artefact, mixed $by, mixed $at): void
+    {
+        if ($artefact->state !== ArtefactState::Approved) {
+            $artefact->update(['state' => ArtefactState::Approved, 'approved_by' => $by, 'approved_at' => $at, 'returned_at' => null]);
         }
     }
 

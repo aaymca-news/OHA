@@ -13,13 +13,15 @@ use Illuminate\Auth\Access\Response;
  * Who may act on a form, report or ODP. Every refusal says why, so a screen can
  * show the reason instead of a button that quietly does nothing.
  *
- *   upload    the staff assigned to the movement upload the OHA form, and each version of the report;
- *             they and the Administrators add versions of the ODP until it is signed
+ *   upload    the staff assigned to the movement, and the Administrators, upload the OHA form and
+ *             each version of the report and ODP, until the ODP is signed
  *   linkDrive the same people link the Google Drive document the ODP is written in
  *   syncDrive and ask the platform to read it now (it also does so by itself)
  *   submit    they hand each one in for approval
- *   approve   any Administrator except the one who submitted it: this lets the staff go on,
- *             and makes it visible to all AAYMCA staff (and the report and ODP to the Board Chairperson)
+ *   approve   any Administrator approves what is submitted, their own submission too; on a movement
+ *             they assess, they approve their own work straight away. The ODP only once the OHA
+ *             form and the report are approved. Approval makes it visible to all AAYMCA staff
+ *             (and the report and ODP to the Board Chairperson)
  *   sign      the Board Chairperson signs the approved ODP, which makes it "Validated"
  */
 class ArtefactPolicy
@@ -64,7 +66,8 @@ class ArtefactPolicy
         if ($artefact->kind === ArtefactKind::Odp) {
             return $this->odpClosed($user, $artefact) ?? Response::allow();
         }
-        if ($denied = $this->notAssessorOf($user, $artefact)) {
+        // The movement's assessors, and the Administrators, who can change the form and report too.
+        if ($denied = $this->notWorkerOf($user, $artefact)) {
             return $denied;
         }
         if ($artefact->assessment->isFrozen()) {
@@ -126,7 +129,7 @@ class ArtefactPolicy
 
     public function submit(User $user, Artefact $artefact): Response
     {
-        $denied = $artefact->kind === ArtefactKind::Odp ? $this->odpClosed($user, $artefact) : $this->notAssessorOf($user, $artefact);
+        $denied = $artefact->kind === ArtefactKind::Odp ? $this->odpClosed($user, $artefact) : $this->notWorkerOf($user, $artefact);
         if ($denied) {
             return $denied;
         }
@@ -159,11 +162,28 @@ class ArtefactPolicy
         if (! $user->active || ! $user->isAdmin()) {
             return Response::deny('Only an Administrator approves.');
         }
-        if ($artefact->state !== ArtefactState::PendingApproval) {
+        if ($artefact->assessment->isFrozen()) {
+            return Response::deny('The Board Chairperson has signed the ODP, so the assessment is final.');
+        }
+
+        // An Administrator's own work (a movement they assess) needs nobody else: they approve
+        // it straight away, with no submission, to make it visible and move it on.
+        $ownWork = $user->canAssess($artefact->assessment->movement)
+            && in_array($artefact->state, $artefact->kind === ArtefactKind::Form ? [ArtefactState::Ready, ArtefactState::Rejected] : [ArtefactState::Drafted, ArtefactState::Rejected], true);
+        if ($artefact->state !== ArtefactState::PendingApproval && ! $ownWork) {
             return Response::deny('This is not awaiting approval.');
         }
-        if ($artefact->submitted_by === $user->id) {
-            return Response::deny('You submitted this, and nobody approves their own work. Another Administrator must approve it.');
+
+        // The ODP rests on the report, which rests on the OHA form: both approved first.
+        if ($artefact->kind === ArtefactKind::Odp) {
+            $statuses = $artefact->assessment->artefacts()->with('status')->get()->keyBy(fn (Artefact $a) => $a->kind->value);
+            $missing = array_values(array_filter([
+                ! ($statuses['form']->status->published ?? false) ? 'the OHA form' : null,
+                ! ($statuses['report']->status->published ?? false) ? 'the report' : null,
+            ]));
+            if ($missing !== []) {
+                return Response::deny('The ODP can be approved only once '.implode(' and ', $missing).' '.(count($missing) === 1 ? 'is' : 'are').' approved.');
+            }
         }
 
         return Response::allow();
@@ -221,6 +241,12 @@ class ArtefactPolicy
         return $odp->status?->isLocked()
             ? Response::deny('The ODP unlocks once a version of the report is saved. The report does not need to be approved first.')
             : null;
+    }
+
+    /** Why someone may not work on the form or report, or null: its assessors and the Administrators. */
+    private function notWorkerOf(User $user, Artefact $artefact): ?Response
+    {
+        return $user->oversees() ? null : $this->notAssessorOf($user, $artefact);
     }
 
     private function notAssessorOf(User $user, Artefact $artefact): ?Response

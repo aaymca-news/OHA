@@ -109,16 +109,24 @@ it('sends everyone’s submissions to the Administrators, never to the submitter
         ->and($approvers[1])->toBe([$this->secondAdmin->id]);
 });
 
-it('refuses to let staff approve, or anyone approve their own', function () {
+it('refuses to let staff approve; an Administrator approves their own work without submitting it', function () {
     $this->admin->assignedMovements()->attach($this->zambia);
-    $form = ($this->openForm)($this->admin);
-    ($this->upload)($form, $this->admin);
-    app(SubmitForApproval::class)->handle($form->refresh(), $this->admin, acknowledgeGaps: true);
+    $own = ($this->openForm)($this->admin);
+    ($this->upload)($own, $this->admin);
 
-    expect(fn () => app(ApproveArtefact::class)->handle($form->refresh(), $this->admin))
-        ->toThrow(WorkflowRuleBroken::class, 'nobody approves their own work')
-        ->and(fn () => app(ApproveArtefact::class)->handle($form->refresh(), $this->assessor))
+    expect(fn () => app(ApproveArtefact::class)->handle($own->refresh(), $this->assessor))
         ->toThrow(WorkflowRuleBroken::class, 'Only an Administrator approves');
+
+    // Its gaps are acknowledged, as a submitter would.
+    expect(fn () => app(ApproveArtefact::class)->handle($own->refresh(), $this->admin))
+        ->toThrow(WorkflowRuleBroken::class, 'missing from the form. Confirm you approve it without them.');
+
+    app(ApproveArtefact::class)->handle($own->refresh(), $this->admin, acknowledgeGaps: true);
+
+    expect($own->refresh()->state)->toBe(ArtefactState::Approved)
+        ->and($own->approved_by)->toBe($this->admin->id)
+        ->and($own->submitted_by)->toBe($this->admin->id)
+        ->and($own->gap_ack)->toBeTrue();
 });
 
 it('blocks submission when there is no Administrator to approve it', function () {

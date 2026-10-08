@@ -69,13 +69,14 @@
     </x-card>
 @endcan
 
-@can('submit', $artefact)
+{{-- An Administrator approves their own work directly (below), so is not asked to submit it. --}}
+@if (Gate::allows('submit', $artefact) && Gate::denies('approve', $artefact))
     <form method="POST" action="{{ route('artefacts.submit', $artefact) }}" class="flex flex-wrap items-center gap-sm">
         @csrf
         <x-button>Submit version {{ $versions->firstWhere('id', $latestId)?->number }} for approval</x-button>
-        <span class="text-[0.8125rem] text-on-surface-variant">Any Administrator other than you can approve it.</span>
+        <span class="text-[0.8125rem] text-on-surface-variant">It goes to the Administrators to approve.</span>
     </form>
-@endcan
+@endif
 
 @include('assessments.tabs._decisions')
 
