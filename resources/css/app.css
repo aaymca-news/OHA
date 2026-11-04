@@ -435,12 +435,14 @@ html.landing {
     text-align: center;
     opacity: 0;
     transform: scale(0.8) translateY(8px);
-    transition: opacity 0.25s ease, transform 0.45s cubic-bezier(0.3, 1.5, 0.5, 1);
+    /* The area going out fades quickly... */
+    transition: opacity 0.12s ease, transform 0.3s ease;
 }
 .ring-info.is-shown {
     opacity: 1;
     transform: none;
-    transition-delay: 0.06s;
+    /* ...and the one coming in waits for it, so the two never overlap. */
+    transition: opacity 0.3s ease 0.12s, transform 0.45s cubic-bezier(0.3, 1.5, 0.5, 1) 0.12s;
 }
 [data-ring-label].is-swapped {
     animation: ring-label-in 0.4s cubic-bezier(0.3, 1.5, 0.5, 1);

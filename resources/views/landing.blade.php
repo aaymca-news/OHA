@@ -53,10 +53,14 @@
     <meta property="og:title" content="Strong, healthy YMCAs across Africa">
     <meta property="og:description" content="{{ $description }}">
     <meta property="og:url" content="{{ url('/') }}">
-    <meta property="og:image" content="{{ asset('images/og-landing.png') }}">
+    {{-- The link preview (WhatsApp, LinkedIn, email). A new file name makes the apps fetch it afresh. --}}
+    <meta property="og:image" content="{{ asset('images/oha-preview.png') }}">
+    <meta property="og:image:type" content="image/png">
     <meta property="og:image:width" content="1200">
     <meta property="og:image:height" content="630">
+    <meta property="og:image:alt" content="The Africa Alliance of YMCAs mark inside a red ring of nine segments, one for each area of the Organisational Health Assessment, beside the words Strong, healthy YMCAs across Africa and the nine areas listed.">
     <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:image" content="{{ asset('images/oha-preview.png') }}">
     <meta name="theme-color" content="#ffffff">
     <link rel="icon" type="image/png" href="{{ asset('images/aaymca-icon.png') }}">
     <script>document.documentElement.classList.add('js');</script>

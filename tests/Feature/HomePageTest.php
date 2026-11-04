@@ -10,7 +10,7 @@ it('shows a guest the public front page, which explains the OHA and links to sig
         ->assertSee(['Why it exists', 'The nine areas of a healthy YMCA.', 'How it works', 'Private by design. Shared by choice.'])
         ->assertSee(['Financial Stability', 'Staff &amp; Volunteer Development'], escape: false)
         ->assertSee(route('login'))
-        ->assertSee('images/og-landing.png')
+        ->assertSee(['images/oha-preview.png', 'og:image:alt'])
         ->assertDontSee('noindex');
 
     $this->get('/dashboard')->assertRedirect(route('login'));
