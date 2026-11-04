@@ -4,6 +4,8 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
+    {{-- Only the public front page is for search engines. --}}
+    <meta name="robots" content="noindex, nofollow">
     <title>{{ $title }} · {{ config('app.name') }}</title>
     <link rel="icon" type="image/png" href="{{ asset('images/aaymca-icon.png') }}">
     @include('partials.display-preferences')
@@ -11,7 +13,9 @@
 </head>
 <body class="min-h-screen flex flex-col items-center justify-center gap-lg p-md">
     <div class="flex flex-col items-center gap-sm text-center">
-        <img src="{{ asset('images/aaymca-logo.png') }}" alt="{{ __('oha.app.org') }}" width="1200" height="452" class="w-[16rem] max-w-full h-auto">
+        <a href="{{ route('home') }}" title="About the Organisational Health Assessment">
+            <img src="{{ asset('images/aaymca-logo.png') }}" alt="{{ __('oha.app.org') }}" width="1200" height="452" class="w-[16rem] max-w-full h-auto">
+        </a>
         <p class="text-[1.125rem] font-bold text-primary">{{ __('oha.app.title') }}</p>
     </div>
 

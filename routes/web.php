@@ -7,6 +7,7 @@ use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\DownloadController;
 use App\Http\Controllers\GapController;
 use App\Http\Controllers\InvitationController;
+use App\Http\Controllers\LandingController;
 use App\Http\Controllers\MovementController;
 use App\Http\Controllers\MyWorkController;
 use App\Http\Controllers\NotificationController;
@@ -19,7 +20,8 @@ use App\Http\Controllers\TimelineController;
 use App\Models\User;
 use Illuminate\Support\Facades\Route;
 
-Route::redirect('/', '/dashboard');
+// The public front page; anyone signed in goes straight to their dashboard.
+Route::get('/', LandingController::class)->middleware('guest')->name('home');
 
 // Sign-in and password reset routes are registered by Fortify.
 

@@ -234,6 +234,345 @@ html[data-text-size='larger'] {
     box-shadow: 0 1px 0 #9aa5b1;
 }
 
+/*
+ * The public front page (landing.blade.php). Parts rise into view once as they are
+ * reached (the page's script adds .is-in); the ring's nine segments draw one after
+ * another, then the ring breathes. Without script everything simply shows; with
+ * "reduce motion" nothing moves.
+ */
+html.landing {
+    scroll-behavior: smooth;
+}
+.landing-section {
+    scroll-margin-top: 4rem;
+}
+.landing-hero {
+    background:
+        radial-gradient(48rem 28rem at 88% 30%, rgb(239 51 64 / 0.09), transparent 65%),
+        radial-gradient(36rem 26rem at 0% 100%, rgb(177 179 182 / 0.22), transparent 65%),
+        radial-gradient(var(--color-surface-container-high) 1px, transparent 1.2px) 0 0 / 22px 22px,
+        var(--color-surface-container-lowest);
+}
+.landing-eyebrow {
+    font-size: 0.8125rem;
+    font-weight: 700;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--color-brand-red-ink);
+}
+.landing-h2 {
+    margin-top: var(--spacing-sm);
+    font-size: clamp(1.875rem, 1.4rem + 1.8vw, 2.75rem);
+    font-weight: 700;
+    line-height: 1.1;
+    letter-spacing: -0.015em;
+    color: var(--color-primary);
+}
+.landing-card {
+    height: 100%;
+    padding: var(--spacing-lg);
+    border: 1.5px solid var(--color-surface-container-high);
+    border-radius: var(--radius-xl);
+    background-color: var(--color-surface-container-lowest);
+    color: var(--color-on-surface);
+    transition: border-color 0.2s, box-shadow 0.2s, transform 0.2s;
+}
+.landing-area:hover {
+    border-color: var(--color-brand-red);
+    box-shadow: 0 10px 30px -18px rgb(35 31 32 / 0.45);
+}
+.landing-badge {
+    display: inline-grid;
+    place-items: center;
+    width: 2.75rem;
+    height: 2.75rem;
+    border-radius: var(--radius-lg);
+    background-color: var(--color-brand-red-wash);
+    color: var(--color-brand-red-ink);
+}
+
+/* The steps: a column with a line down the left, or on wide screens a row with a line across. */
+.landing-steps {
+    position: relative;
+    display: grid;
+    gap: var(--spacing-lg);
+}
+.landing-steps::before {
+    content: '';
+    position: absolute;
+    left: 1.25rem;
+    top: 1.25rem;
+    bottom: 1.25rem;
+    width: 2px;
+    background: linear-gradient(var(--color-brand-red), var(--color-brand-grey-dark));
+    transform-origin: top;
+}
+.landing-step {
+    position: relative;
+    display: grid;
+    grid-template-columns: 2.5rem minmax(0, 1fr);
+    gap: var(--spacing-md);
+    align-items: start;
+    align-content: start;
+}
+.landing-step-dot {
+    display: grid;
+    place-items: center;
+    width: 2.5rem;
+    height: 2.5rem;
+    border-radius: 9999px;
+    border: 2px solid var(--color-brand-red);
+    background-color: var(--color-primary);
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+}
+@media (min-width: 64rem) {
+    .landing-steps {
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: var(--spacing-lg);
+    }
+    .landing-steps::before {
+        left: 1.25rem;
+        right: 1.25rem;
+        top: 1.25rem;
+        bottom: auto;
+        width: auto;
+        height: 2px;
+        background: linear-gradient(90deg, var(--color-brand-red), var(--color-brand-grey-dark));
+        transform-origin: left;
+    }
+    .landing-step {
+        grid-template-columns: minmax(0, 1fr);
+    }
+}
+
+/* Trust, on the dark band: an icon in a soft red ring beside each promise. */
+.landing-trust {
+    display: grid;
+    grid-template-columns: 3rem minmax(0, 1fr);
+    gap: var(--spacing-md);
+    align-items: start;
+    padding: var(--spacing-lg);
+    border: 1px solid rgb(255 255 255 / 0.1);
+    border-radius: var(--radius-xl);
+    background-color: rgb(255 255 255 / 0.03);
+}
+.landing-trust-icon {
+    display: grid;
+    place-items: center;
+    width: 3rem;
+    height: 3rem;
+    border-radius: 9999px;
+    border: 1.5px solid rgb(239 51 64 / 0.6);
+    background-color: rgb(239 51 64 / 0.12);
+    color: #f58a91;
+}
+
+/* The health scale, weakest on the left. */
+.landing-scale {
+    display: flex;
+    gap: 3px;
+    height: 0.875rem;
+    border-radius: 9999px;
+    overflow: hidden;
+}
+.landing-scale > span {
+    flex: 1 1 0;
+    transform-origin: left;
+}
+
+/* The ring. */
+.ring-body,
+.ring-orbit,
+.ring-glow,
+.ring-mark {
+    transform-box: fill-box;
+    transform-origin: center;
+}
+.ring-slot {
+    cursor: pointer;
+}
+/* The segments are drawn over their slots but let the pointer through to them. */
+.ring-lift,
+.ring-seg {
+    pointer-events: none;
+}
+.ring-seg {
+    transition: opacity 0.3s ease, stroke 0.3s ease, stroke-width 0.35s cubic-bezier(0.3, 1.4, 0.5, 1);
+}
+.ring-seg.is-dim {
+    opacity: 0.22;
+}
+/* The segment pointed at: lifted out of its slot, a little thicker and deeper red, with a soft shadow. */
+.ring-lift {
+    transition: transform 0.45s cubic-bezier(0.3, 1.5, 0.5, 1), filter 0.3s ease;
+}
+.ring-lift.is-up {
+    transform: translate(var(--dx), var(--dy));
+    filter: drop-shadow(0 8px 12px rgb(200 16 46 / 0.35));
+}
+.ring-lift.is-up .ring-seg {
+    stroke: var(--color-brand-red-ink);
+    stroke-width: 36;
+}
+/* The centre: the mark makes way for the area's icon, name and why it matters. */
+.ring-mark-img {
+    transform-box: fill-box;
+    transform-origin: center;
+    transition: opacity 0.3s ease, transform 0.45s cubic-bezier(0.3, 1.3, 0.5, 1);
+}
+.oha-ring-box.is-picking .ring-mark-img {
+    opacity: 0;
+    transform: scale(0.6) rotate(-8deg);
+}
+.ring-info {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    opacity: 0;
+    transform: scale(0.8) translateY(8px);
+    transition: opacity 0.25s ease, transform 0.45s cubic-bezier(0.3, 1.5, 0.5, 1);
+}
+.ring-info.is-shown {
+    opacity: 1;
+    transform: none;
+    transition-delay: 0.06s;
+}
+[data-ring-label].is-swapped {
+    animation: ring-label-in 0.4s cubic-bezier(0.3, 1.5, 0.5, 1);
+}
+@keyframes ring-label-in {
+    from {
+        opacity: 0;
+        transform: scale(0.85);
+    }
+}
+.landing-area.is-lit {
+    border-color: var(--color-brand-red);
+    box-shadow: 0 10px 30px -18px rgb(35 31 32 / 0.45);
+}
+@media (prefers-reduced-motion: reduce) {
+    .ring-lift,
+    .ring-seg,
+    .ring-mark-img,
+    .ring-info {
+        transition-duration: 0.01s;
+    }
+    [data-ring-label].is-swapped {
+        animation: none;
+    }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+    .js [data-reveal] {
+        opacity: 0;
+        transform: translateY(18px);
+        transition: opacity 0.7s ease, transform 0.7s cubic-bezier(0.2, 0.7, 0.2, 1);
+        transition-delay: calc(var(--d, 0) * 90ms);
+    }
+    .js [data-reveal].is-in {
+        opacity: 1;
+        transform: none;
+    }
+
+    .js .oha-ring:not(.is-in) .ring-seg {
+        stroke-dashoffset: 35;
+    }
+    .js .oha-ring.is-in .ring-seg {
+        animation: ring-draw 0.6s cubic-bezier(0.3, 0.7, 0.2, 1) both;
+        animation-delay: calc(var(--i) * 130ms + 250ms);
+    }
+    .js .oha-ring.is-in .ring-body {
+        animation: ring-breathe 5s ease-in-out 1.9s infinite;
+    }
+    .js .oha-ring.is-in .ring-mark {
+        animation: ring-pop 0.7s cubic-bezier(0.3, 1.4, 0.5, 1) 1.5s both;
+    }
+    .ring-orbit {
+        animation: ring-turn 90s linear infinite;
+    }
+    .ring-glow {
+        animation: ring-glow 5s ease-in-out infinite;
+    }
+
+    .js .landing-steps::before {
+        transform: scale(0);
+        transition: transform 1.4s cubic-bezier(0.3, 0.7, 0.2, 1) 0.2s;
+    }
+    .js .landing-steps .landing-step {
+        opacity: 0;
+        transform: translateY(12px);
+        transition: opacity 0.6s ease, transform 0.6s ease;
+        transition-delay: calc(var(--d) * 160ms + 200ms);
+    }
+    .js .landing-steps.is-in::before {
+        transform: none;
+    }
+    .js .landing-steps.is-in .landing-step {
+        opacity: 1;
+        transform: none;
+    }
+    /* The list itself does not rise: its steps do, one after another. */
+    .js .landing-steps[data-reveal] {
+        opacity: 1;
+        transform: none;
+    }
+
+    .js .landing-scale:not(.is-in) > span {
+        transform: scaleX(0);
+    }
+    .js .landing-scale > span {
+        transition: transform 0.7s cubic-bezier(0.3, 0.7, 0.2, 1);
+        transition-delay: calc(var(--d) * 150ms + 150ms);
+    }
+    .landing-area:hover {
+        transform: translateY(-2px);
+    }
+}
+
+@keyframes ring-draw {
+    from {
+        stroke-dashoffset: 35;
+    }
+    to {
+        stroke-dashoffset: 0;
+    }
+}
+@keyframes ring-breathe {
+    50% {
+        transform: scale(1.02);
+    }
+}
+@keyframes ring-pop {
+    from {
+        opacity: 0;
+        transform: scale(0.6);
+    }
+    to {
+        opacity: 1;
+        transform: none;
+    }
+}
+@keyframes ring-turn {
+    to {
+        transform: rotate(360deg);
+    }
+}
+@keyframes ring-glow {
+    50% {
+        opacity: 0.55;
+    }
+}
+@media (prefers-reduced-motion: reduce) {
+    html.landing {
+        scroll-behavior: auto;
+    }
+}
+
 /* A signature typed by the Board Chairperson, shown in a handwriting face the device already has. */
 .signature-typed {
     font-family: 'Segoe Script', 'Bradley Hand', 'Brush Script MT', 'Snell Roundhand', 'URW Chancery L', cursive;

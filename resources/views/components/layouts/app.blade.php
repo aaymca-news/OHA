@@ -4,6 +4,8 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
+    {{-- Only the public front page is for search engines. --}}
+    <meta name="robots" content="noindex, nofollow">
     <title>{{ $title }} · {{ config('app.name') }}</title>
     <link rel="icon" type="image/png" href="{{ asset('images/aaymca-icon.png') }}">
     @include('partials.display-preferences')
