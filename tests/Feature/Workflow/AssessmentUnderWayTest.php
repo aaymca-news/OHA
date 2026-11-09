@@ -4,6 +4,7 @@ use App\Actions\Oha\OpenAssessment;
 use App\Exceptions\WorkflowRuleBroken;
 use App\Models\Movement;
 use App\Queries\AllianceStats;
+use App\Queries\MyWork;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Notification;
 use Tests\Support\Journey;
@@ -62,4 +63,30 @@ it('shows "Assessment started", not "Not started", on the lists and dashboards',
     $rows = app(AllianceStats::class)->bandDistribution()->filter(fn (array $r) => $r['band']->code === 'notstarted')->values();
     expect($rows[0]['underWay'])->toBeTrue()->and($rows[0]['count'])->toBe(1)
         ->and($rows[1]['underWay'])->toBeFalse()->and($rows[1]['count'])->toBe(Movement::query()->count() - 1);
+});
+
+it('lists the assessments started in My Work, apart from the movements to start', function () {
+    $this->j->otherStaff->assignedMovements()->attach([$this->j->zambia->id, $this->j->ghana->id]);
+    $groups = fn () => collect(app(MyWork::class)->for($this->j->otherStaff))->keyBy('key');
+
+    expect($groups()->has('started'))->toBeFalse();
+
+    $this->j->assessmentAt('form_uploaded');
+
+    expect(collect($groups()['started']['items'])->pluck('movement.slug')->all())->toBe(['zambia'])
+        ->and(collect($groups()['start']['items'])->pluck('movement.slug')->all())->toBe(['ghana'])
+        ->and(collect($groups()['started']['items'])->contains('actionable', true))->toBeFalse(); // never on the badge
+
+    $this->actingAs($this->j->otherStaff)->get(route('my-work', ['group' => 'started']))->assertOk()
+        ->assertSee('Assessments started')->assertSee('Zambia YMCA · Feb 2026')->assertSee('Assessment started')->assertDontSee('Start the assessment');
+
+    // The Administrators see every assessment started, assigned or not.
+    expect(collect(app(MyWork::class)->for($this->j->secondAdmin))->keyBy('key')['started']['items'])->toHaveCount(1);
+
+});
+
+it('takes a finished assessment off the list of assessments started', function () {
+    $this->j->assessmentAt('odp_signed');
+
+    expect(collect(app(MyWork::class)->for($this->j->assessor))->keyBy('key')->has('started'))->toBeFalse();
 });

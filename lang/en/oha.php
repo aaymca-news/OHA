@@ -57,6 +57,7 @@ return [
         'groups' => [
             'mine' => 'Awaiting my action',
             'start' => 'Movements to start',
+            'started' => 'Assessments started',
             'approve' => 'Awaiting my approval',
             'sign' => 'Awaiting my signature',
             'gaps' => 'Missing information',

@@ -20,6 +20,8 @@ use Illuminate\Support\Facades\Gate;
  * One queue for every role: the same entry point, only the groups differ.
  *
  *   mine      assessors: work waiting on them, including anything sent back
+ *   start     assessors: their movements with no assessment under way, to open
+ *   started   assessors: their movements whose assessment has started (Administrators: every one)
  *   approve   Administrators: everything awaiting approval (what they submitted themselves is shown locked, with why)
  *   sign      the Board Chairperson: the approved ODP awaiting their signature
  *   gaps      forms on your movements that went forward with missing information still open
@@ -31,7 +33,7 @@ use Illuminate\Support\Facades\Gate;
 final class MyWork
 {
     /**
-     * @return list<array{key: string, items: list<array{artefact: Artefact|null, movement?: Movement, holder: string, days_left: int|null, actionable: bool, blocked: string|null}>}>
+     * @return list<array{key: string, items: list<array{artefact: Artefact|null, movement?: Movement, started?: true, holder: string, days_left: int|null, actionable: bool, blocked: string|null}>}>
      */
     public function for(User $user): array
     {
@@ -45,6 +47,12 @@ final class MyWork
             $toStart = $this->toStart($user);
             if ($toStart !== []) {
                 $groups[] = ['key' => 'start', 'items' => $toStart];
+            }
+
+            // …and those whose assessment has started, with where each one stands.
+            $started = $this->started($user, $assigned);
+            if ($started !== []) {
+                $groups[] = ['key' => 'started', 'items' => $started];
             }
         }
 
@@ -119,6 +127,31 @@ final class MyWork
                     'blocked' => $response->denied() ? $response->message() : null,
                 ];
             })->values()->all();
+    }
+
+    /**
+     * The movements whose assessment has started (opened, its ODP not yet signed): the
+     * ones this person assesses, or every one for the Administrators. For reference, so
+     * never counted on the badge; the work itself is in the other groups.
+     *
+     * @param  list<int>  $assigned
+     * @return list<array{artefact: Artefact, movement: Movement, started: true, holder: string, days_left: int|null, actionable: bool, blocked: null}>
+     */
+    private function started(User $user, array $assigned): array
+    {
+        return $this->work(null)
+            ->when(! $user->isAdmin(), fn (Builder $q) => $q->whereIn('movement_id', $assigned))
+            ->get()
+            ->sortBy(fn (WorkItem $w) => $w->artefact->assessment->movement->name)
+            ->map(fn (WorkItem $w) => [
+                'artefact' => $w->artefact,
+                'movement' => $w->artefact->assessment->movement,
+                'started' => true,
+                'holder' => $w->holder_role->label(),
+                'days_left' => $w->days_left,
+                'actionable' => false,
+                'blocked' => null,
+            ])->values()->all();
     }
 
     /**
