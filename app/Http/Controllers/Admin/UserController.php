@@ -33,7 +33,8 @@ class UserController extends Controller
 
         $users = User::query()
             ->with(['assignedMovements:id,name', 'movement:id,name'])
-            ->when($filter === 'boards', fn ($q) => $q->where('role', Role::Board), fn ($q) => $q->where('role', '!=', Role::Board))
+            // "boards": each National Movement's own users, its Board Chairperson and National General Secretary.
+            ->when($filter === 'boards', fn ($q) => $q->whereIn('role', [Role::Board, Role::Ngs]), fn ($q) => $q->whereNotIn('role', [Role::Board, Role::Ngs]))
             ->orderByDesc('active')->orderBy('name')->orderBy('id')
             ->get();
 
@@ -59,7 +60,7 @@ class UserController extends Controller
             $data['email'],
             Role::from($data['role']),
             $data['title'] ?? null,
-            array_map('intval', $data['movement_ids'] ?? []),
+            [],
             isset($data['board_movement_id']) ? Movement::query()->findOrFail($data['board_movement_id']) : null,
             ($data['chair_mode'] ?? null) === 'replace' || (bool) ($data['confirm_replace'] ?? false),
         );
@@ -70,7 +71,7 @@ class UserController extends Controller
     public function edit(Request $request, User $user): View
     {
         return view('admin.users.edit', [
-            'target' => $user->load('assignedMovements:id', 'movement'),
+            'target' => $user->load('assignedMovements:id,name,slug', 'movement'),
             'movements' => $this->movements(),
             'roles' => $this->grantable($request->user()),
             'canAdminister' => Gate::forUser($request->user())->allows('administer', $user),
@@ -81,8 +82,8 @@ class UserController extends Controller
     {
         $data = $request->validated();
 
-        $update->handle($request->user(), $user, $data['name'], $data['email'], $data['title'] ?? null,
-            $user->isAssessor() ? array_map('intval', $data['movement_ids'] ?? []) : null);
+        // Who assesses what is handed out on the Assessments page, not here.
+        $update->handle($request->user(), $user, $data['name'], $data['email'], $data['title'] ?? null, null);
 
         return back()->with('status', 'Details saved.');
     }
@@ -91,7 +92,7 @@ class UserController extends Controller
     {
         $data = $request->validate([
             'role' => ['required', Rule::enum(Role::class)],
-            'board_movement_id' => ['nullable', 'required_if:role,board', 'integer', 'exists:movements,id'],
+            'board_movement_id' => ['nullable', 'required_if:role,board,ngs', 'integer', 'exists:movements,id'],
             'confirm_replace' => ['boolean'],
         ]);
 
@@ -131,7 +132,7 @@ class UserController extends Controller
 
     /**
      * The roles this person may give: everything for a Super Administrator, and
-     * Staff or Board Chairperson for an Administrator.
+     * Staff and the two National Movement roles for an Administrator.
      *
      * @return list<Role>
      */
@@ -145,6 +146,8 @@ class UserController extends Controller
      */
     private function movements()
     {
-        return Movement::query()->with(['zone:id,name', 'chair:id,name,movement_id,email_verified_at'])->orderBy('name')->get(['id', 'name', 'zone_id']);
+        return Movement::query()
+            ->with(['zone:id,name', 'chair:id,name,movement_id,email_verified_at', 'generalSecretary:id,name,movement_id,email_verified_at'])
+            ->orderBy('name')->get(['id', 'name', 'zone_id']);
     }
 }

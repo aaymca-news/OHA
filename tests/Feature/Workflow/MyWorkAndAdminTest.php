@@ -43,14 +43,18 @@ it('lets an Administrator approve their own submission, like any other', functio
         ->and(groupOf($this->j->secondAdmin, 'approve')['items'][0]['actionable'])->toBeTrue();
 });
 
-it('lists forms that went forward with gaps, for the movement’s assessors and the Administrators', function () {
+it('lists forms that went forward with gaps for the movement’s own assessors, Administrators included', function () {
     $this->j->assessmentAt('form_submitted');
     $elsewhere = User::factory()->create();
     $elsewhere->assignedMovements()->attach($this->j->ghana);
 
+    // My Work is each person's own work: an Administrator not assessing Zambia approves its form, but its gaps are not theirs.
     expect(groupOf($this->j->assessor, 'gaps')['items'])->toHaveCount(1)
-        ->and(groupOf($this->j->secondAdmin, 'gaps')['items'])->toHaveCount(1)
+        ->and(groupOf($this->j->secondAdmin, 'gaps'))->toBeNull()
         ->and(groupOf($elsewhere, 'gaps'))->toBeNull();
+
+    $this->j->secondAdmin->assignedMovements()->attach($this->j->zambia);
+    expect(groupOf($this->j->secondAdmin, 'gaps')['items'])->toHaveCount(1);
 });
 
 it('gives the Board Chairperson the approved ODP to sign, and nothing else', function () {

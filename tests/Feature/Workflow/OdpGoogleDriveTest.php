@@ -83,8 +83,8 @@ it('saves a change made in Google Drive as a new version, recorded under the per
     // Nothing changed since: nothing is read again.
     expect(($this->take)($assessment)['outcome'])->toBe(TakeOdpFromDrive::UNCHANGED)
         ->and($this->drive->reads)->toBe(1)
-        // Version 1 was never approved, so only the newest is kept in Stage 1.
-        ->and($odp->versions()->pluck('version_number')->all())->toBe([2]);
+        // Version 1 was never approved: in Stage 1 it is kept only as the one the newest replaced.
+        ->and($odp->versions()->pluck('version_number')->all())->toBe([1, 2]);
 });
 
 it('takes a change to an ODP written as a Google Sheet as an Excel version', function () {
@@ -235,7 +235,9 @@ it('checks every linked, unsigned ODP on a schedule and records each run', funct
     $saved = $this->j->assessmentAt('odp_uploaded');
     $this->drive->edit('changed in Drive', $this->j->assessor->email);
 
-    $this->artisan('oha:sync-drive')->assertSuccessful();
+    $this->artisan('oha:sync-drive')
+        ->expectsOutput('Checked 1, saved 1 new version, 0 could not be read.')
+        ->assertSuccessful();
 
     $run = DriveSyncRun::query()->latest('id')->firstOrFail();
     expect($run->checked)->toBe(1)->and($run->saved)->toBe(1)->and($run->failed)->toBe(0)->and($run->finished_at)->not->toBeNull()

@@ -6,6 +6,7 @@ use App\Models\Concerns\IsDatabaseView;
 use Illuminate\Database\Eloquent\Attributes\Table;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Support\Carbon;
 
 /**
  * A movement's current standing (view v_movement_status): latest score and band,
@@ -16,6 +17,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * @property int|null $latest_assessment_id
  * @property string|null $pct
  * @property string $band_code
+ * @property Carbon|null $next_assessment_on
  * @property bool $reassessment_overdue
  * @property bool $has_odp
  */

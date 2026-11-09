@@ -58,6 +58,7 @@ it('tells each person only what concerns them', function () {
     expect($subjects($this->j->admin))->toContain('Approval needed: OHA form, Zambia YMCA', 'Approval needed: ODP (version 1), Zambia YMCA')
         ->and($subjects($this->j->superAdmin))->toContain('Approval needed: Health assessment report (version 1), Zambia YMCA')
         ->and($subjects($this->j->chair))->toBe([
+            'Now available: OHA form, Zambia YMCA',
             'Now available: Health assessment report (version 1), Zambia YMCA',
             'Please sign: ODP (version 1), Zambia YMCA',
         ])

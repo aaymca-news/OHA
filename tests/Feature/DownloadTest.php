@@ -93,6 +93,15 @@ it('offers the blank OHA form to signed-in users', function () {
         ->assertDownload('YMCA OHA Form 2026 (blank).xlsx');
 });
 
+it('offers the report and ODP templates to signed-in users', function () {
+    $this->actingAs($this->staff)->get(route('downloads.report-template'))
+        ->assertOk()
+        ->assertDownload('OHA Report Template 2026.docx');
+    $this->actingAs($this->staff)->get(route('downloads.odp-template'))
+        ->assertOk()
+        ->assertDownload('ODP Template 2026.xlsx');
+});
+
 it('sends guests away from every download', function () {
     $this->get(route('downloads.form', $this->upload))->assertRedirect(route('login'));
     $this->get(route('downloads.document', $this->version))->assertRedirect(route('login'));

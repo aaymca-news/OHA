@@ -5,7 +5,9 @@ use App\Models\Movement;
 use App\Oha\CheckResult;
 use App\Oha\FindingRule;
 use App\Oha\FormChecker;
+use App\Oha\FormDefinition;
 use App\Oha\FormReader;
+use App\Oha\WhyItMatters;
 use Database\Seeders\MovementsSeeder;
 use PhpOffice\PhpSpreadsheet\Spreadsheet;
 use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
@@ -67,7 +69,15 @@ it('refuses a form for another country, and gives it no points', function () {
 it('tells Guinea-Bissau and Guinea apart', function () {
     expect(rules(($this->check)(['Q102' => 'Guinea-Bissau'], 'guinea-conakry')))->toContain(FindingRule::MovementMismatch)
         ->and(rules(($this->check)(['Q102' => 'Guinea-Bissau'], 'guinea-bissau')))->not->toContain(FindingRule::MovementMismatch)
-        ->and(rules(($this->check)(['Q102' => 'Guinea Conakry'], 'guinea-conakry')))->not->toContain(FindingRule::MovementMismatch);
+        ->and(rules(($this->check)(['Q102' => 'Guinea Conakry'], 'guinea-conakry')))->not->toContain(FindingRule::MovementMismatch)
+        ->and(rules(($this->check)(['Q102' => 'Republic of Guinea-Bissau'], 'guinea-conakry')))->toContain(FindingRule::MovementMismatch);
+});
+
+it('accepts a country’s official long name', function () {
+    expect(rules(($this->check)(['Q102' => 'Federal Republic of Nigeria'], 'nigeria')))->not->toContain(FindingRule::MovementMismatch)
+        ->and(rules(($this->check)(['Q102' => 'Republic of South Sudan'], 'south-sudan')))->not->toContain(FindingRule::MovementMismatch)
+        ->and(rules(($this->check)(['Q102' => 'The Gambia'], 'gambia')))->not->toContain(FindingRule::MovementMismatch)
+        ->and(rules(($this->check)(['Q102' => 'Federal Republic of Nigeria'], 'ghana')))->toContain(FindingRule::MovementMismatch);
 });
 
 it('refuses a spreadsheet that is not the OHA form, naming what it found', function () {
@@ -89,4 +99,33 @@ it('maps every finding to a data-quality dimension', function () {
 
     expect(collect($result->findings)->every(fn ($f) => $f->rule->dimension() !== null))->toBeTrue()
         ->and(collect($result->findings)->where('severity', FindingSeverity::Missing)->every(fn ($f) => $f->ref !== null))->toBeTrue();
+});
+
+it('questions figures that cannot both be right, without blocking', function () {
+    $result = ($this->check)([
+        'Q209' => 1000, 'Q210' => 5000,                // liabilities above assets
+        'Q239' => 'Yes', 'Q240' => 2000, 'Q241' => 3,   // a reserve larger than the current assets
+        'Q212' => 800, 'Q246' => 900,                   // fundraising costing more than everything spent
+        'Q313' => 9, 'Q314' => 5,                       // a minimum above the maximum
+        'Q216' => 140,                                  // one income share above the whole
+    ]);
+    $about = fn (string $code, FindingRule $rule) => collect($result->findings)->first(fn ($f) => $f->rule === $rule && $f->questionCode === $code);
+
+    expect($result->ok)->toBeTrue()
+        ->and($about('Q210', FindingRule::Inconsistent)?->message)->toContain('greater than current assets')
+        ->and($about('Q240', FindingRule::Inconsistent)?->message)->toContain('larger than the current assets')
+        ->and($about('Q246', FindingRule::Inconsistent)?->message)->toContain('more than the total expenditure')
+        ->and($about('Q216', FindingRule::OutOfRange)?->message)->toContain('140%')
+        ->and(collect($result->findings)->contains(fn ($f) => str_contains($f->message, 'minimum number of board members (9) is greater')))->toBeTrue()
+        ->and(collect($result->findings)->where('rule', FindingRule::Inconsistent)->every(fn ($f) => $f->severity === FindingSeverity::Warning))->toBeTrue();
+
+    // Income shared out between sources, but no income at all.
+    expect(collect(($this->check)(['Q211' => 0])->findings)->contains(fn ($f) => $f->questionCode === 'Q211' && $f->rule === FindingRule::Inconsistent))->toBeTrue();
+});
+
+it('says why each question matters, for every question on the form', function () {
+    $codes = collect(FormDefinition::categories())->flatMap(fn ($c) => $c['questions'])
+        ->merge(FormDefinition::general())->map(fn ($q) => $q->code);
+
+    expect($codes->reject(fn ($code) => WhyItMatters::for($code) !== null)->values()->all())->toBe([]);
 });

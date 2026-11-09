@@ -1,4 +1,4 @@
-<x-layouts.app :title="__('oha.nav.movements')" subtitle="All 23 National Movements. A movement is rated once one of its OHA forms is approved.">
+<x-layouts.app :title="__('oha.nav.movements')" :subtitle="'All '.$pipeline['total'].' National Movements. A movement is rated once one of its OHA forms is approved.'">
     @php
         $stageLabels = ['not_assessed' => ['Not yet assessed', 'radio_button_unchecked', 'neutral'], 'form' => ['OHA form under way', 'table_view', 'info'],
             'report' => ['Report under way', 'description', 'info'], 'odp' => ['ODP under way', 'checklist', 'info'],
@@ -7,6 +7,21 @@
             'diversity' => 'Diversity & youth', 'comms' => 'Comms', 'staff' => 'Staff & volunteers'];
         $query = fn (array $change) => route('movements.index', array_filter(array_merge($filters, $change), fn ($v) => $v !== null && $v !== ''));
     @endphp
+
+    <div class="flex flex-wrap items-center gap-sm text-[0.875rem]">
+        <span class="font-semibold">Scores for reporting (CSV):</span>
+        <a href="{{ route('downloads.scores') }}" class="inline-flex items-center gap-xs text-primary underline">
+            <span class="material-symbols-outlined text-[1.125rem]" aria-hidden="true">download</span> Latest, per movement
+        </a>
+        <a href="{{ route('downloads.scores', ['all' => 1]) }}" class="inline-flex items-center gap-xs text-primary underline">
+            <span class="material-symbols-outlined text-[1.125rem]" aria-hidden="true">download</span> Every approved assessment
+        </a>
+        @can('create', \App\Models\Movement::class)
+            <a href="{{ route('admin.movements.create') }}" class="ml-auto inline-flex items-center gap-xs px-md py-1.5 rounded bg-primary text-on-primary font-semibold">
+                <span class="material-symbols-outlined text-[1.125rem]" aria-hidden="true">add</span> Add a National Movement
+            </a>
+        @endcan
+    </div>
 
     <x-card>
         <x-viz.pipeline :pipeline="$pipeline" />
@@ -69,7 +84,7 @@
                             $who = $assessors[$m->id] ?? collect();
                             $mine = $cells[$m->id] ?? null;
                         @endphp
-                        <li class="bg-surface-container-lowest border-[1.5px] border-outline-variant rounded-lg p-md flex flex-col gap-sm hover:border-primary">
+                        <li class="bg-surface-container-lowest border-[1.5px] border-outline-variant rounded-lg p-md flex flex-col gap-sm transition duration-200 hover:border-secondary hover:shadow-[0_0_0_4px_var(--color-brand-red-wash),0_6px_18px_rgba(200,16,46,0.12)]">
                             <div class="flex items-start gap-sm">
                                 <div class="flex-1 min-w-0">
                                     <a href="{{ route('movements.show', $m) }}" class="text-[1rem] font-bold text-primary underline decoration-1 underline-offset-2">{{ $m->name }}</a>
@@ -122,7 +137,7 @@
             </section>
         @endforeach
     @else
-        <div class="bg-surface-container-lowest border-[1.5px] border-outline-variant rounded-lg overflow-x-auto">
+        <div class="bg-surface-container-lowest border-[1.5px] border-outline-variant rounded-lg relative overflow-x-auto">
             <table class="w-full text-[0.875rem]">
                 <thead class="text-left text-[0.8125rem] uppercase tracking-wider text-on-surface-variant">
                     <tr class="border-b-[1.5px] border-outline-variant">

@@ -58,6 +58,10 @@ class FormUploadPolicy
         if ($formUpload->isApproved()) {
             return Response::deny('This upload was approved: it is the record of the score, so it is kept. Upload a corrected form instead.');
         }
+        // A colleague's upload is not deleted by another assessor: they upload a corrected form instead.
+        if (! $user->oversees() && $formUpload->uploaded_by !== $user->id) {
+            return Response::deny('Only '.($formUpload->uploader->name ?? 'the person who uploaded it').', who uploaded it, or an Administrator can delete it. Upload a corrected form instead.');
+        }
 
         $form = $formUpload->artefact;
         $others = $form->uploads()->whereKeyNot($formUpload->id)->exists();

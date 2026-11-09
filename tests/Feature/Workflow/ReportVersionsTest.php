@@ -41,23 +41,28 @@ it('saves an uploaded report as version 1, stored unchanged, ready to submit', f
         ->and(Gate::forUser($this->j->assessor)->allows('submit', $report))->toBeTrue();
 });
 
-it('keeps only the approved and the newest version in Stage 1, each keeping its number', function () {
+it('keeps the approved version, the newest and the one it replaced in Stage 1, each keeping its number', function () {
     $assessment = $this->j->assessmentAt('report_uploaded');
     $first = $this->j->report($assessment)->latestVersion()->firstOrFail();
-    $this->j->uploadReport($assessment, 'second draft', note: 'Added the March board elections.');
+    $this->j->uploadReport($assessment, 'second draft');
 
-    // Version 1 was never approved: the newer draft replaces it, file and all.
-    expect($this->j->report($assessment)->versions()->pluck('version_number')->all())->toBe([2])
+    // Version 1 is kept while it is the one version 2 replaced (so 2 can be withdrawn).
+    expect($this->j->report($assessment)->versions()->pluck('version_number')->all())->toBe([1, 2]);
+
+    // A third draft: version 1, never approved, goes now, file and all.
+    $this->j->uploadReport($assessment, 'second draft, again', note: 'Added the March board elections.');
+    expect($this->j->report($assessment)->versions()->pluck('version_number')->all())->toBe([2, 3])
         ->and(Storage::disk('oha')->exists($first->path))->toBeFalse();
 
     app(SubmitForApproval::class)->handle($this->j->report($assessment), $this->j->assessor);
     app(ApproveArtefact::class)->handle($this->j->report($assessment), $this->j->admin);
-    $this->j->uploadReport($assessment, 'third draft');
     $this->j->uploadReport($assessment, 'fourth draft');
+    $this->j->uploadReport($assessment, 'fifth draft');
+    $this->j->uploadReport($assessment, 'sixth draft');
 
-    // The approved version 2 stays, with the newest (4); 3 goes.
+    // The approved version 3 stays, with the newest (6) and the one it replaced (5); 4 goes.
     $versions = $this->j->report($assessment)->versions()->get();
-    expect($versions->map->versionNumber()->all())->toBe([2, 4])
+    expect($versions->map->versionNumber()->all())->toBe([3, 5, 6])
         ->and($versions[0]->isApproved())->toBeTrue()
         ->and($versions[0]->approved_by)->toBe($this->j->admin->id)
         ->and($versions[0]->note)->toBe('Added the March board elections.');

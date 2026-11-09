@@ -7,6 +7,7 @@ use App\Exceptions\WorkflowRuleBroken;
 use App\Models\Assessment;
 use App\Models\BoardSignature;
 use App\Models\Document;
+use App\Models\Evidence;
 use App\Models\FormUpload;
 use App\Models\User;
 use App\Notifications\WorkflowNotice;
@@ -48,6 +49,7 @@ final class DeleteAssessment
                 ->merge(Document::query()->whereIn('artefact_id', $artefactIds)->get(['disk', 'path'])->map(fn ($f) => ['disk' => $f->disk, 'path' => $f->path]))
                 ->merge(BoardSignature::query()->whereIn('artefact_id', $artefactIds)->get(['signature_disk', 'signature_path'])
                     ->map(fn ($s) => ['disk' => $s->signature_disk, 'path' => $s->signature_path]))
+                ->merge(Evidence::query()->where('assessment_id', $assessment->id)->whereNull('url')->get(['disk', 'path'])->map(fn ($f) => ['disk' => $f->disk, 'path' => $f->path]))
                 ->values()->all();
 
             Audit::record($superAdmin, 'assessment.deleted', $movement, $assessment, payload: array_filter([
@@ -91,7 +93,8 @@ final class DeleteAssessment
         foreach (collect($files)->filter(fn ($f) => $f['disk'] !== null && $f['path'] !== null)->unique(fn ($f) => $f['disk'].'|'.$f['path']) as $file) {
             $stillUsed = FormUpload::query()->where('disk', $file['disk'])->where('path', $file['path'])->exists()
                 || Document::query()->where('disk', $file['disk'])->where('path', $file['path'])->exists()
-                || BoardSignature::query()->where('signature_disk', $file['disk'])->where('signature_path', $file['path'])->exists();
+                || BoardSignature::query()->where('signature_disk', $file['disk'])->where('signature_path', $file['path'])->exists()
+                || Evidence::query()->where('disk', $file['disk'])->where('path', $file['path'])->exists();
 
             if (! $stillUsed) {
                 Storage::disk($file['disk'])->delete($file['path']);

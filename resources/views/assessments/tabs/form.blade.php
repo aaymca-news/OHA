@@ -67,6 +67,7 @@
                 <input type="file" name="form" accept=".xlsx" required class="sr-only focus:not-sr-only"
                        x-on:change="name = $event.target.files[0]?.name ?? ''">
             </label>
+            @include('assessments.tabs._replace-guard', ['artefact' => $form])
             <x-button class="self-start">Upload and check</x-button>
         </form>
     </x-card>
@@ -111,6 +112,19 @@
             </p>
             <p class="text-[0.8125rem] text-on-surface-variant">The score is recorded when an Administrator approves the form.{{ $approvedUpload ? ' Until then, the score recorded at the last approval stands.' : '' }}</p>
         @endif
+    </x-card>
+
+    {{-- The documents behind the form's "Yes" answers, from the movement's evidence library. --}}
+    <x-card title="Evidence for the form’s answers" subtitle="Each “Yes” that a document can prove, with what the evidence library holds for it.">
+        <x-slot:actions>
+            <a href="{{ route('evidence.index', ['movement' => $assessment->movement, 'assessment' => $assessment->id]) }}" class="inline-flex items-center gap-xs text-[0.875rem] text-primary underline">
+                <span class="material-symbols-outlined text-[1.125rem]" aria-hidden="true">folder_open</span> Open the evidence library
+            </a>
+        </x-slot:actions>
+        @include('evidence._checklist', [
+            'checklist' => app(\App\Queries\EvidenceLibrary::class)->checklist($upload->answers, $evidence()),
+            'categoryNames' => \App\Models\Category::query()->pluck('name', 'code')->all(),
+        ])
     </x-card>
 
     @can('viewGaps', $assessment)
@@ -180,6 +194,9 @@
                 <div class="flex-1 min-w-[min(15rem,100%)] text-[0.875rem]">
                     <p class="font-semibold">{{ $finding->message }}</p>
                     <p class="text-[0.8125rem] text-on-surface-variant">{{ $finding->location }}{{ $finding->hint ? ' · '.$finding->hint : '' }}</p>
+                    @if ($why = \App\Oha\WhyItMatters::forFinding($finding))
+                        <p class="text-[0.8125rem] mt-xs flex items-start gap-xs"><span class="material-symbols-outlined text-[1rem] text-primary" aria-hidden="true">lightbulb</span><span><span class="font-semibold">Why it matters:</span> {{ $why }}</span></p>
+                    @endif
                     @if ($finding->resolved_at)
                         <p class="text-[0.8125rem] mt-xs"><span class="font-semibold">{{ $finding->severity->value === 'missing' ? 'Resolved' : 'Reviewed' }}</span> by {{ $finding->resolver->name }}, {{ $finding->resolved_at->format('j M Y') }}: “{{ $finding->resolved_note }}”</p>
                     @endif
@@ -235,6 +252,7 @@
 @if (Gate::allows('submit', $form) && Gate::denies('approve', $form))
     <x-card title="Submit for approval" subtitle="It goes to the Administrators to approve.">
         <form method="POST" action="{{ route('artefacts.submit', $form) }}" class="flex flex-col gap-sm" x-data="{ ack: false }">
+            <input type="hidden" name="seen" value="{{ \App\Support\ReplaceGuard::current($form)?->id ?? 0 }}">
             @csrf
             @if ($openGaps > 0)
                 <label class="flex items-start gap-sm text-[0.875rem]">

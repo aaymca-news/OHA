@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Actions\Users\UpdateOwnProfile;
 use App\Actions\Users\UpdateProfilePhoto;
 use App\Models\User;
+use App\Support\SignedInDevices;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
@@ -12,14 +13,17 @@ use Illuminate\View\View;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
 /**
- * A person's own profile: their photo, name and job title. (Their password and
- * sign-in sessions are on the Security page.)
+ * A person's own profile: their photo, name and job title (AAYMCA staff only), the text
+ * size, and the devices they are signed in on. (Their password is on the Security page.)
  */
 class ProfileController extends Controller
 {
     public function show(Request $request): View
     {
-        return view('profile.show', ['user' => $request->user()->load('assignedMovements:id,name', 'movement')]);
+        return view('profile.show', [
+            'user' => $request->user()->load('assignedMovements:id,name', 'movement'),
+            'sessions' => SignedInDevices::of($request->user(), $request->session()->getId()),
+        ]);
     }
 
     public function update(Request $request, UpdateOwnProfile $action): RedirectResponse
@@ -29,7 +33,9 @@ class ProfileController extends Controller
             'title' => ['nullable', 'string', 'max:80'],
         ]);
 
-        $action->handle($request->user(), $data['name'], $data['title'] ?? null);
+        // The Board Chairperson and General Secretary keep the title the Administrators gave them.
+        $user = $request->user();
+        $action->handle($user, $data['name'], $user->isSecretariat() ? ($data['title'] ?? null) : $user->title);
 
         return back()->with('status', 'Your details are saved.');
     }

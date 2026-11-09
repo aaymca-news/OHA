@@ -90,8 +90,8 @@ it('needs the ODP’s Google Drive link with its first version, and refuses link
     expect($odp->drive_file_id)->toBe('1ZaMbIaOdP2026xYzAbCdEfGhIjKlMnOpQr')
         ->and($odp->drive_url)->toBe(Journey::DRIVE_URL)
         ->and($odp->drive_linked_by)->toBe($this->j->assessor->id)
-        // Neither was approved: in Stage 1 only the newest is kept, as version 2.
-        ->and($odp->versions()->pluck('version_number')->all())->toBe([2]);
+        // Neither was approved: in Stage 1 the newest (version 2) and the one it replaced are kept.
+        ->and($odp->versions()->pluck('version_number')->all())->toBe([1, 2]);
 });
 
 it('lets any Administrator approve, the one who submitted it included', function () {

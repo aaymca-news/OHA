@@ -56,14 +56,28 @@ it('offers the Administrator roles only to the Super Administrator', function ()
         ->assertSee('value="admin"', false)->assertSee('value="super_admin"', false);
 });
 
-it('saves a user’s details and the movements they assess', function () {
+it('saves a user’s details, and leaves who assesses what to the Assessments page', function () {
+    $this->staff->assignedMovements()->attach($this->zambia);
     $this->actingAs($this->admin)->put(route('admin.users.update', $this->staff), [
         'name' => 'Tendai Moyo', 'email' => 'TENDAI@aaymca.test', 'title' => 'Zonal Coordinator, Southern Africa',
-        'movement_ids' => [$this->zambia->id],
+        'movement_ids' => [],
     ])->assertRedirect()->assertSessionHasNoErrors();
 
     expect($this->staff->refresh()->email)->toBe('tendai@aaymca.test')
         ->and($this->staff->assignedMovements->pluck('slug')->all())->toBe(['zambia']);
+    $this->actingAs($this->admin)->get(route('admin.users.edit', $this->staff))->assertOk()
+        ->assertSee('Assigned assessments')->assertSee('Zambia YMCA')->assertDontSee('name="movement_ids[]"', false);
+});
+
+it('shows who has no assessment assigned', function () {
+    $newcomer = User::factory()->create(['name' => 'Kofi Mensah']);
+    $this->staff->assignedMovements()->attach($this->zambia);
+
+    $this->actingAs($this->admin)->get(route('admin.users.index'))->assertOk()
+        ->assertSeeInOrder(['Kofi Mensah', 'No assessment assigned', 'Tendai Moyo', 'Zambia YMCA']);
+    $this->actingAs($this->admin)->get(route('admin.users.edit', $newcomer))->assertOk()->assertSee('No assessment assigned');
+    $this->actingAs($this->admin)->get(route('admin.users.create'))->assertOk()
+        ->assertSee('They start with no assessment assigned')->assertDontSee('name="movement_ids[]"', false);
 });
 
 it('changes a role through the screen, and never the user’s own', function () {

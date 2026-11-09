@@ -112,7 +112,8 @@ it('fixes a report while it waits for approval, keeping it with the Administrato
 
     app(FixReport::class)->fromForm($this->j->report($assessment), $this->j->assessor);
     expect($this->j->report($assessment)->state)->toBe(ArtefactState::PendingApproval)
-        ->and($this->j->report($assessment)->versions()->count())->toBe(1);
+        // The fixed version, and the one it replaced.
+        ->and($this->j->report($assessment)->versions()->count())->toBe(2);
 
     $signed = $this->j->assessmentAt('odp_signed');
     expect(fn () => app(ReviewReportFinding::class)->mark($this->j->report($signed), $this->j->assessor, str_repeat('a', 32), 'Something', 'Checked.'))

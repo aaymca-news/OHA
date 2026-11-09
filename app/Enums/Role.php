@@ -7,7 +7,8 @@ namespace App\Enums;
  *
  * AAYMCA: Staff, Administrator and Super Administrator. Both kinds of Administrator
  * approve and manage users alike; only a Super Administrator gives or takes away an
- * Administrator role. A National Movement has one user, its Board Chairperson.
+ * Administrator role. A National Movement has two users: its Board Chairperson, who
+ * signs the ODP, and its National General Secretary, who supplies its evidence.
  */
 enum Role: string
 {
@@ -15,6 +16,7 @@ enum Role: string
     case Admin = 'admin';
     case Staff = 'staff';
     case Board = 'board';
+    case Ngs = 'ngs';
 
     public function label(): string
     {
@@ -23,7 +25,14 @@ enum Role: string
             self::Admin => 'Administrator',
             self::Staff => 'AAYMCA Staff',
             self::Board => 'Board Chairperson',
+            self::Ngs => 'National General Secretary',
         };
+    }
+
+    /** A National Movement's own user, who belongs to one movement and sees only it. */
+    public function isMovementRole(): bool
+    {
+        return $this === self::Board || $this === self::Ngs;
     }
 
     /** The Administrator roles, which only a Super Administrator gives or takes away. */

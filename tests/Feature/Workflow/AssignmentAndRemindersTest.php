@@ -78,6 +78,9 @@ it('sends no reminder once every role is held', function () {
     foreach (Movement::query()->whereNotIn('slug', ['zambia', 'ghana'])->get() as $movement) {
         User::factory()->chair($movement)->create();
     }
+    foreach (Movement::query()->get() as $movement) {
+        User::factory()->generalSecretary($movement)->create();
+    }
 
     $this->artisan('oha:remind-missing-roles')->expectsOutputToContain('No reminder sent')->assertSuccessful();
     Notification::assertNothingSent();

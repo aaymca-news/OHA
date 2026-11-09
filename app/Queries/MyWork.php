@@ -6,6 +6,7 @@ use App\Enums\ArtefactKind;
 use App\Enums\ArtefactState;
 use App\Enums\FindingSeverity;
 use App\Enums\HolderRole;
+use App\Enums\Role;
 use App\Models\Artefact;
 use App\Models\Movement;
 use App\Models\User;
@@ -21,7 +22,7 @@ use Illuminate\Support\Facades\Gate;
  *   mine      assessors: work waiting on them, including anything sent back
  *   approve   Administrators: everything awaiting approval (what they submitted themselves is shown locked, with why)
  *   sign      the Board Chairperson: the approved ODP awaiting their signature
- *   gaps      forms that went forward with missing information still open
+ *   gaps      forms on your movements that went forward with missing information still open
  *   watching  submitted by you, or on your movements, and now with someone else
  *
  * Each entry is one document, with its due date from v_work_items where it is on
@@ -53,7 +54,8 @@ final class MyWork
                 __('oha.holder.approver'), fn (Artefact $a) => Gate::forUser($user)->inspect('approve', $a));
         }
 
-        if (! $user->isSecretariat()) {
+        // Only the Board Chairperson signs; the National General Secretary has nothing to sign.
+        if ($user->role === Role::Board) {
             $groups[] = $this->fromArtefacts('sign', $this->artefacts()
                 ->where('kind', ArtefactKind::Odp)
                 ->where('state', ArtefactState::Approved)->whereDoesntHave('signature')
@@ -62,7 +64,9 @@ final class MyWork
         }
 
         if ($user->isAssessor()) {
-            $gaps = $this->withOpenGaps($user->oversees() ? null : $assigned);
+            // Only on the movements they assess: My Work is their own work. (Administrators
+            // see every form waiting on them under "approve".)
+            $gaps = $this->withOpenGaps($assigned);
             if ($gaps->isNotEmpty()) {
                 $groups[] = $this->fromWork('gaps', $gaps, fn () => null);
             }

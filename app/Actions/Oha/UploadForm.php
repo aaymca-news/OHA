@@ -20,6 +20,7 @@ use App\Oha\ReadForm;
 use App\Oha\UnreadableForm;
 use App\Support\Audit;
 use App\Support\FileVault;
+use App\Support\Notify;
 use App\Support\VersionPruner;
 use Illuminate\Support\Facades\DB;
 
@@ -43,7 +44,10 @@ final class UploadForm
         private readonly FormChecker $checker,
     ) {}
 
-    public function handle(Artefact $form, string $sourcePath, string $originalName, User $uploader): FormUpload
+    /**
+     * @param  array<string, string>  $replacing  what the audit trail keeps when it replaces an upload (ReplaceGuard)
+     */
+    public function handle(Artefact $form, string $sourcePath, string $originalName, User $uploader, array $replacing = []): FormUpload
     {
         $this->ensure($uploader, 'upload', $form);
 
@@ -60,7 +64,7 @@ final class UploadForm
         [$read, $result] = $this->readAndCheck($sourcePath, $movement);
         $stored = FileVault::store($sourcePath, "forms/{$assessment->id}", 'xlsx');
 
-        return DB::transaction(function () use ($form, $assessment, $uploader, $originalName, $read, $result, $stored): FormUpload {
+        return DB::transaction(function () use ($form, $assessment, $uploader, $originalName, $read, $result, $stored, $replacing): FormUpload {
             $form = $this->lock($form);
             $this->ensure($uploader, 'upload', $form);
 
@@ -86,9 +90,12 @@ final class UploadForm
                 'points' => $result->points,
                 'gaps' => count($result->withSeverity(FindingSeverity::Missing)),
                 'read_from_words' => count($read->interpreted ?? []),
-            ]);
+            ] + $replacing);
 
-            // Only the approved upload and this one are kept in Stage 1.
+            Notify::colleagues($assessment, $uploader, "New OHA form: {$assessment->movement->name}",
+                "{$uploader->name} uploaded {$originalName}, which is now the current OHA form.".(isset($replacing['replaced']) ? " It replaced {$replacing['replaced']}." : ''));
+
+            // In Stage 1: the approved upload, this one and the one it replaced (so a mistaken upload can be undone).
             VersionPruner::uploads($form);
 
             return $upload;

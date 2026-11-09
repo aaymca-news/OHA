@@ -38,6 +38,15 @@ final class Notify
         return $assessment->movement->assessors()->where('active', true)->get();
     }
 
+    /**
+     * The movement's other assessors, in the app only: what a colleague just changed, so
+     * nobody goes on working from a version that has been replaced.
+     */
+    public static function colleagues(Assessment $assessment, User $actor, string $subject, string $body): void
+    {
+        self::send(self::assessorsOf($assessment), new WorkflowNotice($subject, $body, self::link($assessment), 'info', byEmail: false), except: $actor);
+    }
+
     public static function link(Assessment $assessment): string
     {
         return '/assessments/'.$assessment->id;

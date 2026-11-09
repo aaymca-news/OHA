@@ -20,12 +20,14 @@ class WorkflowNotice extends Notification implements ShouldQueue
 
     /**
      * @param  string  $tone  action | good | serious | info
+     * @param  bool  $byEmail  false: in the app only (a colleague's routine change)
      */
     public function __construct(
         public string $subject,
         public string $body,
         public ?string $link = null,
         public string $tone = 'info',
+        public bool $byEmail = true,
     ) {
         $this->afterCommit();
     }
@@ -35,7 +37,7 @@ class WorkflowNotice extends Notification implements ShouldQueue
      */
     public function via(object $notifiable): array
     {
-        return ['database', 'mail'];
+        return $this->byEmail ? ['database', 'mail'] : ['database'];
     }
 
     public function toMail(object $notifiable): MailMessage

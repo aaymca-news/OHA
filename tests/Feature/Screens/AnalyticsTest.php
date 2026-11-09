@@ -19,8 +19,8 @@ it('shows the Stage 1 pipeline and a clear empty state before any form is approv
     $this->j->assessmentAt('form_submitted');
 
     $this->actingAs($this->j->admin)->get(route('dashboard'))->assertOk()
-        ->assertSee('Stage 1 across the alliance')->assertSee('Not yet assessed')
-        ->assertSee('No movement has an approved OHA form yet')->assertDontSee('Every movement, every category');
+        ->assertSee('Stage 1 across the region')->assertSee('Not yet assessed')
+        ->assertSee('No movement is rated yet')->assertDontSee('Every movement, every category');
 });
 
 it('fills the dashboard from the approved forms', function () {

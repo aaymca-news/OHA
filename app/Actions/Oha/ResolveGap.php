@@ -26,7 +26,7 @@ final class ResolveGap
             throw new WorkflowRuleBroken('Say how it was resolved: the validator reads this in place of the missing answer.');
         }
         if ($gap->resolved_at !== null) {
-            throw new WorkflowRuleBroken('That item is already resolved.');
+            throw new WorkflowRuleBroken('That item is already resolved, by '.($gap->resolver->name ?? 'someone').' on '.$gap->resolved_at->format('j M \a\t H:i').'. Reload the page to see it.');
         }
 
         return DB::transaction(function () use ($gap, $user, $note): FormFinding {

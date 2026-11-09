@@ -21,10 +21,12 @@
                     <x-input name="email" label="Email" type="email" :value="$target->email" required />
                     <x-input name="title" label="Job title" :value="$target->title" />
                 </div>
-                @if ($target->isAssessor())
-                    @include('admin.users._movements', ['selected' => $target->assignedMovements->pluck('id')->all()])
-                @endif
                 <x-button class="self-start">Save details</x-button>
+                @if ($target->isAssessor())
+                    <div class="border-t border-surface-container pt-md">
+                        @include('admin.users._assignments')
+                    </div>
+                @endif
             </form>
         @endif
 
@@ -43,19 +45,23 @@
                 @unless (auth()->user()->isSuperAdmin())
                     <p class="text-[0.8125rem] text-on-surface-variant">Only the Super Administrator gives the Administrator roles.</p>
                 @endunless
-                <div x-show="role === 'board'" x-cloak class="flex flex-col gap-sm">
-                    <select name="board_movement_id" class="px-sm py-2 rounded border-[1.5px] border-outline-variant bg-surface-container-lowest text-[0.875rem]">
-                        <option value="">Board Chairperson of which movement…</option>
-                        @foreach ($movements as $movement)
-                            <option value="{{ $movement->id }}" @selected($target->movement_id === $movement->id)>{{ $movement->name }}{{ $movement->chair && $movement->chair->id !== $target->id ? ' (now: '.$movement->chair->name.')' : '' }}</option>
-                        @endforeach
-                    </select>
-                    <label class="flex items-start gap-sm text-[0.875rem]">
-                        <input type="hidden" name="confirm_replace" value="0">
-                        <input type="checkbox" name="confirm_replace" value="1" class="mt-1">
-                        <span>If the movement already has a Board Chairperson, replace them (their account is deactivated).</span>
-                    </label>
-                </div>
+                @foreach (['board' => 'chair', 'ngs' => 'generalSecretary'] as $value => $relation)
+                    @php($roleLabel = \App\Enums\Role::from($value)->label())
+                    <div x-show="role === '{{ $value }}'" x-cloak class="flex flex-col gap-sm">
+                        <select name="board_movement_id" :disabled="role !== '{{ $value }}'" class="px-sm py-2 rounded border-[1.5px] border-outline-variant bg-surface-container-lowest text-[0.875rem]">
+                            <option value="">{{ $roleLabel }} of which movement…</option>
+                            @foreach ($movements as $movement)
+                                @php($now = $movement->{$relation})
+                                <option value="{{ $movement->id }}" @selected($target->movement_id === $movement->id)>{{ $movement->name }}{{ $now && $now->id !== $target->id ? ' (now: '.$now->name.')' : '' }}</option>
+                            @endforeach
+                        </select>
+                        <label class="flex items-start gap-sm text-[0.875rem]">
+                            <input type="hidden" name="confirm_replace" value="0" :disabled="role !== '{{ $value }}'">
+                            <input type="checkbox" name="confirm_replace" value="1" class="mt-1" :disabled="role !== '{{ $value }}'">
+                            <span>If the movement already has a {{ $roleLabel }}, replace them (their account is deactivated).</span>
+                        </label>
+                    </div>
+                @endforeach
                 <x-button class="self-start">Change role</x-button>
             </form>
         @else

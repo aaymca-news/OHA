@@ -1,4 +1,9 @@
 <x-layouts.app :title="$movement->name" :subtitle="$movement->city.' · '.$movement->zone->name.' · '.$movement->membershipStatus->label">
+    @can('update', $movement)
+        <a href="{{ route('admin.movements.edit', $movement) }}" class="self-start -mt-sm inline-flex items-center gap-xs text-[0.875rem] text-primary underline">
+            <span class="material-symbols-outlined text-[1.125rem]" aria-hidden="true">edit</span> Edit the movement’s details
+        </a>
+    @endcan
     <div class="grid sm:grid-cols-3 gap-md">
         <x-stat-tile label="Latest health score" :value="$status->pct !== null ? number_format((float) $status->pct, 1) : '—'" :unit="$status->pct !== null ? '%' : null">
             <x-slot:sub><x-band-chip :band="$status->band" /></x-slot:sub>
@@ -32,20 +37,37 @@
             @if (auth()->user()->isSecretariat())
                 @include('movements._assessors')
             @endif
-            <x-card title="Board Chairperson" subtitle="The movement’s one user. Reads the approved report and signs the ODP.">
-                @if ($chair)
-                    <p class="text-[0.875rem] flex flex-wrap items-center gap-sm"><x-avatar :user="$chair" /> {{ $chair->name }}
-                        @if ($chair->title)
-                            <span class="text-on-surface-variant">· {{ $chair->title }}</span>
+            <x-card title="The movement’s users" subtitle="Each sees only this movement.">
+                @foreach ([
+                    ['Board Chairperson', $chair, 'draw', 'Signs the ODP', 'No Board Chairperson yet, so the ODP cannot be signed.'],
+                    ['National General Secretary', $generalSecretary, 'upload_file', 'Supplies the evidence', 'No National General Secretary yet, so AAYMCA staff add the evidence.'],
+                ] as [$role, $person, $icon, $does, $none])
+                    <div class="flex flex-col gap-xs">
+                        <p class="text-[0.8125rem] font-semibold text-on-surface-variant">{{ $role }}</p>
+                        @if ($person)
+                            <p class="text-[0.875rem] flex flex-wrap items-center gap-sm"><x-avatar :user="$person" /> {{ $person->name }}
+                                <x-chip tone="info" :icon="$icon">{{ $does }}</x-chip>
+                            </p>
+                        @else
+                            <p class="text-[0.875rem] text-on-surface-variant">{{ $none }}</p>
                         @endif
-                        <x-chip tone="info" icon="draw">Signs the ODP</x-chip>
-                    </p>
-                @else
-                    <x-empty-state icon="person_off">No Board Chairperson yet, so the ODP cannot be signed.</x-empty-state>
-                @endif
+                    </div>
+                @endforeach
             </x-card>
+            <a href="{{ route('evidence.index', $movement) }}" class="flex items-center gap-sm p-md rounded-lg border-[1.5px] border-outline-variant bg-surface-container-lowest text-[0.875rem] hover:border-primary">
+                <span class="material-symbols-outlined text-[1.5rem] text-primary" aria-hidden="true">folder_open</span>
+                <span class="flex-1">
+                    <span class="block font-semibold text-primary">Evidence library</span>
+                    <span class="block text-[0.8125rem] text-on-surface-variant">{{ $evidenceCount === 0 ? 'No documents yet' : $evidenceCount.' '.\Illuminate\Support\Str::plural('document', $evidenceCount) }}, linked to the OHA form and the ODP</span>
+                </span>
+                <span class="material-symbols-outlined text-[1.25rem] text-on-surface-variant" aria-hidden="true">chevron_right</span>
+            </a>
         </div>
     </div>
+
+    @if ($history->count() > 1)
+        @include('movements._score-history')
+    @endif
 
     @if ($profile)
         @include('movements._profile')

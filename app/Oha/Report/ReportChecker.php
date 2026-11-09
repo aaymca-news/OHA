@@ -36,6 +36,12 @@ final class ReportChecker
         'staff' => '/staff\s*(and|&|\+)\s*volunteer/i',
     ];
 
+    /**
+     * Sections the report template adds that are not form categories. Each ends the
+     * category section before it, so its text is not read as that category's analysis.
+     */
+    private const OTHER_SECTIONS = '/^programmes?\s+(and|&)\s+projects?\b/i';
+
     /** The report's own score must be within this many percentage points of the form's. */
     private const TOLERANCE = 0.5;
 
@@ -157,7 +163,7 @@ final class ReportChecker
         // Strengths and opportunities are one requirement: a movement that is developing is
         // written up by its opportunities, one that is strong by its strengths. Either will do.
         $sections = [
-            'overview' => ['/overview|introduction|current\s+status|general\s+information|background/i', 'an overview of the movement', 'Describe the movement: its registration, structure, branches and reach.'],
+            'overview' => ['/overview|introduction|current\s+status|general\s+information|background|summary\s+of\s+findings/i', 'an overview of the movement', 'Describe the movement: its registration, structure, branches and reach.'],
             'strengths' => ['/\bstrengths?\b|opportunit|priorit|areas?\s+of\s+growth/i', 'the key strengths or opportunities for growth', 'List what the movement does well, or where it can grow; these feed the ODP.'],
             'risks' => ['/\brisks?\b|concern|challenge|weakness|threat|\bgaps?\b/i', 'the key risks', 'List the risks or challenges the assessment found.'],
         ];
@@ -300,6 +306,11 @@ final class ReportChecker
         $current = null;
 
         foreach ($report->paragraphs as $p) {
+            if (ReadReport::isTitle($p) && self::startsOtherSection($p['text'])) {
+                $current = null;
+
+                continue;
+            }
             $code = ReadReport::isTitle($p) ? self::categoryNamedBy($p['text']) : null;
             if ($code !== null) {
                 $current = $code;
@@ -315,13 +326,20 @@ final class ReportChecker
         return $sections;
     }
 
+    /** Whether a title opens a template section that is not a form category. */
+    public static function startsOtherSection(string $title): bool
+    {
+        return preg_match(self::OTHER_SECTIONS, $title) === 1;
+    }
+
     /**
      * The category a title introduces. "Key strengths…" and other summary titles are
      * not category titles, and a title naming several categories picks the first.
      */
     public static function categoryNamedBy(string $title): ?string
     {
-        if (preg_match('/^(key|strategic|summary|consolidated|overall)\b/i', $title) === 1) {
+        // "Strategic priorities…" is a summary title; "Strategic Planning & Mission" is the category.
+        if (preg_match('/^(key|strategic(?!\s+planning)|summary|consolidated|overall)\b/i', $title) === 1) {
             return null;
         }
         foreach (self::CATEGORY_TITLES as $code => $pattern) {

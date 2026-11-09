@@ -1,11 +1,14 @@
 <?php
 
 use App\Enums\ArtefactState;
+use App\Models\Artefact;
 use App\Models\ArtefactStatus;
 use App\Models\Assessment;
 use App\Models\MovementStatus;
+use App\Support\ReplaceGuard;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Notifications\ChannelManager;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Notification;
 use Tests\Support\Journey;
 
@@ -23,6 +26,21 @@ function reportUpload(string $content, string $name = 'Zambia OHA Report 2026.pd
     return new UploadedFile(Journey::reportFile($content), $name, null, null, true);
 }
 
+/** What the page sends with an upload or submission: the version it showed. */
+function seen(Artefact $artefact): int
+{
+    return ReplaceGuard::current($artefact)->id ?? 0;
+}
+
+it('opens an assessment in the month chosen, whatever day it is today', function () {
+    // On the 31st, "2026-02" read with today's day would overflow into March.
+    $this->travelTo(Carbon::parse('2026-10-31 10:00'));
+
+    $this->actingAs($this->j->assessor)->post(route('assessments.store', $this->j->zambia), ['period_label' => 'Feb 2026', 'period_start' => '2026-02'])->assertRedirect();
+
+    expect(Assessment::query()->latest('id')->firstOrFail()->assessed_on->toDateString())->toBe('2026-02-01');
+});
+
 it('takes Zambia from a new assessment to a signed ODP through the screens', function () {
     $j = $this->j;
 
@@ -35,7 +53,7 @@ it('takes Zambia from a new assessment to a signed ODP through the screens', fun
         'form' => new UploadedFile(zambiaFormPath(), 'ZAM26 OHA Form.xlsx', null, null, true),
     ])->assertSessionHas('status', fn ($s) => str_contains($s, '3 item(s) are missing'));
 
-    $this->actingAs($j->assessor)->post(route('artefacts.submit', $form), ['acknowledge_gaps' => '1', 'reason' => 'Following up.'])
+    $this->actingAs($j->assessor)->post(route('artefacts.submit', $form), ['acknowledge_gaps' => '1', 'reason' => 'Following up.', 'seen' => seen($form)])
         ->assertSessionHas('status', 'Submitted for approval. The Administrators have been told.');
 
     // An Administrator approves; Zambia is rated from that moment and the form is visible to all staff.
@@ -49,7 +67,7 @@ it('takes Zambia from a new assessment to a signed ODP through the screens', fun
     $this->actingAs($j->assessor)->get($reportTab)->assertSee('Upload the report')->assertSee('No report has been uploaded yet.');
     $this->actingAs($j->assessor)->post(route('artefacts.versions', $report), ['report' => reportUpload('first')])
         ->assertSessionHas('status', fn ($s) => str_starts_with($s, 'Saved as version 1. The report check flagged'));
-    $this->actingAs($j->assessor)->post(route('artefacts.versions', $report), ['report' => reportUpload('second'), 'note' => 'Corrected the staff figures.'])
+    $this->actingAs($j->assessor)->post(route('artefacts.versions', $report), ['report' => reportUpload('second'), 'note' => 'Corrected the staff figures.', 'seen' => seen($report), 'replace' => '1'])
         ->assertSessionHas('status', fn ($s) => str_starts_with($s, 'Saved as version 2.'));
 
     $version = $report->latestVersion()->firstOrFail();
@@ -59,10 +77,10 @@ it('takes Zambia from a new assessment to a signed ODP through the screens', fun
     // Not approved yet: other staff and the Chairperson cannot see it.
     $this->actingAs($j->otherStaff)->get($reportTab)->assertDontSee('Version 2 ·');
 
-    $this->actingAs($j->assessor)->post(route('artefacts.submit', $report))->assertSessionHasNoErrors();
+    $this->actingAs($j->assessor)->post(route('artefacts.submit', $report), ['seen' => seen($report)])->assertSessionHasNoErrors();
     $this->actingAs($j->secondAdmin)->get($reportTab)->assertSee('Your approval · version 2');
     $this->actingAs($j->secondAdmin)->post(route('artefacts.approve', $report))
-        ->assertSessionHas('status', 'Approved. All AAYMCA staff and the Board Chairperson can now see this version of the report.');
+        ->assertSessionHas('status', 'Approved. All AAYMCA staff and the movement’s Board Chairperson and National General Secretary can now see this version of the report.');
 
     $this->actingAs($j->chair)->get($reportTab)->assertOk()->assertSee('Version 2 · Zambia OHA Report 2026.pdf')
         ->assertDontSee('Sign and validate')->assertDontSee('Upload a new version');
@@ -80,7 +98,7 @@ it('takes Zambia from a new assessment to a signed ODP through the screens', fun
     ])->assertSessionHas('status', 'Saved as version 1. Preview it, then submit it for approval when it is ready.');
     $this->actingAs($j->assessor)->get($odpTab)->assertSee('Open in Google Drive')->assertSee('Continue in Google Drive')
         ->assertSee('By upload only, for now.');
-    $this->actingAs($j->assessor)->post(route('artefacts.submit', $odp));
+    $this->actingAs($j->assessor)->post(route('artefacts.submit', $odp), ['seen' => seen($odp)]);
     $this->actingAs($j->superAdmin)->post(route('artefacts.approve', $odp));
 
     // Approved: the Chairperson reads it and signs it, without the live Google Drive link.
@@ -108,12 +126,12 @@ it('lets the assessor upload a new version after approval, which goes back for a
 
     $this->actingAs($this->j->assessor)->get($reportTab)->assertSee('Upload a new version')
         ->assertSee('A new version goes back to the Administrators for approval');
-    $this->actingAs($this->j->assessor)->post(route('artefacts.versions', $report), ['report' => reportUpload('after approval')])
+    $this->actingAs($this->j->assessor)->post(route('artefacts.versions', $report), ['report' => reportUpload('after approval'), 'seen' => seen($report), 'replace' => '1'])
         ->assertSessionHas('status', fn ($s) => str_starts_with($s, 'Saved as version 2.'));
 
     $this->actingAs($this->j->otherStaff)->get($reportTab)->assertOk()
         ->assertSee('Version 1 · Zambia OHA Report 2026.pdf')->assertDontSee('Version 2');
-    $this->actingAs($this->j->assessor)->get($reportTab)->assertSee('Staff and the Board Chairperson see the last approved version until the new one is approved.');
+    $this->actingAs($this->j->assessor)->get($reportTab)->assertSee('Staff and the movement’s Board Chairperson and National General Secretary see the last approved version until the new one is approved.');
 });
 
 it('refuses a report that is not Word or PDF, saying why', function () {

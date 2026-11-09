@@ -92,6 +92,10 @@ final class SubmitForApproval
                     "{$submitter->name} submitted the OHA form for {$movement} with {$openGaps} missing item".($openGaps === 1 ? '' : 's').'. They stay flagged until resolved.',
                     Notify::link($assessment), 'serious',
                 ), except: $submitter);
+            } else {
+                // Otherwise they are told in the app only, so nobody goes on working on it unaware.
+                Notify::colleagues($assessment, $submitter, "Submitted: {$name}, {$movement}",
+                    "{$submitter->name} submitted the ".self::inSentence($name).' for approval. It is now with the Administrators.');
             }
 
             return $artefact;

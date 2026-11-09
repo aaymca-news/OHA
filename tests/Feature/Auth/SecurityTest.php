@@ -24,7 +24,7 @@ it('signs the user out everywhere else, after checking their password', function
     expect(DB::table('sessions')->where('user_id', $user->id)->count())->toBe(2);
 
     $this->actingAs($user)->delete(route('security.other-sessions'), ['password' => 'password'])
-        ->assertSessionHas('status', 'Signed out of 2 other sessions.');
+        ->assertSessionHas('status', 'Signed out of 2 other devices.');
 
     expect(DB::table('sessions')->where('user_id', $user->id)->count())->toBe(0)
         ->and(AuditEvent::query()->where('action', 'auth.signed_out_elsewhere')->exists())->toBeTrue();

@@ -275,9 +275,22 @@ These two hold everything. Neither is in GitHub:
 
 | What | Where |
 |---|---|
-| The database | `pg_dump -U africaym_oha_user -d africaym_oha --no-owner -f ~/backups/oha-$(date +%F).sql` |
+| The database | `~/backups/oha-<date>.sql`, made with the command below |
 | Uploaded files: forms, reports, ODPs, signatures | `/home/africaym/oha/storage/app/private/oha` |
 
-If `pg_dump` fails with an SSL or `pg_hba` error, leave out `-h`, as on the voting server.
+Back up the database before every update that has a migration. The app hands its own
+database settings to `pg_dump`, so nothing is asked and nothing is shown (8 Oct 2026: a
+plain `pg_dump` finds no PostgreSQL socket at the default place, and reading the password
+out of `.env` by hand got it wrong):
+```bash
+mkdir -p ~/backups && chmod 700 ~/backups && cd ~/oha && /opt/cpanel/ea-php84/root/usr/bin/php -r '
+require "vendor/autoload.php"; $app = require "bootstrap/app.php"; $app->make(Illuminate\Contracts\Console\Kernel::class)->bootstrap();
+$c = config("database.connections.pgsql"); putenv("PGPASSWORD=".$c["password"]);
+$file = getenv("HOME")."/backups/oha-".date("Y-m-d-Hi").".sql";
+passthru("pg_dump -h ".escapeshellarg($c["host"])." -p ".escapeshellarg((string) $c["port"])." -U ".escapeshellarg($c["username"])." -d ".escapeshellarg($c["database"])." --no-owner -f ".escapeshellarg($file), $rc);
+echo $rc === 0 ? "Backup saved: $file\n" : "Backup FAILED\n"; exit($rc);' && chmod 600 ~/backups/* && ls -lh ~/backups | tail -2
+```
+Only go on with the update if it says "Backup saved" and the file is not empty.
+
 cPanel's own **Backup** also includes PostgreSQL databases and home folders. Download a
 copy regularly and keep the `.env` file safe: its `APP_KEY` is needed to restore.

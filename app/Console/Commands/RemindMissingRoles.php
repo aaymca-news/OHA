@@ -11,7 +11,7 @@ use Illuminate\Console\Command;
 
 /**
  * Reminds the Administrators, every day, while the workflow is missing a role it
- * needs: a Super Administrator, a second Administrator, or a Board Chairperson for
+ * needs: a Super Administrator, a second Administrator, or a Board Chairperson or National General Secretary for
  * any movement.
  */
 #[Signature('oha:remind-missing-roles')]
@@ -31,6 +31,9 @@ class RemindMissingRoles extends Command
         $body = implode(' ', $health['problems']);
         if ($health['movements_without_chair'] !== []) {
             $body .= ' Without a Chairperson: '.implode(', ', $health['movements_without_chair']).'.';
+        }
+        if ($health['movements_without_gs'] !== []) {
+            $body .= ' Without a National General Secretary: '.implode(', ', $health['movements_without_gs']).'.';
         }
         $body .= ' They are appointed in Users & Roles.';
 

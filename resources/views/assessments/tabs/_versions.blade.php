@@ -71,7 +71,7 @@
 @endif
 
 @if ($versions->count() > 1 || ($versions->isNotEmpty() && auth()->user()->isSecretariat()))
-    <x-card title="Versions" subtitle="Until the ODP is signed, only the approved version and the newest are kept (to save space); the audit trail records every one. Choose one to preview it.">
+    <x-card title="Versions" subtitle="Until the ODP is signed, the approved version, the newest and the one it replaced are kept (to save space); the audit trail records every one. Choose one to preview it. The newest can be withdrawn by whoever saved it, or an Administrator.">
         <ul class="flex flex-col gap-xs">
             @foreach ($versions as $v)
                 @php([$label, $icon, $tone] = VersionLabel::of($v, $artefact, $latestId))
@@ -96,6 +96,17 @@
                         <a href="{{ route('assessments.show', ['assessment' => $assessment, 'tab' => $artefact->kind->value, 'version' => $v->id]) }}" class="text-primary underline">Preview</a>
                     @endif
                     <a href="{{ route('downloads.document', $v) }}" class="text-primary underline">Download</a>
+                    @can('withdraw', $v)
+                        @php($before = $versions->first(fn ($o) => $o->id < $v->id))
+                        <form method="POST" action="{{ route('versions.withdraw', $v) }}"
+                              x-data x-on:submit="if (! confirm(@js('Withdraw version '.$v->number.'? Use this for a version saved by mistake. '.($before ? 'Version '.$before->number.' becomes current again.' : 'No version will be left.')))) $event.preventDefault()">
+                            @csrf
+                            @method('DELETE')
+                            <button class="inline-flex items-center gap-xs text-error underline">
+                                <span class="material-symbols-outlined text-[1.125rem]" aria-hidden="true">undo</span> Withdraw
+                            </button>
+                        </form>
+                    @endcan
                 </li>
             @endforeach
         </ul>

@@ -3,7 +3,6 @@
 namespace App\Http\Controllers;
 
 use App\Actions\Oha\AssignAssessors;
-use App\Enums\Role;
 use App\Models\Assessment;
 use App\Models\AuditEvent;
 use App\Models\FormUpload;
@@ -11,7 +10,6 @@ use App\Models\HealthBand;
 use App\Models\MembershipStatus;
 use App\Models\Movement;
 use App\Models\MovementStatus;
-use App\Models\User;
 use App\Models\Zone;
 use App\Oha\CategoryRows;
 use App\Oha\Profile;
@@ -23,7 +21,7 @@ use Illuminate\View\View;
 
 class MovementController extends Controller
 {
-    /** All 23 movements, filterable by zone, membership status and band. */
+    /** Every movement, filterable by zone, membership status and band. */
     public function index(Request $request, AllianceInsights $insights): View
     {
         abort_unless($request->user()->isSecretariat(), 403);
@@ -103,32 +101,37 @@ class MovementController extends Controller
         $frozen = $latest !== null ? FormUpload::query()->whereKey($latest->categoryScores()->value('form_upload_id'))->first() : null;
         $profile = $frozen !== null ? (new Profile($frozen->answers ?? [], $frozen->form_meta ?? []))->toArray() : null;
 
+        $assessments = $movement->assessments()->with(['score.band', 'artefacts.status', 'workItem'])->latest('assessed_on')->latest('id')->get()
+            ->filter(fn (Assessment $a) => Gate::forUser($user)->allows('view', $a));
+
         return view('movements.show', [
             'movement' => $movement->load('zone', 'membershipStatus'),
             'status' => $status,
             'latest' => $latest,
             'rows' => $latest !== null ? CategoryRows::for($latest) : [],
-            'assessments' => $movement->assessments()->with(['score.band', 'artefacts.status', 'workItem'])->latest('assessed_on')->latest('id')->get()
-                ->filter(fn (Assessment $a) => Gate::forUser($user)->allows('view', $a)),
+            'assessments' => $assessments,
+            // Each scored assessment's category scores, oldest first (the last five), to compare.
+            'history' => $assessments->filter(fn (Assessment $a) => $a->score !== null)->take(5)->reverse()->values()
+                ->map(fn (Assessment $a) => ['assessment' => $a, 'rows' => collect(CategoryRows::for($a))->keyBy('code')]),
             'assessors' => $user->isSecretariat() ? $movement->assessors()->where('active', true)->orderBy('name')->get() : collect(),
             'chair' => $movement->chair()->first(),
+            'generalSecretary' => $movement->generalSecretary()->first(),
+            'evidenceCount' => $movement->evidence()->count(),
             'profile' => $profile,
             'assignmentHistory' => $assignmentHistory,
             'assignedSince' => $assignedSince,
             'canOpen' => Gate::forUser($user)->allows('openAssessment', $movement),
             'canAssign' => Gate::forUser($user)->allows('assignAssessors', $movement),
-            'staff' => Gate::forUser($user)->allows('assignAssessors', $movement)
-                ? User::query()->where('active', true)->where('role', '!=', Role::Board)->orderBy('name')->get()
-                : collect(),
         ]);
     }
 
-    /** The Administrators choose who assesses a movement. */
+    /** The Administrators choose who assesses a movement, on the Assessments page. */
     public function assignAssessors(Request $request, Movement $movement, AssignAssessors $assign): RedirectResponse
     {
         $data = $request->validate(['assessor_ids' => ['array'], 'assessor_ids.*' => ['integer', 'exists:users,id']]);
         $assign->handle($request->user(), $movement, array_map('intval', $data['assessor_ids'] ?? []));
 
-        return back()->with('status', 'Assessors saved.');
+        // Back to the movement's row on the Assessments page.
+        return redirect()->to(url()->previous().'#assessors-'.$movement->slug)->with('status', "Assessors saved for {$movement->name}.");
     }
 }

@@ -21,32 +21,39 @@
             </label>
         </div>
 
-        <div x-show="role !== 'board'">
-            @include('admin.users._movements', ['selected' => []])
-        </div>
+        <p x-show="! ['board', 'ngs'].includes(role)" class="text-[0.8125rem] text-on-surface-variant">
+            They start with no assessment assigned. Once invited, give them movements to assess on the Assessments page.
+        </p>
 
         {{--
-            A movement has one Board Chairperson. A new one goes to a movement without one: the
-            others are greyed out. Replacing picks among the movements that have one, says who
-            is replaced, deactivates them and tells them by email.
+            A movement has one Board Chairperson and one National General Secretary. A new one
+            goes to a movement without one: the others are greyed out. Replacing picks among the
+            movements that have one, says who is replaced, deactivates them and tells them by email.
         --}}
-        @php($chairs = $movements->mapWithKeys(fn ($m) => [$m->id => $m->chair ? $m->chair->name.($m->chair->isInvitationPending() ? ' (invitation pending)' : '') : null]))
-        <div x-show="role === 'board'" x-cloak class="flex flex-col gap-md"
+        @php($holder = fn ($u) => $u ? $u->name.($u->isInvitationPending() ? ' (invitation pending)' : '') : null)
+        @php($holders = [
+            'board' => $movements->mapWithKeys(fn ($m) => [$m->id => $holder($m->chair)]),
+            'ngs' => $movements->mapWithKeys(fn ($m) => [$m->id => $holder($m->generalSecretary)]),
+        ])
+        @php($labels = ['board' => \App\Enums\Role::Board->label(), 'ngs' => \App\Enums\Role::Ngs->label()])
+        <div x-show="['board', 'ngs'].includes(role)" x-cloak class="flex flex-col gap-md"
              x-data="{
-                 mode: '{{ old('chair_mode', 'new') }}', movement: '{{ old('board_movement_id') }}', chairs: @js($chairs),
-                 fits(id) { return (this.mode === 'new') === (this.chairs[id] === null) },
-                 get replacing() { return this.mode === 'replace' ? (this.chairs[this.movement] ?? null) : null },
+                 mode: '{{ old('chair_mode', 'new') }}', movement: '{{ old('board_movement_id') }}', holders: @js($holders), labels: @js($labels),
+                 get current() { return this.holders[this.role] ?? {} },
+                 get label() { return this.labels[this.role] ?? '' },
+                 fits(id) { return (this.mode === 'new') === ((this.current[id] ?? null) === null) },
+                 get replacing() { return this.mode === 'replace' ? (this.current[this.movement] ?? null) : null },
              }"
-             x-effect="if (movement !== '' ? ! fits(movement) : false) movement = ''">
+             x-effect="role; if (movement !== '' ? ! fits(movement) : false) movement = ''">
             <fieldset class="flex flex-col gap-xs text-[0.875rem]">
-                <legend class="font-semibold mb-xs">This Board Chairperson is…</legend>
+                <legend class="font-semibold mb-xs">This <span x-text="label"></span> is…</legend>
                 <label class="flex items-start gap-sm">
                     <input type="radio" name="chair_mode" value="new" x-model="mode" class="mt-1" @checked(old('chair_mode', 'new') === 'new')>
-                    <span>For a movement <strong>without</strong> a Board Chairperson</span>
+                    <span>For a movement <strong>without</strong> a <span x-text="label"></span></span>
                 </label>
                 <label class="flex items-start gap-sm">
                     <input type="radio" name="chair_mode" value="replace" x-model="mode" class="mt-1" @checked(old('chair_mode') === 'replace')>
-                    <span><strong>Replacing</strong> a movement’s current Board Chairperson</span>
+                    <span><strong>Replacing</strong> a movement’s current <span x-text="label"></span></span>
                 </label>
             </fieldset>
 
@@ -56,14 +63,15 @@
                     <option value="">Choose…</option>
                     @foreach ($movements as $movement)
                         <option value="{{ $movement->id }}" @selected(old('board_movement_id') == $movement->id)
-                                :disabled="{{ $chairs[$movement->id] !== null ? 'mode === \'new\'' : 'mode === \'replace\'' }}">
-                            {{ $movement->name }}{{ $chairs[$movement->id] !== null ? ' — Chairperson: '.$chairs[$movement->id] : '' }}
+                                :disabled="! fits({{ $movement->id }})"
+                                x-text="{{ \Illuminate\Support\Js::from($movement->name) }} + (current[{{ $movement->id }}] ? ' — now: ' + current[{{ $movement->id }}] : '')">
+                            {{ $movement->name }}
                         </option>
                     @endforeach
                 </select>
                 <span class="text-[0.8125rem] text-on-surface-variant"
-                      x-text="mode === 'new' ? 'Movements that already have a Board Chairperson are greyed out: choose “Replacing” to change theirs.' : 'Only movements that have a Board Chairperson are listed.'">
-                    A movement has one user: its Board Chairperson, who reads the approved report and signs the ODP.
+                      x-text="mode === 'new' ? 'Movements that already have a ' + label + ' are greyed out: choose “Replacing” to change theirs.' : 'Only movements that have a ' + label + ' can be chosen.'">
+                    A movement has two users: its Board Chairperson, who signs the ODP, and its National General Secretary, who supplies its evidence.
                 </span>
             </label>
 

@@ -24,9 +24,7 @@ class InviteUserRequest extends FormRequest
             'email' => ['required', 'email:rfc', 'max:255', Rule::unique('users', 'email')],
             'role' => ['required', Rule::enum(Role::class)],
             'title' => ['nullable', 'string', 'max:80'],
-            'movement_ids' => ['array'],
-            'movement_ids.*' => ['integer', 'exists:movements,id'],
-            'board_movement_id' => ['nullable', 'required_if:role,board', 'integer', 'exists:movements,id'],
+            'board_movement_id' => ['nullable', 'required_if:role,board,ngs', 'integer', 'exists:movements,id'],
             'confirm_replace' => ['boolean'],
             'chair_mode' => ['nullable', 'in:new,replace'],
         ];

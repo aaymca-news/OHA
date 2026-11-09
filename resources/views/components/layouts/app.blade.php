@@ -127,15 +127,8 @@
                         </button>
                         <div x-show="open" x-cloak class="absolute right-0 mt-1 w-64 max-w-[calc(100vw-2rem)] bg-surface-container-lowest border-[1.5px] border-outline-variant rounded-lg py-xs text-[0.9375rem] shadow-md">
                             {{-- Text size: remembered on this device. Everything is sized in rem, so it all scales. --}}
-                            <div class="px-md py-2 border-b border-surface-container" role="group" aria-labelledby="text-size-label">
-                                <p id="text-size-label" class="text-[0.8125rem] font-semibold text-on-surface-variant mb-xs">Text size</p>
-                                <div class="flex gap-xs">
-                                    @foreach (['normal' => ['A', 'Normal', 'text-[0.875rem]'], 'large' => ['A', 'Large', 'text-[1.0625rem]'], 'larger' => ['A', 'Larger', 'text-[1.25rem]']] as $key => [$glyph, $label, $size])
-                                        <button type="button" x-on:click="setTextSize('{{ $key }}')" :aria-pressed="textSize === '{{ $key }}'" aria-label="{{ $label }} text"
-                                                :class="textSize === '{{ $key }}' ? 'bg-primary text-on-primary border-primary' : 'border-outline-variant hover:border-primary'"
-                                                class="flex-1 h-9 rounded border-[1.5px] font-bold {{ $size }}">{{ $glyph }}</button>
-                                    @endforeach
-                                </div>
+                            <div class="px-md py-2 border-b border-surface-container">
+                                @include('partials.text-size', ['id' => 'text-scale-menu'])
                             </div>
                             <a href="{{ route('profile.show') }}" class="flex items-center gap-sm px-md py-2 hover:bg-surface-container">
                                 <span class="material-symbols-outlined text-[1.125rem]" aria-hidden="true">account_circle</span>{{ __('oha.nav.profile') }}
@@ -168,6 +161,12 @@
                                 <details class="text-[0.875rem] mt-xs">
                                     <summary class="cursor-pointer underline">Movements without a Board Chairperson ({{ count($health['movements_without_chair']) }})</summary>
                                     <p class="mt-xs">{{ implode(', ', $health['movements_without_chair']) }}</p>
+                                </details>
+                            @endif
+                            @if ($health['movements_without_gs'] !== [])
+                                <details class="text-[0.875rem] mt-xs">
+                                    <summary class="cursor-pointer underline">Movements without a National General Secretary ({{ count($health['movements_without_gs']) }})</summary>
+                                    <p class="mt-xs">{{ implode(', ', $health['movements_without_gs']) }}</p>
                                 </details>
                             @endif
                             <p class="text-[0.8125rem] mt-xs">You will be reminded daily until these are appointed.</p>

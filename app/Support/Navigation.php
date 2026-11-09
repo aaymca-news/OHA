@@ -2,8 +2,11 @@
 
 namespace App\Support;
 
+use App\Enums\Role;
 use App\Models\AssessmentMilestone;
+use App\Models\Movement;
 use App\Models\MovementStatus;
+use App\Models\OdpTask;
 use App\Models\User;
 use App\Queries\MyWork;
 use Illuminate\Support\Facades\Gate;
@@ -26,32 +29,63 @@ final class Navigation
             'badge' => $badge, 'tone' => $tone, 'active' => $active ?? $route.'*',
         ];
 
-        $items = [
-            $item('dashboard', 'dashboard', 'dashboard'),
-            $item('my_work', 'my-work', 'inbox', $this->myWork->actionableCount($user)),
-        ];
+        $items = [$item('dashboard', 'dashboard', 'dashboard')];
 
+        // A National Movement's own users. The Board Chairperson has the ODP to sign, in
+        // My Work; the National General Secretary has no work to act on. Both read their
+        // movement's approved documents in Resources, where the NGS also adds evidence.
         if (! $user->isSecretariat()) {
+            if (self::hasMyWork($user)) {
+                $items[] = $item('my_work', 'my-work', 'inbox', $this->myWork->actionableCount($user));
+            }
             $items[] = $item('our_movement', 'movements.show', 'flag', params: ['movement' => $user->movement], active: 'movements.*');
             $items[] = $item('resources', 'resources', 'folder_open');
 
             return $items;
         }
 
+        // AAYMCA: staff see their own work; the Administrators also hand out the
+        // assessments (Assessments) and manage the users (Users & Roles).
+        $items[] = $item('my_work', 'my-work', 'inbox', $this->myWork->actionableCount($user));
         $items[] = $item('movements', 'movements.index', 'public',
             MovementStatus::query()->where('reassessment_overdue', true)->count(), 'warning', active: 'movements.*');
-        $items[] = $item('assessments', 'assessments.index', 'fact_check', active: 'assessments.*');
-        $items[] = $item('resources', 'resources', 'folder_open');
-
-        if ($user->isAssessor()) {
-            $items[] = $item('timelines', 'timelines', 'event_note', $this->overdueMilestones($user));
+        if ($user->isAdmin()) {
+            $items[] = $item('assessments', 'assessments.index', 'fact_check',
+                $this->unassigned(), 'warning', active: 'assessments.*');
         }
+        $items[] = $item('resources', 'resources', 'folder_open');
+        $items[] = $item('timelines', 'timelines', 'event_note', $this->overdue($user));
 
         if (Gate::forUser($user)->allows('manage', User::class)) {
             $items[] = $item('users', 'admin.users.index', 'manage_accounts', active: 'admin.users.*');
         }
 
         return $items;
+    }
+
+    /** Everyone has My Work except the National General Secretary, who has no work in the platform yet. */
+    public static function hasMyWork(User $user): bool
+    {
+        return $user->role !== Role::Ngs;
+    }
+
+    /** Movements with an assessment under way, or never assessed, that nobody is assessing. */
+    private function unassigned(): int
+    {
+        return Movement::query()->whereDoesntHave('assessors', fn ($q) => $q->where('active', true))
+            ->where(fn ($q) => $q->whereHas('assessments', fn ($a) => $a->whereHas('workItem'))->orWhereDoesntHave('assessments'))
+            ->count();
+    }
+
+    /** Overdue gate milestones and ODP tasks on the movements this user may see on Timelines. */
+    private function overdue(User $user): int
+    {
+        $odps = OdpTimeline::assessments($user->oversees() ? null : $user->assignedMovements()->pluck('movements.id')->all());
+
+        return $this->overdueMilestones($user) + OdpTask::query()
+            ->whereIn('assessment_id', $odps->pluck('id'))
+            ->where('done', false)->whereNotNull('due_on')->where('due_on', '<', today())
+            ->count();
     }
 
     /** Overdue gate milestones on the assessments this user can act on. */

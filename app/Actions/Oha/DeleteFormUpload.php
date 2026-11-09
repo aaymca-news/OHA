@@ -9,6 +9,7 @@ use App\Enums\FindingSeverity;
 use App\Models\FormUpload;
 use App\Models\User;
 use App\Support\Audit;
+use App\Support\Notify;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 
@@ -53,6 +54,8 @@ final class DeleteFormUpload
             }
 
             Audit::record($user, 'form.upload_deleted', $form, $assessment, $from, $form->state, payload: ['file' => $name, 'sha256' => $sha]);
+            Notify::colleagues($assessment, $user, "Deleted: OHA form upload, {$assessment->movement->name}",
+                "{$user->name} deleted the upload {$name}.".($wasCurrent ? ' The upload before it is current again.' : ''));
         });
     }
 }

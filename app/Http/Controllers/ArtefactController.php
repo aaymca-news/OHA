@@ -3,7 +3,6 @@
 namespace App\Http\Controllers;
 
 use App\Actions\Oha\ApproveArtefact;
-use App\Actions\Oha\AttachDocument;
 use App\Actions\Oha\LinkOdpToDrive;
 use App\Actions\Oha\SendBack;
 use App\Actions\Oha\SignAsBoard;
@@ -12,27 +11,33 @@ use App\Actions\Oha\TakeOdpFromDrive;
 use App\Actions\Oha\UploadForm;
 use App\Actions\Oha\UploadOdpVersion;
 use App\Actions\Oha\UploadReportVersion;
+use App\Actions\Oha\WithdrawVersion;
 use App\Enums\ArtefactKind;
-use App\Enums\DocumentPurpose;
 use App\Enums\FindingSeverity;
 use App\Models\Artefact;
+use App\Models\Document;
 use App\Oha\Report\ReadReport;
 use App\Oha\Report\ReportChecker;
+use App\Support\ReplaceGuard;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Gate;
 
 /**
  * Every workflow step on a form, report or ODP. Each hands straight to its action,
- * which checks the policy and gives the reason if it refuses.
+ * which checks the policy and gives the reason if it refuses. Uploads and submissions
+ * first check the page was up to date, so several assessors never undo each other's
+ * work unseen (ReplaceGuard).
  */
 class ArtefactController extends Controller
 {
     public function upload(Request $request, Artefact $artefact, UploadForm $upload): RedirectResponse
     {
         $request->validate(['form' => ['required', 'file', 'max:'.(int) config('oha.max_upload_kb')]]);
+        $replacing = $this->replacing($request, $artefact);
         $file = $request->file('form');
 
-        $stored = $upload->handle($artefact, (string) $file->getRealPath(), $file->getClientOriginalName(), $request->user());
+        $stored = $upload->handle($artefact, (string) $file->getRealPath(), $file->getClientOriginalName(), $request->user(), $replacing);
 
         $refused = $stored->findings->where('severity', FindingSeverity::Error)->count();
         $gaps = $stored->findings->where('severity', FindingSeverity::Missing)->count();
@@ -53,9 +58,10 @@ class ArtefactController extends Controller
             'report' => ['required', 'file', 'max:'.(int) config('oha.max_upload_kb')],
             'note' => ['nullable', 'string', 'max:2000'],
         ], ['report.required' => 'Choose the report file to save.']);
+        $replacing = $this->replacing($request, $artefact);
         $file = $request->file('report');
 
-        $version = $upload->handle($artefact, (string) $file->getRealPath(), $file->getClientOriginalName(), $request->user(), $request->input('note'));
+        $version = $upload->handle($artefact, (string) $file->getRealPath(), $file->getClientOriginalName(), $request->user(), $request->input('note'), $replacing);
 
         $flagged = count($checker->check(ReadReport::fromArray($version->extracted ?? []), $artefact->assessment)['findings']);
 
@@ -74,12 +80,42 @@ class ArtefactController extends Controller
             'odp.required' => 'Choose the ODP file to save.',
             'drive_url.required' => 'Add the link to the ODP in Google Drive, so everyone works on the same document.',
         ]);
+        $replacing = $this->replacing($request, $odp);
         $file = $request->file('odp');
 
         $version = $upload->handle($odp, (string) $file->getRealPath(), $file->getClientOriginalName(), $request->user(),
-            $request->input('note'), $request->input('drive_url'));
+            $request->input('note'), $request->input('drive_url'), $replacing);
 
         return $this->back($odp, 'Saved as version '.$version->versionNumber().'. Preview it, then submit it for approval when it is ready.');
+    }
+
+    /**
+     * Before an upload: the page showed what is current, and replacing it was confirmed
+     * (with a reason when it is a colleague's). Returns what the audit trail keeps.
+     *
+     * @return array<string, string>
+     */
+    private function replacing(Request $request, Artefact $artefact): array
+    {
+        $data = $request->validate(['seen' => ['nullable', 'integer'], 'replace' => ['boolean'], 'replace_reason' => ['nullable', 'string', 'max:2000']]);
+        // Someone not allowed to upload is told why by the action itself.
+        if (Gate::forUser($request->user())->denies('upload', $artefact)) {
+            return [];
+        }
+
+        return ReplaceGuard::forUpload($artefact, $request->user(), $data['seen'] ?? null, (bool) ($data['replace'] ?? false), $data['replace_reason'] ?? null);
+    }
+
+    /** Withdraws the newest version of the report or ODP; the one before it is current again. */
+    public function withdraw(Request $request, Document $document, WithdrawVersion $withdraw): RedirectResponse
+    {
+        $artefact = $document->artefact;
+        $number = $document->versionNumber();
+        $withdraw->handle($document, $request->user());
+
+        $current = ReplaceGuard::current($artefact);
+
+        return $this->back($artefact, "Version {$number} withdrawn.".($current instanceof Document ? ' Version '.$current->versionNumber().' is current again.' : ''));
     }
 
     /** Links (or re-links) the Google Drive document the ODP is written in. */
@@ -103,7 +139,10 @@ class ArtefactController extends Controller
 
     public function submit(Request $request, Artefact $artefact, SubmitForApproval $submit): RedirectResponse
     {
-        $data = $request->validate(['acknowledge_gaps' => ['boolean'], 'reason' => ['nullable', 'string', 'max:2000']]);
+        $data = $request->validate(['acknowledge_gaps' => ['boolean'], 'reason' => ['nullable', 'string', 'max:2000'], 'seen' => ['nullable', 'integer']]);
+        if (Gate::forUser($request->user())->allows('submit', $artefact)) {
+            ReplaceGuard::ensureSeen($artefact, $data['seen'] ?? null, 'submitting it');
+        }
         $submit->handle($artefact, $request->user(), (bool) ($data['acknowledge_gaps'] ?? false), $data['reason'] ?? null);
 
         return $this->back($artefact, 'Submitted for approval. The Administrators have been told.');
@@ -115,9 +154,9 @@ class ArtefactController extends Controller
         $approve->handle($artefact, $request->user(), $data['note'] ?? null, $data['revision'] ?? null, (bool) ($data['acknowledge_gaps'] ?? false));
 
         return $this->back($artefact, match ($artefact->kind) {
-            ArtefactKind::Form => 'Approved. The assessor can go on to the report, and all AAYMCA staff can now see the form.',
-            ArtefactKind::Report => 'Approved. All AAYMCA staff and the Board Chairperson can now see this version of the report.',
-            ArtefactKind::Odp => 'Approved. All AAYMCA staff can now see the ODP, and the Board Chairperson is asked to sign it.',
+            ArtefactKind::Form => 'Approved. The assessor can go on to the report, and all AAYMCA staff and the movement’s Board Chairperson and National General Secretary can now see the form.',
+            ArtefactKind::Report => 'Approved. All AAYMCA staff and the movement’s Board Chairperson and National General Secretary can now see this version of the report.',
+            ArtefactKind::Odp => 'Approved. All AAYMCA staff and the movement’s National General Secretary can now see the ODP, and the Board Chairperson is asked to sign it.',
         });
     }
 
@@ -141,18 +180,6 @@ class ArtefactController extends Controller
             $request->ip(), (string) $request->userAgent());
 
         return $this->back($artefact, 'Signed. The ODP is now validated by the board.');
-    }
-
-    /** A reference file attached to the ODP. */
-    public function attach(Request $request, Artefact $artefact, AttachDocument $attach): RedirectResponse
-    {
-        abort_unless($request->user()->canAssess($artefact->assessment->movement), 403);
-        $request->validate(['document' => ['required', 'file', 'mimes:docx,pdf,xlsx', 'max:20480']]);
-        $file = $request->file('document');
-
-        $attach->handle($artefact, (string) $file->getRealPath(), $file->getClientOriginalName(), DocumentPurpose::Reference, $request->user());
-
-        return $this->back($artefact, 'Reference document attached.');
     }
 
     private function back(Artefact $artefact, string $status): RedirectResponse

@@ -21,7 +21,7 @@ class AssessmentPolicy
         if ($user->isSecretariat()) {
             return Response::allow();
         }
-        if (! $user->isChairOf($assessment->movement)) {
+        if (! $user->isOfMovement($assessment->movement)) {
             return Response::deny('You see only your own movement.');
         }
 

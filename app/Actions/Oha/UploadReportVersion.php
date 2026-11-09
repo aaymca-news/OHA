@@ -26,7 +26,10 @@ final class UploadReportVersion
 
     public function __construct(private readonly ReportReader $reader) {}
 
-    public function handle(Artefact $report, string $sourcePath, string $originalName, User $uploader, ?string $note = null): Document
+    /**
+     * @param  array<string, string>  $replacing  what the audit trail keeps when it replaces a version (ReplaceGuard)
+     */
+    public function handle(Artefact $report, string $sourcePath, string $originalName, User $uploader, ?string $note = null, array $replacing = []): Document
     {
         if ($report->kind !== ArtefactKind::Report) {
             throw new WorkflowRuleBroken('Only the report is uploaded here.');
@@ -39,6 +42,6 @@ final class UploadReportVersion
         return $this->storeVersion($report, $sourcePath, $originalName, $uploader, $uploader, 'upload', [
             'note' => $note !== null && trim($note) !== '' ? trim($note) : null,
             'extracted' => $read->toArray(),
-        ]);
+        ], $replacing);
     }
 }

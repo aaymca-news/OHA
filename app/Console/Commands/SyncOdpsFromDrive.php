@@ -55,7 +55,9 @@ class SyncOdpsFromDrive extends Command
             return self::FAILURE;
         }
 
+        // Re-read: a count never incremented is only in the database, as its default 0.
         $run->update(['finished_at' => now()]);
+        $run->refresh();
         $this->info("Checked {$run->checked}, saved {$run->saved} new ".($run->saved === 1 ? 'version' : 'versions').", {$run->failed} could not be read.");
 
         return self::SUCCESS;

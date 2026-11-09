@@ -12,7 +12,7 @@
     ];
 @endphp
 <div class="flex flex-col gap-sm">
-    <div class="overflow-x-auto -mx-xs px-xs">
+    <div class="relative overflow-x-auto -mx-xs px-xs">
         <table class="w-full min-w-[40rem] text-[0.8125rem] border-separate border-spacing-[2px]">
             <thead>
                 <tr>

@@ -47,6 +47,27 @@ it('refuses the blank form uploaded unfilled', function () {
         ->and(collect($result->findings)->pluck('rule'))->toContain(FindingRule::EmptyForm);
 });
 
+it('reads the official blank form’s own prompts as blank', function () {
+    $answers = app(FormReader::class)->read($this->blank)->answers;
+
+    expect(array_filter($answers, fn ($v) => $v !== null && $v !== ''))->toBe([]);
+});
+
+it('agrees with the maximum scores written on the official form', function () {
+    // "1 General Information" B28:E36: each category's name and its maximum ("N/A" when unscored).
+    $sheet = IOFactory::load($this->blank)->getSheetByName('1 General Information');
+    $official = [];
+    foreach (array_keys(FormDefinition::categories()) as $i => $code) {
+        $max = $sheet->getCell('E'.(28 + $i))->getValue();
+        $official[$code] = is_numeric($max) ? (int) $max : null;
+    }
+
+    expect($official)->toBe(Category::query()->orderBy('form_order')->pluck('max_points', 'code')->all())
+        ->and(array_sum(array_filter($official)))->toBe(84)
+        ->and($official['staff'])->toBe(5)
+        ->and($official['property'])->toBeNull();
+});
+
 it('lets every category reach exactly its maximum, as the OW2026 template does', function () {
     $attainable = FormDefinition::attainablePoints();
 

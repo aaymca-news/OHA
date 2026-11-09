@@ -10,13 +10,14 @@ use Illuminate\Support\Collection;
 /**
  * The roles the workflow cannot run without: a Super Administrator (who appoints
  * the Administrators), an Administrator of either kind (who approves; their own work
- * too), and a Board Chairperson for every movement, who signs its ODP. Behind the
+ * too), and for every movement a Board Chairperson, who signs its ODP, and a National
+ * General Secretary, who supplies its evidence. Behind the
  * warning banner and the daily reminders.
  */
 final class SystemHealth
 {
     /**
-     * @return array{ok: bool, severity: string|null, problems: list<string>, movements_without_chair: list<string>}
+     * @return array{ok: bool, severity: string|null, problems: list<string>, movements_without_chair: list<string>, movements_without_gs: list<string>}
      */
     public static function check(): array
     {
@@ -44,7 +45,16 @@ final class SystemHealth
             $severity ??= 'serious';
         }
 
-        return ['ok' => $problems === [], 'severity' => $severity, 'problems' => $problems, 'movements_without_chair' => $withoutChair];
+        $withoutGs = Movement::query()->whereDoesntHave('generalSecretary')->orderBy('name')->pluck('name')->all();
+
+        if ($withoutGs !== []) {
+            $problems[] = count($withoutGs) === 1
+                ? "{$withoutGs[0]} has no National General Secretary, so it cannot supply its own evidence."
+                : count($withoutGs).' movements have no National General Secretary, so they cannot supply their own evidence.';
+            $severity ??= 'serious';
+        }
+
+        return ['ok' => $problems === [], 'severity' => $severity, 'problems' => $problems, 'movements_without_chair' => $withoutChair, 'movements_without_gs' => $withoutGs];
     }
 
     /**

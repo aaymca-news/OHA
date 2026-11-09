@@ -2,15 +2,19 @@
 
 namespace App\Models;
 
+use App\Enums\ArtefactKind;
 use App\Enums\DocumentFormat;
 use App\Enums\DocumentPurpose;
 use App\Enums\DocumentSource;
+use App\Support\OdpTimeline;
 use Database\Factories\DocumentFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\WithoutTimestamps;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Support\Facades\DB;
+use Throwable;
 
 /**
  * A downloadable report or ODP file, stored once and never overwritten. A version
@@ -73,6 +77,30 @@ class Document extends Model
     {
         return $this->version_number ?? Document::query()->where('artefact_id', $this->artefact_id)
             ->where('purpose', DocumentPurpose::Uploaded)->where('id', '<=', $this->id)->count();
+    }
+
+    /**
+     * A new ODP version (uploaded, or taken from Google Drive): its tasks are read into
+     * Timelines once it is saved. Reading them never stops the version being saved.
+     */
+    protected static function booted(): void
+    {
+        static::created(function (Document $document): void {
+            if ($document->purpose !== DocumentPurpose::Uploaded) {
+                return;
+            }
+            DB::afterCommit(function () use ($document): void {
+                $artefact = $document->artefact()->with('assessment')->first();
+                if ($artefact?->kind !== ArtefactKind::Odp || $artefact->assessment === null) {
+                    return;
+                }
+                try {
+                    OdpTimeline::refresh($artefact->assessment);
+                } catch (Throwable $e) {
+                    report($e);
+                }
+            });
+        });
     }
 
     /** A browser can show PDFs itself; Word files are drawn on the page by docx-preview. */

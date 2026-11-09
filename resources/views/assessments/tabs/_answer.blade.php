@@ -71,6 +71,9 @@
                     <span class="text-on-surface-variant">{{ $guide['example'] }}</span>
                     <span class="text-on-surface-variant">The form has {{ $shown($now[$code] ?? null) }}.</span>
                 </p>
+                @if ($several && ($why = \App\Oha\WhyItMatters::for($code)))
+                    <p class="text-[0.8125rem] text-on-surface-variant"><span class="font-semibold">Why it matters:</span> {{ $why }}</p>
+                @endif
             </div>
         @endforeach
     @elseif ($fields['kind'] === 'shares')

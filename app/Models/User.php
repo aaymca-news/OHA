@@ -41,7 +41,8 @@ class User extends Authenticatable
     }
 
     /**
-     * The movement whose Board Chairperson this is. NULL for Secretariat users.
+     * The movement whose Board Chairperson or National General Secretary this is. NULL
+     * for Secretariat users.
      *
      * @return BelongsTo<Movement, $this>
      */
@@ -63,7 +64,7 @@ class User extends Authenticatable
 
     public function isSecretariat(): bool
     {
-        return $this->role !== Role::Board;
+        return ! $this->role->isMovementRole();
     }
 
     /** Staff and both kinds of Administrator assess. */
@@ -99,10 +100,22 @@ class User extends Authenticatable
         return $this->active && $this->isAdmin();
     }
 
-    /** The Board Chairperson of this movement: its one user, who signs its ODP. */
+    /** The Board Chairperson of this movement, who signs its ODP. */
     public function isChairOf(Movement $movement): bool
     {
         return $this->role === Role::Board && $this->movement_id === $movement->id;
+    }
+
+    /** The National General Secretary of this movement, who supplies its evidence. */
+    public function isGeneralSecretaryOf(Movement $movement): bool
+    {
+        return $this->role === Role::Ngs && $this->movement_id === $movement->id;
+    }
+
+    /** One of this movement's own users (its Board Chairperson or National General Secretary). */
+    public function isOfMovement(Movement $movement): bool
+    {
+        return $this->role->isMovementRole() && $this->movement_id === $movement->id;
     }
 
     /** An invited user who has not yet set a password. */

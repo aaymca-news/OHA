@@ -1,7 +1,7 @@
 {{-- Category scores (from App\Oha\CategoryRows) with the overall total. --}}
 @props(['rows', 'total' => null])
 @php($tones = ['excellent' => 'good', 'strong' => 'good', 'developing' => 'warning', 'atrisk' => 'serious', 'critical' => 'critical'])
-<div class="overflow-x-auto">
+<div class="relative overflow-x-auto">
     <table class="w-full text-[0.875rem]">
         <thead class="text-left text-[0.8125rem] uppercase tracking-wider text-on-surface-variant">
             <tr class="border-b-[1.5px] border-outline-variant">

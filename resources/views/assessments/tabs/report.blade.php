@@ -21,8 +21,13 @@
     @if ($status->published && ! $artefact->isApproved() && $seesDrafts)
         <span class="flex items-center gap-xs text-on-surface-variant">
             <span class="material-symbols-outlined text-[1.125rem]" aria-hidden="true">visibility</span>
-            Staff and the Board Chairperson see the last approved version until the new one is approved.
+            Staff and the movement’s Board Chairperson and National General Secretary see the last approved version until the new one is approved.
         </span>
+    @endif
+    @if (auth()->user()->isSecretariat())
+    <a href="{{ route('downloads.report-template') }}" class="ml-auto inline-flex items-center gap-xs text-primary underline">
+        <span class="material-symbols-outlined text-[1.125rem]" aria-hidden="true">download</span> Download the report template
+    </a>
     @endif
 </div>
 
@@ -46,7 +51,7 @@
               x-data="{ name: '', over: false }" class="flex flex-col gap-sm">
             @csrf
             @if ($artefact->isApproved())
-                <p class="p-sm rounded bg-surface-container text-[0.875rem]">This report is approved. A new version goes back to the Administrators for approval; until then, staff and the Board Chairperson keep seeing the approved version.</p>
+                <p class="p-sm rounded bg-surface-container text-[0.875rem]">This report is approved. A new version goes back to the Administrators for approval; until then, staff and the movement’s Board Chairperson and National General Secretary keep seeing the approved version.</p>
             @endif
             <label x-on:dragover.prevent="over = true" x-on:dragleave="over = false" x-on:drop="over = false"
                    :class="over ? 'border-primary bg-surface-container-low' : 'border-outline-variant'"
@@ -62,6 +67,7 @@
                     <textarea name="note" rows="2" class="px-sm py-2 rounded border-[1.5px] border-outline-variant">{{ old('note') }}</textarea>
                 </label>
             @endif
+            @include('assessments.tabs._replace-guard')
             <x-button class="self-start">
                 <span class="inline-flex items-center gap-xs"><span class="material-symbols-outlined text-[1.125rem]" aria-hidden="true">save</span> Save</span>
             </x-button>
@@ -73,6 +79,7 @@
 @if (Gate::allows('submit', $artefact) && Gate::denies('approve', $artefact))
     <form method="POST" action="{{ route('artefacts.submit', $artefact) }}" class="flex flex-wrap items-center gap-sm">
         @csrf
+        <input type="hidden" name="seen" value="{{ \App\Support\ReplaceGuard::current($artefact)?->id ?? 0 }}">
         <x-button>Submit version {{ $versions->firstWhere('id', $latestId)?->number }} for approval</x-button>
         <span class="text-[0.8125rem] text-on-surface-variant">It goes to the Administrators to approve.</span>
     </form>

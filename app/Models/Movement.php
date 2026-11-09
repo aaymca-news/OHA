@@ -11,6 +11,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasManyThrough;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 
 #[Fillable(['slug', 'name', 'country', 'city', 'zone_id', 'membership_status_id', 'planned_assessment_label', 'planned_assessment_on'])]
@@ -55,14 +56,45 @@ class Movement extends Model
     }
 
     /**
-     * The movement's one user, its active Board Chairperson, who signs its ODP.
-     * The database allows only one active Chairperson per movement.
+     * The movement's active Board Chairperson, who signs its ODP. The database allows
+     * only one active Chairperson per movement.
      *
      * @return HasOne<User, $this>
      */
     public function chair(): HasOne
     {
-        return $this->hasOne(User::class)->where('role', Role::Board)->where('active', true);
+        return $this->holder(Role::Board);
+    }
+
+    /**
+     * The movement's active National General Secretary, who supplies its evidence. The
+     * database allows only one per movement.
+     *
+     * @return HasOne<User, $this>
+     */
+    public function generalSecretary(): HasOne
+    {
+        return $this->holder(Role::Ngs);
+    }
+
+    /**
+     * The active holder of one of the movement's own roles.
+     *
+     * @return HasOne<User, $this>
+     */
+    public function holder(Role $role): HasOne
+    {
+        return $this->hasOne(User::class)->where('role', $role)->where('active', true);
+    }
+
+    /**
+     * The evidence supplied for its assessments.
+     *
+     * @return HasManyThrough<Evidence, Assessment, $this>
+     */
+    public function evidence(): HasManyThrough
+    {
+        return $this->hasManyThrough(Evidence::class, Assessment::class);
     }
 
     /**

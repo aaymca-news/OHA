@@ -21,7 +21,11 @@ final class FormDefinition
     public const VERSION = 'Version 1.0 - 2026';
 
     /** Answers that are really the form's own prompts, and so read as blank. */
-    public const PLACEHOLDERS = ['/^please choose an option$/i', '/^please write your answer here$/i'];
+    public const PLACEHOLDERS = [
+        '/^please choose an option$/i', '/^please write your answer here$/i',
+        // The official blank's own prompts at Q208 (currency) and Q312.
+        '/^please write in full$/i', '/^please write here your answer$/i',
+    ];
 
     public const INCOME = ['Q214', 'Q215', 'Q216', 'Q217', 'Q218', 'Q219', 'Q220', 'Q221', 'Q222'];
 

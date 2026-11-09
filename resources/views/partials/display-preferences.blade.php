@@ -8,8 +8,10 @@
     (function () {
         var root = document.documentElement;
         try {
-            var size = localStorage.getItem('oha.textSize');
-            if (size === 'large' || size === 'larger') root.dataset.textSize = size;
+            // Text size, as a percentage (90 to 140). An older choice of "Large" or "Larger" carries over.
+            var scale = parseInt(localStorage.getItem('oha.textScale') || '', 10);
+            if (!scale) scale = { large: 110, larger: 125 }[localStorage.getItem('oha.textSize')] || 100;
+            if (scale >= 90 && scale <= 140 && scale !== 100) root.style.fontSize = scale + '%';
             if (localStorage.getItem('oha.sidebar') === 'collapsed') root.dataset.sidebar = 'collapsed';
             var width = parseInt(localStorage.getItem('oha.sidebarWidth') || '', 10);
             if (width >= 208) root.style.setProperty('--sidebar-w', width + 'px');

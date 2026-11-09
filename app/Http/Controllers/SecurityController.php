@@ -3,39 +3,37 @@
 namespace App\Http\Controllers;
 
 use App\Actions\Users\SignOutOtherSessions;
+use App\Support\SignedInDevices;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Carbon;
-use Illuminate\Support\Facades\DB;
 use Illuminate\View\View;
 
 /**
  * A user's own security settings: their password, and the browsers and devices
- * they are signed in on. (Their photo and details are on My profile.)
+ * they are signed in on (also shown on My profile).
  */
 class SecurityController extends Controller
 {
     public function show(Request $request): View
     {
-        $user = $request->user();
-
-        $sessions = DB::table('sessions')->where('user_id', $user->id)->orderByDesc('last_activity')->get()
-            ->map(fn (object $s) => [
-                'current' => $s->id === $request->session()->getId(),
-                'ip' => $s->ip_address,
-                'agent' => (string) $s->user_agent,
-                'last_active' => Carbon::createFromTimestamp($s->last_activity),
-            ]);
-
-        return view('security.show', ['user' => $user, 'sessions' => $sessions]);
+        return view('security.show', [
+            'user' => $request->user(),
+            'sessions' => SignedInDevices::of($request->user(), $request->session()->getId()),
+        ]);
     }
 
+    /** Signs out one other device (device=its key), or every other one. */
     public function signOutOtherSessions(Request $request, SignOutOtherSessions $action): RedirectResponse
     {
-        $request->validate(['password' => ['required', 'string']]);
+        $data = $request->validate(['password' => ['required', 'string'], 'device' => ['nullable', 'string', 'size:32']],
+            ['password.required' => 'Type your password to sign out another device.']);
 
-        $count = $action->handle($request->user(), (string) $request->input('password'), $request->session()->getId());
+        $count = $action->handle($request->user(), $data['password'], $request->session()->getId(), $data['device'] ?? null);
 
-        return back()->with('status', $count === 1 ? 'Signed out of 1 other session.' : "Signed out of {$count} other sessions.");
+        return back()->with('status', match (true) {
+            isset($data['device']) => 'That device is signed out. It can sign in again with your password.',
+            $count === 1 => 'Signed out of 1 other device.',
+            default => "Signed out of {$count} other devices.",
+        });
     }
 }

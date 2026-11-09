@@ -25,8 +25,6 @@ class UpdateUserRequest extends FormRequest
             'name' => ['required', 'string', 'max:255'],
             'email' => ['required', 'email:rfc', 'max:255', Rule::unique('users', 'email')->ignore($target->id)],
             'title' => ['nullable', 'string', 'max:80'],
-            'movement_ids' => ['array'],
-            'movement_ids.*' => ['integer', 'exists:movements,id'],
         ];
     }
 

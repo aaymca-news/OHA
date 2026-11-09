@@ -134,14 +134,9 @@
 
 /*
  * Readability. Every text size is in rem, so the reader's own browser setting counts,
- * and the "Text size" choice (user menu) scales the whole page from here.
+ * and the "Text size" slider (user menu, My profile) scales the whole page by setting
+ * the root font size (see partials/display-preferences).
  */
-html[data-text-size='large'] {
-    font-size: 112.5%;
-}
-html[data-text-size='larger'] {
-    font-size: 125%;
-}
 
 /*
  * Phones and tablets. iPhones zoom the whole page in when a box with text under 16px is

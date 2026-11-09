@@ -107,12 +107,14 @@ final class FormChecker
     /**
      * Exact on the country (Q102), ignoring spacing, accents and hyphens: a loose
      * "contains" would let a Guinea-Bissau form through against Guinea. Country
-     * plus capital ("Guinea Conakry") is accepted too. Only when Q102 is blank does
-     * it fall back to the legal name (Q101).
+     * plus capital ("Guinea Conakry") is accepted too, and so is the country's official
+     * long name ("Federal Republic of Nigeria"). Only when Q102 is blank does it fall
+     * back to the legal name (Q101).
      */
     private function checkMovement(ReadForm $form, Movement $expected): void
     {
         $normalise = fn (mixed $v) => (string) preg_replace('/[^a-z]/', '', (string) Normalizer::normalize(Answer::lower($v), Normalizer::FORM_D));
+        $shortName = fn (mixed $v) => preg_replace('/^\s*(the\s+)?(((federal|democratic|united|islamic)\s+)*(republic|kingdom|state)\s+of\s+(the\s+)?)?/i', '', (string) $v);
 
         $want = $normalise($expected->country);
         $accepted = [$want, $want.$normalise($expected->city)];
@@ -120,7 +122,7 @@ final class FormChecker
         $legalName = $form->answers['Q101'] ?? null;
 
         $mismatch = Answer::has($country)
-            ? ! in_array($normalise($country), $accepted, true)
+            ? ! in_array($normalise($shortName($country)), $accepted, true)
             : Answer::has($legalName) && ! str_contains($normalise($legalName), $want);
 
         if ($want !== '' && $mismatch) {
@@ -251,6 +253,18 @@ final class FormChecker
                 continue;
             }
 
+            // One share cannot be more than the whole, nor below nothing.
+            foreach ($filled as $index => $share) {
+                if ($share < 0 || $share > 100) {
+                    $code = $group['keys'][$index];
+                    $this->add(FindingSeverity::Warning, FindingRule::OutOfRange,
+                        $code.' is '.$this->figure($share).'%, outside 0–100.',
+                        location: ($form->locations[$code]['sheet'] ?? '').' · '.$code,
+                        hint: 'One share cannot be more than the whole. Percentages are entered as whole numbers, e.g. 25 for 25%.',
+                        question: $code, category: 'financial');
+                }
+            }
+
             $sum = array_sum($filled);
             if (abs($sum - 100) > 2) {
                 $this->add(FindingSeverity::Warning, FindingRule::SumMismatch,
@@ -314,9 +328,55 @@ final class FormChecker
                 hint: 'Confirm the figures with the movement’s finance lead.', question: 'Q213', category: 'financial');
         }
 
+        // Current liabilities above current assets: the YMCA cannot pay this year's bills from what it holds.
+        [$assets, $liabilities] = [$money('Q209'), $money('Q210')];
+        if ($assets !== null && $liabilities !== null && $liabilities > $assets) {
+            $this->add(FindingSeverity::Warning, FindingRule::Inconsistent,
+                'Current liabilities ('.$this->figure($liabilities).') are greater than current assets ('.$this->figure($assets).').',
+                location: ($form->locations['Q210']['sheet'] ?? '').' · Q209–Q210',
+                hint: 'If right, the YMCA cannot pay the bills due this year from what it holds: a liquidity risk for the report and the ODP. If not, confirm the figures with the finance lead.',
+                question: 'Q210', category: 'financial');
+        }
+
+        // A cash reserve is part of the current assets, so cannot be larger.
+        $reserve = $money('Q240');
+        if ($assets !== null && $reserve !== null && $reserve > $assets) {
+            $this->add(FindingSeverity::Warning, FindingRule::Inconsistent,
+                'The cash reserve ('.$this->figure($reserve).') is larger than the current assets ('.$this->figure($assets).').',
+                location: ($form->locations['Q240']['sheet'] ?? '').' · Q209, Q240',
+                hint: 'Cash and liquid assets are part of the current assets. One of the two figures is wrong.',
+                question: 'Q240', category: 'financial');
+        }
+
+        // Fundraising is part of the expenditure.
+        $fundraising = $money('Q246');
+        if ($spent !== null && $fundraising !== null && $fundraising > $spent) {
+            $this->add(FindingSeverity::Warning, FindingRule::Inconsistent,
+                'The cost of fundraising ('.$this->figure($fundraising).') is more than the total expenditure ('.$this->figure($spent).').',
+                location: ($form->locations['Q246']['sheet'] ?? '').' · Q212, Q246',
+                hint: 'Fundraising is part of the year’s spending. Check whether Q246 is in another currency or for several years.',
+                question: 'Q246', category: 'financial');
+        }
+
+        // Income shares given for an income of nothing.
+        $shares = array_filter(array_map(fn ($code) => $n($code), FormDefinition::INCOME), fn ($v) => $v !== null && $v > 0);
+        if ($income !== null && $income <= 0 && $shares !== []) {
+            $this->add(FindingSeverity::Warning, FindingRule::Inconsistent,
+                'Q211 gives a total income of '.$this->figure($income).', but Q214–Q222 share income out between sources.',
+                location: ($form->locations['Q211']['sheet'] ?? '').' · Q211',
+                hint: 'Ask the movement for the past year’s total income.',
+                question: 'Q211', category: 'financial');
+        }
+
         $board = ($n('Q315') ?? 0) + ($n('Q316') ?? 0) + ($n('Q317') ?? 0);
         $min = $n('Q313');
         $max = $n('Q314');
+        if ($min !== null && $max !== null && $min > $max) {
+            $this->add(FindingSeverity::Warning, FindingRule::Inconsistent,
+                'The minimum number of board members ('.$this->figure($min).') is greater than the maximum ('.$this->figure($max).').',
+                location: ($form->locations['Q313']['sheet'] ?? '').' · Q313–Q314',
+                hint: 'The two may have been swapped. Check them against the constitution.', category: 'governance');
+        }
         if ($board && $min !== null && $max !== null && ($board < $min || $board > $max)) {
             $this->add(FindingSeverity::Warning, FindingRule::Inconsistent,
                 'The board has '.$this->figure($board).' members, outside the constitutional range of '.$this->figure($min).'–'.$this->figure($max).'.',

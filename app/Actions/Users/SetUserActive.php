@@ -2,7 +2,6 @@
 
 namespace App\Actions\Users;
 
-use App\Enums\Role;
 use App\Exceptions\WorkflowRuleBroken;
 use App\Models\User;
 use App\Support\Audit;
@@ -30,10 +29,10 @@ final class SetUserActive
                 return $user;
             }
 
-            if ($active && $user->role === Role::Board) {
-                $current = $user->movement->chair()->first();
+            if ($active && $user->role->isMovementRole()) {
+                $current = $user->movement->holder($user->role)->first();
                 if ($current !== null) {
-                    throw new WorkflowRuleBroken("{$current->name} is now {$user->movement->name}’s Board Chairperson, and a movement has one. Deactivate them first.");
+                    throw new WorkflowRuleBroken("{$current->name} is now {$user->movement->name}’s {$user->role->label()}, and a movement has one. Deactivate them first.");
                 }
             }
 

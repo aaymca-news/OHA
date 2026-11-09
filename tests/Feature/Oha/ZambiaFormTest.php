@@ -59,9 +59,15 @@ it('reads the form’s own prompt as a blank answer', function () {
 });
 
 it('flags the staff head count that does not add up', function () {
-    $warning = collect($this->result->findings)->firstWhere('rule', FindingRule::Inconsistent);
+    $warning = collect($this->result->findings)->first(fn ($f) => $f->rule === FindingRule::Inconsistent && $f->categoryCode === 'staff');
 
     expect($warning->message)->toContain('22')->toContain('33');
+});
+
+it('flags current liabilities greater than current assets', function () {
+    $warning = collect($this->result->findings)->first(fn ($f) => $f->rule === FindingRule::Inconsistent && $f->questionCode === 'Q210');
+
+    expect($warning->message)->toContain('5195243')->toContain('2136438');
 });
 
 it('captures the improvement comments the report is built from', function () {

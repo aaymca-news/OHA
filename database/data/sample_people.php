@@ -6,7 +6,8 @@
  * Generated once from the Stage 1 prototype (app/js/data/users.js). The Secretariat
  * names match the prototype walkthrough; the Board Chairpersons are invented placeholders.
  * AAYMCA: one Super Administrator, two Administrators (the former O.H.A Leads) and
- * Staff. Each movement has one user, its Board Chairperson.
+ * Staff. Each movement has two users: its Board Chairperson and its National
+ * General Secretary.
  */
 
 return [
@@ -42,5 +43,31 @@ return [
         'malawi' => ['name' => 'Mutinta Hamusonde', 'title' => 'Board Chairperson'],
         'guinea-bissau' => ['name' => 'Haja Koroma', 'title' => 'Board Chairperson'],
         'guinea-conakry' => ['name' => 'Djeneba Coulibaly', 'title' => 'Board Chairperson'],
+    ],
+    // Invented placeholders: each movement's National General Secretary (30 Oct 2026).
+    'general_secretaries' => [
+        'sierra-leone' => ['name' => 'Mohamed Kanu', 'title' => 'National General Secretary'],
+        'madagascar' => ['name' => 'Hery Rakoto', 'title' => 'National General Secretary'],
+        'ethiopia' => ['name' => 'Dawit Bekele', 'title' => 'National General Secretary'],
+        'zambia' => ['name' => 'Mwila Banda', 'title' => 'National General Secretary'],
+        'togo' => ['name' => 'Kossi Agbeko', 'title' => 'National General Secretary'],
+        'ghana' => ['name' => 'Kofi Mensah', 'title' => 'National General Secretary'],
+        'liberia' => ['name' => 'Joseph Kollie', 'title' => 'National General Secretary'],
+        'zimbabwe' => ['name' => 'Tatenda Ncube', 'title' => 'National General Secretary'],
+        'south-africa' => ['name' => 'Sipho Dlamini', 'title' => 'National General Secretary'],
+        'cameroon' => ['name' => 'Jean-Pierre Mbarga', 'title' => 'National General Secretary'],
+        'south-sudan' => ['name' => 'Deng Garang', 'title' => 'National General Secretary'],
+        'nigeria' => ['name' => 'Chinedu Okafor', 'title' => 'National General Secretary'],
+        'senegal' => ['name' => 'Ousmane Sow', 'title' => 'National General Secretary'],
+        'namibia' => ['name' => 'Tuhafeni Shilongo', 'title' => 'National General Secretary'],
+        'burundi' => ['name' => 'Eric Ndayishimiye', 'title' => 'National General Secretary'],
+        'kenya' => ['name' => 'Brian Otieno', 'title' => 'National General Secretary'],
+        'benin' => ['name' => 'Codjo Houngbo', 'title' => 'National General Secretary'],
+        'niger' => ['name' => 'Issoufou Maiga', 'title' => 'National General Secretary'],
+        'tanzania' => ['name' => 'Baraka Mushi', 'title' => 'National General Secretary'],
+        'gambia' => ['name' => 'Lamin Ceesay', 'title' => 'National General Secretary'],
+        'malawi' => ['name' => 'Chikondi Phiri', 'title' => 'National General Secretary'],
+        'guinea-bissau' => ['name' => 'Braima Embalo', 'title' => 'National General Secretary'],
+        'guinea-conakry' => ['name' => 'Mamadou Bah', 'title' => 'National General Secretary'],
     ],
 ];

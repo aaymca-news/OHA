@@ -22,7 +22,7 @@ class DocumentFactory extends Factory
     {
         return [
             'artefact_id' => Artefact::factory()->kind(ArtefactKind::Report),
-            'purpose' => DocumentPurpose::Reference,
+            'purpose' => DocumentPurpose::Uploaded,
             'format' => DocumentFormat::Docx,
             'disk' => 'local',
             'path' => 'oha/documents/'.fake()->uuid().'.docx',

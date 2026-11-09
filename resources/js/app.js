@@ -184,7 +184,7 @@ Alpine.data('layout', () => ({
     menu: false,
     collapsed: document.documentElement.dataset.sidebar === 'collapsed',
     width: parseInt(getComputedStyle(document.documentElement).getPropertyValue('--sidebar-w'), 10) || 240,
-    textSize: document.documentElement.dataset.textSize || 'normal',
+    textScale: parseInt(document.documentElement.style.fontSize, 10) || 100,
 
     wide() {
         return window.matchMedia('(min-width: 64rem)').matches;
@@ -254,14 +254,12 @@ Alpine.data('layout', () => ({
         }
     },
 
-    setTextSize(size) {
-        this.textSize = size;
-        if (size === 'normal') {
-            delete document.documentElement.dataset.textSize;
-        } else {
-            document.documentElement.dataset.textSize = size;
-        }
-        store.set('oha.textSize', size === 'normal' ? null : size);
+    // Text size as a percentage of the reader's own browser setting; 100 is unchanged.
+    setTextScale(value) {
+        this.textScale = Math.min(140, Math.max(90, Math.round(value / 5) * 5));
+        document.documentElement.style.fontSize = this.textScale === 100 ? '' : this.textScale + '%';
+        store.set('oha.textScale', this.textScale === 100 ? null : String(this.textScale));
+        store.set('oha.textSize', null);
     },
 }));
 

@@ -12,8 +12,8 @@ use Illuminate\Support\Str;
 use RuntimeException;
 
 /**
- * SAMPLE Secretariat users and one Board Chairperson per movement, for local
- * development and demos.
+ * SAMPLE Secretariat users and, for each movement, one Board Chairperson and one
+ * National General Secretary, for local development and demos.
  *
  * Every account gets the password "password", so this seeder refuses to run in
  * production. Real users are invited by an Administrator.
@@ -28,7 +28,7 @@ class SamplePeopleSeeder extends Seeder
             throw new RuntimeException('SamplePeopleSeeder creates accounts with a known password and must not run in production.');
         }
 
-        /** @var array{secretariat: list<array{name: string, role: string, title: string, movements: list<string>}>, chairs: array<string, array{name: string, title: string}>} $people */
+        /** @var array{secretariat: list<array{name: string, role: string, title: string, movements: list<string>}>, chairs: array<string, array{name: string, title: string}>, general_secretaries: array<string, array{name: string, title: string}>} $people */
         $people = require database_path('data/sample_people.php');
 
         $movements = Movement::query()->pluck('id', 'slug');
@@ -49,15 +49,17 @@ class SamplePeopleSeeder extends Seeder
                 );
             }
 
-            foreach ($people['chairs'] as $slug => $chair) {
-                User::query()->firstOrCreate(['email' => $this->email($chair['name'], $slug)], [
-                    'name' => $chair['name'],
-                    'password' => $password,
-                    'email_verified_at' => now(),
-                    'role' => Role::Board,
-                    'title' => $chair['title'],
-                    'movement_id' => $movements[$slug],
-                ]);
+            foreach ([Role::Board->value => $people['chairs'], Role::Ngs->value => $people['general_secretaries']] as $role => $holders) {
+                foreach ($holders as $slug => $holder) {
+                    User::query()->firstOrCreate(['email' => $this->email($holder['name'], $slug)], [
+                        'name' => $holder['name'],
+                        'password' => $password,
+                        'email_verified_at' => now(),
+                        'role' => Role::from($role),
+                        'title' => $holder['title'],
+                        'movement_id' => $movements[$slug],
+                    ]);
+                }
             }
         });
     }

@@ -1,4 +1,4 @@
-<x-layouts.app :title="__('oha.nav.profile')" subtitle="Your photo and details. Your password and sign-ins are under Security.">
+<x-layouts.app :title="__('oha.nav.profile')" subtitle="Your photo and details, the text size, and the devices you are signed in on. Your password is under Security.">
     <div class="grid lg:grid-cols-2 gap-md items-start">
         {{-- Profile photo: shown wherever the person's name appears. --}}
         <section class="min-w-0 bg-surface-container-lowest border-[1.5px] border-outline-variant rounded-lg p-md sm:p-lg flex flex-col gap-md">
@@ -58,12 +58,18 @@
                 @csrf
                 @method('PUT')
                 <x-input name="name" label="Full name" :value="$user->name" required autocomplete="name" />
-                <x-input name="title" label="Job title" :value="$user->title" autocomplete="organization-title"
-                         :hint="$user->isSecretariat() ? 'For example: Zonal Coordinator, East Africa' : 'For example: Board Chairperson'" />
+                {{-- A National Movement's Board Chairperson and General Secretary hold the title of their role. --}}
+                @if ($user->isSecretariat())
+                    <x-input name="title" label="Job title" :value="$user->title" autocomplete="organization-title" hint="For example: Zonal Coordinator, East Africa" />
+                @endif
                 <x-button class="self-start">Save details</x-button>
             </form>
 
             <dl class="grid grid-cols-[auto_1fr] gap-x-md gap-y-xs text-[0.875rem] border-t border-surface-container pt-md">
+                @unless ($user->isSecretariat())
+                    <dt class="text-on-surface-variant">Job title</dt>
+                    <dd>{{ $user->title ?: $user->role->label() }}</dd>
+                @endunless
                 <dt class="text-on-surface-variant">Email (sign-in)</dt>
                 <dd class="break-all">{{ $user->email }}</dd>
                 <dt class="text-on-surface-variant">Role</dt>
@@ -76,7 +82,20 @@
                     <dd>{{ $user->assignedMovements->sortBy('name')->pluck('name')->join(', ') ?: 'No movements yet' }}</dd>
                 @endif
             </dl>
-            <p class="text-[0.8125rem] text-on-surface-variant">Your email, role and movements are set by the Administrators. Ask one of them if something here is wrong.</p>
+            <p class="text-[0.8125rem] text-on-surface-variant">
+                Your email, {{ $user->isSecretariat() ? 'role and the movements you assess' : 'job title and role' }} are set by the Administrators. Ask one of them if something here is wrong.
+            </p>
         </section>
+
+        {{-- How the platform looks on this device. --}}
+        <section class="min-w-0 bg-surface-container-lowest border-[1.5px] border-outline-variant rounded-lg p-md sm:p-lg flex flex-col gap-md">
+            <div>
+                <h2 class="text-[1.125rem] font-bold text-primary">Display</h2>
+                <p class="text-[0.875rem] text-on-surface-variant">Make the text larger or smaller everywhere in the platform. It is remembered on this device; the same slider is in the menu under your name.</p>
+            </div>
+            @include('partials.text-size', ['id' => 'text-scale-profile'])
+        </section>
+
+        @include('security._devices')
     </div>
 </x-layouts.app>

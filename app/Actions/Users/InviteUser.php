@@ -41,13 +41,13 @@ final class InviteUser
         $this->ensureAdmin($admin);
         $this->ensureAllowed($admin, 'grantRole', [User::class, $role]);
 
-        if ($role === Role::Board && $chairOf === null) {
-            throw new WorkflowRuleBroken('A Board Chairperson belongs to a movement: choose which one.');
+        if ($role->isMovementRole() && $chairOf === null) {
+            throw new WorkflowRuleBroken("A {$role->label()} belongs to a movement: choose which one.");
         }
 
         return DB::transaction(function () use ($admin, $name, $email, $role, $title, $movementIds, $chairOf, $confirmReplace): User {
-            if ($role === Role::Board) {
-                $this->vacateChair($admin, $chairOf, null, $confirmReplace, trim($name));
+            if ($role->isMovementRole()) {
+                $this->vacate($admin, $role, $chairOf, null, $confirmReplace, trim($name));
             }
 
             $user = User::query()->create([
@@ -56,7 +56,7 @@ final class InviteUser
                 'password' => Hash::make(Str::random(64)),
                 'role' => $role,
                 'title' => $title !== null && trim($title) !== '' ? trim($title) : null,
-                'movement_id' => $role === Role::Board ? $chairOf->id : null,
+                'movement_id' => $role->isMovementRole() ? $chairOf->id : null,
                 'active' => true,
             ]);
 

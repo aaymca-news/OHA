@@ -35,7 +35,7 @@ dataset('pages', [
     'resources' => ['resources', fn () => [], '*'],
     'search' => ['search', fn () => ['q' => 'zam'], '*'],
     'movements list' => ['movements.index', fn () => [], 'secretariat'],
-    'assessments list' => ['assessments.index', fn () => [], 'secretariat'],
+    'assessments list' => ['assessments.index', fn () => [], ['super admin', 'admin', 'second admin']],
     'timelines' => ['timelines', fn () => [], 'secretariat'],
     'users & roles' => ['admin.users.index', fn () => [], ['super admin', 'admin', 'second admin']],
     'invite a user' => ['admin.users.create', fn () => [], ['super admin', 'admin', 'second admin']],

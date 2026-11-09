@@ -39,6 +39,19 @@
         @endforeach
     </nav>
 
+    {{-- Who last changed this document, for those working on it: several assessors see each other's steps. --}}
+    @if ($lastChange !== null && in_array($tab, ['form', 'report', 'odp'], true) && ($change = $lastChange($tab)))
+        <p class="flex flex-wrap items-center gap-xs text-[0.8125rem] text-on-surface-variant">
+            <span class="material-symbols-outlined text-[1.125rem]" aria-hidden="true">history</span>
+            Last change: <strong class="text-on-surface">{{ $change->actor?->name ?? 'The platform' }}</strong>
+            {{ str_replace(['.', '_'], [': ', ' '], $change->action) }},
+            <span title="{{ $change->occurred_at->format('j M Y, H:i') }}">{{ $change->occurred_at->diffForHumans() }}</span>
+            @if ($canAudit)
+                · <a href="{{ route('assessments.show', ['assessment' => $assessment, 'tab' => 'audit']) }}" class="text-primary underline">Audit trail</a>
+            @endif
+        </p>
+    @endif
+
     @switch($tab)
         @case('form')
             @include('assessments.tabs.form', ['form' => $artefacts['form']])

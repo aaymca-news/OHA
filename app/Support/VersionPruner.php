@@ -14,9 +14,10 @@ use Illuminate\Support\Facades\Storage;
 
 /**
  * Stage 1 keeps only what is needed, to save space: of the OHA form, the report and the
- * ODP, the last approved version (what everyone sees) and the newest (what is being
- * worked on). Versions in between are removed, with their files once nothing else uses
- * them. What happened stays in the audit trail. When the ODP is signed, only what was
+ * ODP, the last approved version (what everyone sees), the newest (what is being worked
+ * on) and, until the newest is approved, the one it replaced, so that a version uploaded by
+ * mistake, perhaps over a colleague's, can be withdrawn and theirs is current again. Older
+ * ones are removed, with their files once nothing else uses them. What happened stays in the audit trail. When the ODP is signed, only what was
  * approved is kept (finalise()); from then on the record is frozen.
  */
 final class VersionPruner
@@ -31,6 +32,8 @@ final class VersionPruner
         $all = $artefact->documents()->where('purpose', DocumentPurpose::Uploaded)->orderBy('id')->get();
         $keep = array_filter([
             $all->last()?->id,
+            // The one the newest replaced, while the newest can still be withdrawn.
+            $all->last()?->approved_at === null ? $all->slice(-2, 1)->first()?->id : null,
             $all->whereNotNull('approved_at')->last()?->id,
         ]);
         $signed = BoardSignature::query()->where('artefact_id', $artefact->id)->pluck('document_id')->filter()->all();
@@ -44,7 +47,7 @@ final class VersionPruner
         }
     }
 
-    /** The OHA form's uploads: the approved one (whose score is recorded) and the newest. */
+    /** The OHA form's uploads: the approved one (whose score is recorded), the newest and the one before it. */
     public static function uploads(Artefact $form): void
     {
         if ($form->assessment->isFrozen()) {
@@ -54,6 +57,8 @@ final class VersionPruner
         $all = $form->uploads()->orderBy('id')->get();
         $keep = array_filter([
             $all->last()?->id,
+            // The one the newest replaced, while the newest can still be deleted (not approved).
+            $all->last()?->approved_at === null ? $all->slice(-2, 1)->first()?->id : null,
             $all->whereNotNull('approved_at')->last()?->id,
             ...CategoryScore::query()->where('assessment_id', $form->assessment_id)->distinct()->pluck('form_upload_id')->all(),
         ]);

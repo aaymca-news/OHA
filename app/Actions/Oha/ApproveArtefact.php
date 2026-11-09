@@ -98,9 +98,9 @@ final class ApproveArtefact
             $name = SubmitForApproval::label($artefact).($version !== null ? " (version {$version})" : '');
             $movement = $assessment->movement->name;
             $onwards = match ($artefact->kind) {
-                ArtefactKind::Form => 'Its score is now recorded.',
-                ArtefactKind::Report => 'All AAYMCA staff and the Board Chairperson can now see it.',
-                ArtefactKind::Odp => 'All AAYMCA staff can now see it, and it is with the Board Chairperson for signature.',
+                ArtefactKind::Form => 'Its score is now recorded, and the movement’s Board Chairperson and National General Secretary can see it.',
+                ArtefactKind::Report => 'All AAYMCA staff and the movement’s Board Chairperson and National General Secretary can now see it.',
+                ArtefactKind::Odp => 'All AAYMCA staff and the movement’s National General Secretary can now see it, and it is with the Board Chairperson for signature.',
             };
             Notify::send([$artefact->submitter], new WorkflowNotice(
                 "Approved: {$name}, {$movement}",
@@ -108,13 +108,25 @@ final class ApproveArtefact
                 Notify::link($assessment), 'good',
             ), except: $approver);
 
-            if ($artefact->kind !== ArtefactKind::Form) {
-                $toSign = $artefact->kind === ArtefactKind::Odp;
+            // The movement's own users: each approved document to both; the ODP to the Board
+            // Chairperson to sign, and to the National General Secretary, who can now add evidence.
+            $approved = 'The '.SubmitForApproval::inSentence($name)." for {$movement} ({$assessment->period_label}) has been approved by AAYMCA.";
+            if ($artefact->kind === ArtefactKind::Odp) {
                 Notify::send([$assessment->movement->chair], new WorkflowNotice(
-                    ($toSign ? 'Please sign: ' : 'Now available: ')."{$name}, {$movement}",
-                    'The '.SubmitForApproval::inSentence($name)." for {$movement} ({$assessment->period_label}) has been approved by AAYMCA."
-                        .($toSign ? ' Please read it and sign it to validate it on behalf of your board.' : ' You can read and download it.'),
-                    Notify::link($assessment), $toSign ? 'action' : 'info',
+                    "Please sign: {$name}, {$movement}",
+                    $approved.' Please read it and sign it to validate it on behalf of your board.',
+                    Notify::link($assessment), 'action',
+                ));
+                Notify::send([$assessment->movement->generalSecretary], new WorkflowNotice(
+                    "Now available: {$name}, {$movement}",
+                    $approved.' You can read and download it in Resources, and you can now add your supporting documents there.',
+                    Notify::link($assessment), 'info',
+                ));
+            } else {
+                Notify::send([$assessment->movement->chair, $assessment->movement->generalSecretary], new WorkflowNotice(
+                    "Now available: {$name}, {$movement}",
+                    $approved.' You can read and download it in Resources.',
+                    Notify::link($assessment), 'info',
                 ));
             }
 

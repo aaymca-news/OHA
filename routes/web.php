@@ -1,10 +1,12 @@
 <?php
 
+use App\Http\Controllers\Admin\MovementController as AdminMovementController;
 use App\Http\Controllers\Admin\UserController;
 use App\Http\Controllers\ArtefactController;
 use App\Http\Controllers\AssessmentController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\DownloadController;
+use App\Http\Controllers\EvidenceController;
 use App\Http\Controllers\GapController;
 use App\Http\Controllers\InvitationController;
 use App\Http\Controllers\LandingController;
@@ -17,6 +19,7 @@ use App\Http\Controllers\ResourceController;
 use App\Http\Controllers\SearchController;
 use App\Http\Controllers\SecurityController;
 use App\Http\Controllers\TimelineController;
+use App\Models\Movement;
 use App\Models\User;
 use Illuminate\Support\Facades\Route;
 
@@ -67,8 +70,8 @@ Route::middleware('auth')->group(function () {
         Route::post('send-back', 'sendBack')->name('send-back');
         Route::post('versions', 'uploadVersion')->name('versions');
         Route::post('sign', 'sign')->name('sign');
-        Route::post('documents', 'attach')->name('attach');
     });
+    Route::delete('versions/{document}', [ArtefactController::class, 'withdraw'])->name('versions.withdraw');
 
     Route::post('findings/{finding}/resolve', [GapController::class, 'resolve'])->name('findings.resolve');
     Route::post('findings/{finding}/reopen', [GapController::class, 'reopen'])->name('findings.reopen');
@@ -87,13 +90,30 @@ Route::middleware('auth')->group(function () {
 
     Route::get('resources', ResourceController::class)->name('resources');
 
+    // Each movement's evidence library: supporting documents linked to the form and the ODP.
+    Route::get('resources/{movement}', [EvidenceController::class, 'index'])->name('evidence.index');
+    Route::post('resources/{movement}/evidence', [EvidenceController::class, 'store'])->middleware('throttle:30,1')->name('evidence.store');
+    Route::get('evidence/{evidence}/download', [EvidenceController::class, 'download'])->name('evidence.download');
+    Route::put('evidence/{evidence}/sharing', [EvidenceController::class, 'share'])->name('evidence.share');
+    Route::put('evidence/{evidence}/folder', [EvidenceController::class, 'move'])->name('evidence.move');
+    Route::delete('evidence/{evidence}', [EvidenceController::class, 'destroy'])->name('evidence.destroy');
+
     Route::put('assessments/{assessment}/timeline/gate', [TimelineController::class, 'setGate'])->name('timeline.gate');
     Route::post('assessments/{assessment}/timeline/steps', [TimelineController::class, 'addStep'])->name('timeline.steps.store');
     Route::put('timeline/steps/{step}', [TimelineController::class, 'updateStep'])->name('timeline.steps.update');
     Route::delete('timeline/steps/{step}', [TimelineController::class, 'removeStep'])->name('timeline.steps.destroy');
+    // The ODP's tasks: read from the ODP, typed in when it cannot be read, and corrected.
+    Route::post('assessments/{assessment}/odp-tasks', [TimelineController::class, 'addTask'])->name('timeline.tasks.store');
+    Route::put('odp-tasks/{odpTask}', [TimelineController::class, 'updateTask'])->name('timeline.tasks.update');
+    Route::delete('odp-tasks/{odpTask}', [TimelineController::class, 'removeTask'])->name('timeline.tasks.destroy');
 
     Route::prefix('downloads')->name('downloads.')->group(function () {
         Route::get('blank-oha-form', [DownloadController::class, 'blankForm'])->name('blank-form');
+        Route::get('alliance-scores', [DownloadController::class, 'scores'])->middleware('throttle:10,1')->name('scores');
+        Route::get('zip/assessments/{assessment}', [DownloadController::class, 'assessmentZip'])->middleware('throttle:10,1')->name('zip.assessment');
+        Route::get('zip/movements/{movement}', [DownloadController::class, 'movementZip'])->middleware('throttle:10,1')->name('zip.movement');
+        Route::get('report-template', [DownloadController::class, 'reportTemplate'])->name('report-template');
+        Route::get('odp-template', [DownloadController::class, 'odpTemplate'])->name('odp-template');
         Route::get('forms/{formUpload}', [DownloadController::class, 'form'])->name('form')->can('download', 'formUpload');
         Route::get('documents/{document}', [DownloadController::class, 'document'])->name('document')->can('download', 'document');
         Route::get('documents/{document}/preview', [DownloadController::class, 'preview'])->name('preview')->can('download', 'document');
@@ -110,5 +130,12 @@ Route::middleware('auth')->group(function () {
         Route::post('{user}/deactivate', [UserController::class, 'deactivate'])->name('deactivate');
         Route::post('{user}/reactivate', [UserController::class, 'reactivate'])->name('reactivate');
         Route::post('{user}/invitation', [UserController::class, 'resendInvitation'])->name('invitation');
+    });
+
+    Route::prefix('admin/movements')->name('admin.movements.')->group(function () {
+        Route::get('add', [AdminMovementController::class, 'create'])->name('create')->can('create', Movement::class);
+        Route::post('/', [AdminMovementController::class, 'store'])->name('store')->can('create', Movement::class);
+        Route::get('{movement}/edit', [AdminMovementController::class, 'edit'])->name('edit')->can('update', 'movement');
+        Route::put('{movement}', [AdminMovementController::class, 'update'])->name('update')->can('update', 'movement');
     });
 });

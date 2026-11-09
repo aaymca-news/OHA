@@ -11,9 +11,9 @@ use Illuminate\Support\Facades\Notification;
 use Tests\Support\Journey;
 
 /*
- * However an Administrator assigns a movement (its own page, or a person's page in
- * Users & Roles), the person is told, it is in the audit trail, and the movement waits
- * in their My Work until its assessment is opened.
+ * When an Administrator assigns a movement on the Assessments page, the people are told,
+ * it is in the audit trail, and the movement waits in their My Work until its
+ * assessment is opened. Users & Roles only shows the assignments.
  */
 
 beforeEach(function () {
@@ -22,37 +22,35 @@ beforeEach(function () {
     $this->staff = User::factory()->create(['name' => 'Aisha Kamara', 'email' => 'aisha@africaymca.org']);
 });
 
-it('tells the person when they are assigned from Users & Roles, and when they are taken off', function () {
-    $this->actingAs($this->j->admin)->put(route('admin.users.update', $this->staff), [
-        'name' => 'Aisha Kamara', 'email' => 'aisha@africaymca.org', 'movement_ids' => [$this->j->ghana->id],
-    ])->assertRedirect();
+it('tells the people when they are assigned on the Assessments page, and when they are replaced', function () {
+    $second = User::factory()->create(['name' => 'Kofi Mensah']);
+    $this->actingAs($this->j->admin)->from(route('assessments.index'))
+        ->put(route('movements.assessors', $this->j->ghana), ['assessor_ids' => [$this->staff->id, $second->id]])
+        ->assertRedirect(route('assessments.index').'#assessors-ghana');
 
-    Notification::assertSentTo($this->staff, WorkflowNotice::class, fn ($n) => $n->subject === 'You are assigned to assess Ghana YMCA'
-        && in_array('mail', $n->via($this->staff), true) && str_contains($n->body, 'My Work'));
-    expect(AuditEvent::query()->where('action', 'movement.assessors_changed')->where('subject_id', $this->j->ghana->id)->value('payload')['added_names'])->toBe(['Aisha Kamara']);
+    foreach ([$this->staff, $second] as $person) {
+        Notification::assertSentTo($person, WorkflowNotice::class, fn ($n) => $n->subject === 'You are assigned to assess Ghana YMCA'
+            && in_array('mail', $n->via($person), true) && str_contains($n->body, 'My Work'));
+    }
+    expect(AuditEvent::query()->where('action', 'movement.assessors_changed')->where('subject_id', $this->j->ghana->id)->value('payload')['added_names'])->toBe(['Aisha Kamara', 'Kofi Mensah']);
 
-    $this->actingAs($this->j->admin)->put(route('admin.users.update', $this->staff), [
-        'name' => 'Aisha Kamara', 'email' => 'aisha@africaymca.org', 'movement_ids' => [],
-    ]);
+    // Kofi is replaced by another assessor; Aisha stays.
+    $third = User::factory()->create(['name' => 'Ama Owusu']);
+    $this->actingAs($this->j->admin)->put(route('movements.assessors', $this->j->ghana), ['assessor_ids' => [$this->staff->id, $third->id]]);
 
-    Notification::assertSentTo($this->staff, WorkflowNotice::class, fn ($n) => $n->subject === 'You no longer assess Ghana YMCA');
+    Notification::assertSentTo($second, WorkflowNotice::class, fn ($n) => $n->subject === 'You no longer assess Ghana YMCA');
+    Notification::assertSentTo($third, WorkflowNotice::class, fn ($n) => $n->subject === 'You are assigned to assess Ghana YMCA');
+    expect($this->j->ghana->assessors()->orderBy('name')->pluck('name')->all())->toBe(['Aisha Kamara', 'Ama Owusu']);
 });
 
-it('tells the person when they are assigned from the movement’s page', function () {
-    $this->actingAs($this->j->admin)->put(route('movements.assessors', $this->j->ghana), ['assessor_ids' => [$this->staff->id]])->assertRedirect();
-
-    Notification::assertSentTo($this->staff, WorkflowNotice::class, fn ($n) => $n->subject === 'You are assigned to assess Ghana YMCA');
-});
-
-it('names the movements in a new person’s invitation instead of a separate notice', function () {
+it('starts a new person with no assessment, whatever the invitation form sends', function () {
     $this->actingAs($this->j->admin)->post(route('admin.users.store'), [
-        'name' => 'Kofi Mensah', 'email' => 'kofi@africaymca.org', 'role' => 'staff', 'movement_ids' => [$this->j->ghana->id, $this->j->zambia->id],
+        'name' => 'Kofi Mensah', 'email' => 'kofi@africaymca.org', 'role' => 'staff', 'movement_ids' => [$this->j->ghana->id],
     ])->assertRedirect();
     $kofi = User::query()->where('email', 'kofi@africaymca.org')->firstOrFail();
 
-    Notification::assertSentTo($kofi, InvitationNotice::class, fn (InvitationNotice $n) => str_contains(implode(' ', $n->toMail($kofi)->introLines), 'You are assigned to assess: Ghana YMCA and Zambia YMCA'));
-    Notification::assertNotSentTo($kofi, WorkflowNotice::class);
-    expect(AuditEvent::query()->where('action', 'movement.assessors_changed')->count())->toBe(2);
+    Notification::assertSentTo($kofi, InvitationNotice::class);
+    expect($kofi->assignedMovements()->count())->toBe(0);
 });
 
 it('puts an assigned movement with no assessment under way in My Work, until its assessment is opened', function () {

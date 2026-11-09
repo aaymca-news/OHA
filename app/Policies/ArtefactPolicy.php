@@ -21,15 +21,16 @@ use Illuminate\Auth\Access\Response;
  *   approve   any Administrator approves what is submitted, their own submission too; on a movement
  *             they assess, they approve their own work straight away. The ODP only once the OHA
  *             form and the report are approved. Approval makes it visible to all AAYMCA staff
- *             (and the report and ODP to the Board Chairperson)
+ *             and to the movement's Board Chairperson and National General Secretary
  *   sign      the Board Chairperson signs the approved ODP, which makes it "Validated"
  */
 class ArtefactPolicy
 {
     /**
      * Work in progress: the movement's assessors and the Administrators. Once
-     * approved: every AAYMCA staff member. The Board Chairperson: the approved OHA
-     * form, report and ODP of their own movement (in Resources).
+     * approved: every AAYMCA staff member, and the movement's Board Chairperson and
+     * National General Secretary (the ODP to the Chairperson to sign it; signed, it stays
+     * visible to both).
      */
     public function view(User $user, Artefact $artefact): Response
     {
@@ -40,7 +41,7 @@ class ArtefactPolicy
         $movement = $artefact->assessment->movement;
 
         if (! $user->isSecretariat()) {
-            if (! $user->isChairOf($movement)) {
+            if (! $user->isOfMovement($movement)) {
                 return Response::deny('You see only your own movement.');
             }
 

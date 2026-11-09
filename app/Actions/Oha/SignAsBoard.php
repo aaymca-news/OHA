@@ -88,6 +88,12 @@ final class SignAsBoard
                     Notify::link($assessment), 'good',
                 ),
             );
+            // The movement's National General Secretary, who already sees the ODP, learns it is validated.
+            Notify::send([$assessment->movement->generalSecretary], new WorkflowNotice(
+                "Validated by the board: {$name}, {$assessment->movement->name}",
+                "{$chair->name} signed the ".SubmitForApproval::inSentence($name)." for {$assessment->movement->name} ({$assessment->period_label}) on behalf of the board.",
+                Notify::link($assessment), 'good',
+            ));
 
             return $signature;
         });

@@ -22,11 +22,13 @@ beforeEach(function () {
 });
 
 it('greys out movements that already have a Chairperson unless replacing, and names who holds it', function () {
+    // Who holds each movement's roles goes to the page, which greys out and names them as the role is chosen.
     $this->actingAs($this->j->admin)->get(route('admin.users.create'))->assertOk()
-        ->assertSee('Zambia YMCA — Chairperson: Naledi Moyo')
+        ->assertSee('Naledi Moyo')
         ->assertSee('For a movement')
         ->assertSee('Replacing')
-        ->assertSee('Movements that already have a Board Chairperson are greyed out', escape: false);
+        ->assertSee('Movements that already have a ', escape: false)
+        ->assertSee('National General Secretary');
 });
 
 it('refuses a second Chairperson for a movement unless it is a replacement', function () {

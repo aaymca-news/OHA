@@ -32,6 +32,21 @@ return [
     'blank_form' => resource_path('templates/YMCA-OHA-Form-2026-v1.0-BLANK.xlsx'),
 
     /*
+    | The official report template (Version 5, March 2026) and ODP template, corrected to
+    | the form: the report's Financial Stability maximum is 20, not 21, so the scored
+    | maxima total 84; the ODP's priorities are numbered 1.1 to 9.3.
+    */
+    'report_template' => resource_path('templates/YMCA-OHA-Report-Template-2026.docx'),
+    'odp_template' => resource_path('templates/YMCA-ODP-Template-2026.xlsx'),
+
+    /*
+    | The real form, report and ODP of 11 National Movements, one folder each, loaded
+    | locally by NationalMovementsSeeder. Real movement data, so kept outside version
+    | control.
+    */
+    'national_movements' => env('OHA_NATIONAL_MOVEMENTS', base_path('../National Movements')),
+
+    /*
     | The Zambia YMCA 2026 documents, used for local sample data and for tests
     | of the form reader. They hold a real movement's data, so they live outside
     | version control until AAYMCA decides otherwise.

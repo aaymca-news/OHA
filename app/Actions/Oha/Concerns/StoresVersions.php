@@ -12,6 +12,7 @@ use App\Models\User;
 use App\Support\Audit;
 use App\Support\ChangedAfterApproval;
 use App\Support\FileVault;
+use App\Support\Notify;
 use App\Support\VersionPruner;
 use Illuminate\Support\Facades\DB;
 
@@ -86,7 +87,7 @@ trait StoresVersions
                 ChangedAfterApproval::whileWaiting($artefact, $actor ?? $createdBy, $happened);
             }
 
-            // Only the approved version and this one are kept in Stage 1.
+            // In Stage 1: the approved version, this one and the one it replaced (so a mistaken upload can be withdrawn).
             VersionPruner::versions($artefact);
 
             Audit::record($actor, $artefact->kind->value.'.version_'.($version->fromDrive() ? 'from_drive' : 'uploaded'), $version, $assessment, $from, $artefact->state,
@@ -96,6 +97,13 @@ trait StoresVersions
                     'sha256' => $stored['sha256'],
                     'note' => $version->note,
                 ] + $payload, fn ($v) => $v !== null));
+
+            // A colleague's new version is what the others work from now: they are told, in the app.
+            if ($actor !== null && ! $version->fromDrive()) {
+                $noun = $artefact->kind->value === 'odp' ? 'ODP' : 'report';
+                Notify::colleagues($assessment, $actor, "New {$noun} version: {$assessment->movement->name}",
+                    "{$actor->name} saved version {$version->versionNumber()} of the {$noun} ({$originalName}), which is now the newest.".(isset($payload['replaced']) ? " It replaced {$payload['replaced']}." : ''));
+            }
 
             return $version;
         });

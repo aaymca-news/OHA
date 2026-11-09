@@ -3,13 +3,19 @@
 namespace App\Http\Controllers;
 
 use App\Queries\MyWork;
+use App\Support\Navigation;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
 
 class MyWorkController extends Controller
 {
-    public function __invoke(Request $request, MyWork $myWork): View
+    public function __invoke(Request $request, MyWork $myWork): View|RedirectResponse
     {
+        // The National General Secretary has no work in the platform yet.
+        if (! Navigation::hasMyWork($request->user())) {
+            return redirect()->route('dashboard');
+        }
         $groups = $myWork->for($request->user());
         $keys = array_column($groups, 'key');
 

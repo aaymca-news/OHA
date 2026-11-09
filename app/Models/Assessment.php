@@ -11,7 +11,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 
-#[Fillable(['movement_id', 'period_label', 'assessed_on', 'opened_at', 'opened_by'])]
+#[Fillable(['movement_id', 'period_label', 'assessed_on', 'opened_at', 'opened_by', 'odp_read_document_id', 'odp_read_problem'])]
 class Assessment extends Model
 {
     /** @use HasFactory<AssessmentFactory> */
@@ -66,6 +66,16 @@ class Assessment extends Model
     }
 
     /**
+     * The supporting documents supplied for this assessment.
+     *
+     * @return HasMany<Evidence, $this>
+     */
+    public function evidence(): HasMany
+    {
+        return $this->hasMany(Evidence::class);
+    }
+
+    /**
      * @return HasMany<CategoryScore, $this>
      */
     public function categoryScores(): HasMany
@@ -97,6 +107,26 @@ class Assessment extends Model
     public function timelineItems(): HasMany
     {
         return $this->hasMany(TimelineItem::class);
+    }
+
+    /**
+     * The ODP version its tasks were last read from.
+     *
+     * @return BelongsTo<Document, $this>
+     */
+    public function odpReadDocument(): BelongsTo
+    {
+        return $this->belongsTo(Document::class, 'odp_read_document_id');
+    }
+
+    /**
+     * The ODP's tasks and their deadlines, in the ODP's order.
+     *
+     * @return HasMany<OdpTask, $this>
+     */
+    public function odpTasks(): HasMany
+    {
+        return $this->hasMany(OdpTask::class)->orderBy('sort_order')->orderBy('id');
     }
 
     /**

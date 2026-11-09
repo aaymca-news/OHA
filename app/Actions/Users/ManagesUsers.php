@@ -13,7 +13,8 @@ use Illuminate\Support\Facades\Gate;
 
 /**
  * Only an active Administrator manages users, and only a Super Administrator
- * manages the Administrators. A movement has one Board Chairperson.
+ * manages the Administrators. A movement has one Board Chairperson and one National
+ * General Secretary.
  */
 trait ManagesUsers
 {
@@ -35,14 +36,15 @@ trait ManagesUsers
     }
 
     /**
-     * Makes room for a new Board Chairperson of $movement. Each movement has one; the
-     * current one is deactivated (and signed out), but only when $confirmReplace says so,
-     * and is told by email that their role has ended.
+     * Makes room for a new holder of one of $movement's own roles (Board Chairperson or
+     * National General Secretary). Each movement has one of each; the current one is
+     * deactivated (and signed out), but only when $confirmReplace says so, and is told by
+     * email that their role has ended.
      */
-    private function vacateChair(User $actor, Movement $movement, ?User $newChair, bool $confirmReplace, ?string $newChairName = null): void
+    private function vacate(User $actor, Role $role, Movement $movement, ?User $newHolder, bool $confirmReplace, ?string $newHolderName = null): void
     {
-        $current = User::query()->where('role', Role::Board)->where('movement_id', $movement->id)->where('active', true)
-            ->when($newChair !== null, fn ($q) => $q->whereKeyNot($newChair->id))
+        $current = User::query()->where('role', $role)->where('movement_id', $movement->id)->where('active', true)
+            ->when($newHolder !== null, fn ($q) => $q->whereKeyNot($newHolder->id))
             ->lockForUpdate()->first();
 
         if ($current === null) {
@@ -50,15 +52,15 @@ trait ManagesUsers
         }
 
         if (! $confirmReplace) {
-            throw new WorkflowRuleBroken("{$current->name} is {$movement->name}’s Board Chairperson, and a movement has one. Confirm to replace them: their account will be deactivated.");
+            throw new WorkflowRuleBroken("{$current->name} is {$movement->name}’s {$role->label()}, and a movement has one. Confirm to replace them: their account will be deactivated.");
         }
 
-        $newName = $newChair->name ?? $newChairName;
+        $newName = $newHolder->name ?? $newHolderName;
         $current->update(['active' => false]);
         DB::table('sessions')->where('user_id', $current->id)->delete();
-        Audit::record($actor, 'user.deactivated', $current, payload: ['reason' => "Replaced as {$movement->name}’s Board Chairperson".($newName !== null ? " by {$newName}" : '')]);
+        Audit::record($actor, 'user.deactivated', $current, payload: ['reason' => "Replaced as {$movement->name}’s {$role->label()}".($newName !== null ? " by {$newName}" : '')]);
 
         // Sent to them directly: Notify skips deactivated accounts, and this one just was.
-        $current->notify(new ChairRoleEnded($movement->name, $actor->name, $newName));
+        $current->notify(new ChairRoleEnded($movement->name, $actor->name, $newName, $role->label()));
     }
 }

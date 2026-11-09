@@ -5,22 +5,74 @@ namespace App\Http\Controllers;
 use App\Actions\Oha\EditTimeline;
 use App\Models\Assessment;
 use App\Models\AssessmentMilestone;
+use App\Models\OdpTask;
 use App\Models\TimelineItem;
+use App\Support\OdpTimeline;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Gate;
 use Illuminate\View\View;
 
 class TimelineController extends Controller
 {
-    /** Every ongoing assessment's deadlines, on one page. */
+    /**
+     * Two timelines on one page: each movement's ODP tasks and their deadlines (read
+     * from its ODP, or typed in), and the deadlines of the assessments under way.
+     * The Administrators see every movement's; staff see those they assess.
+     */
     public function index(Request $request): View
     {
         $user = $request->user();
         abort_unless($user->isAssessor(), 403);
+        $mine = $user->oversees() ? null : $user->assignedMovements()->pluck('movements.id')->all();
 
+        return $request->query('tab') === 'gates'
+            ? $this->gates($request, $mine)
+            : $this->odpTasks($request, $mine);
+    }
+
+    /**
+     * @param  list<int>|null  $mine  the movements this person assesses; null for every movement
+     */
+    private function odpTasks(Request $request, ?array $mine): View
+    {
+        $assessments = OdpTimeline::assessments($mine);
+        $assessments->each(fn (Assessment $a) => OdpTimeline::refresh($a));
+
+        $tasks = OdpTask::query()->whereIn('assessment_id', $assessments->pluck('id'))
+            ->orderBy('sort_order')->orderBy('id')->get()->groupBy('assessment_id');
+        $all = $tasks->flatten();
+        $counts = $all->countBy(fn (OdpTask $t) => $t->state());
+
+        $state = in_array($request->query('state'), ['overdue', 'soon', 'undated', 'done', 'open'], true) ? $request->query('state') : null;
+        $movement = $request->query('movement');
+
+        return view('timelines', [
+            'tab' => 'odp',
+            'assessments' => $assessments->filter(fn (Assessment $a) => $movement === null || $a->movement->slug === $movement)->values(),
+            'movements' => $assessments->pluck('movement'),
+            'tasks' => $tasks->map(fn ($group) => $group->filter(fn (OdpTask $t) => match ($state) {
+                null => true,
+                'open' => ! $t->done,
+                default => $t->state() === $state,
+            })->values()),
+            'totals' => $tasks->map(fn ($group) => ['all' => $group->count(), 'done' => $group->where('done', true)->count()]),
+            'counts' => $counts,
+            'state' => $state,
+            'movement' => $movement,
+            'canEdit' => $assessments->mapWithKeys(fn (Assessment $a) => [$a->id => Gate::forUser($request->user())->allows('editTimeline', $a)]),
+        ]);
+    }
+
+    /**
+     * @param  list<int>|null  $mine  the movements this person assesses; null for every movement
+     */
+    private function gates(Request $request, ?array $mine): View
+    {
         $assessments = Assessment::query()
             ->with(['movement', 'workItem'])
             ->whereHas('workItem')
+            ->when($mine !== null, fn ($q) => $q->whereIn('movement_id', $mine))
             ->orderBy('opened_at')->orderBy('id')
             ->get();
 
@@ -32,6 +84,7 @@ class TimelineController extends Controller
         $end = $dates->max()?->copy()->endOfMonth() ?? now()->endOfMonth();
 
         return view('timelines', [
+            'tab' => 'gates',
             'assessments' => $assessments,
             'milestones' => $milestones,
             'steps' => $steps,
@@ -41,6 +94,40 @@ class TimelineController extends Controller
             'dueSoon' => $milestones->flatten()->filter(fn ($m) => $m->done_at === null && ! $m->overdue && $m->due_on->lte(now()->addDays(7)))->count(),
             'view' => $request->query('view') === 'table' ? 'table' : 'chart',
         ]);
+    }
+
+    public function addTask(Request $request, Assessment $assessment, EditTimeline $timeline): RedirectResponse
+    {
+        $timeline->addTask($assessment, $this->task($request), $request->user());
+
+        return back()->with('status', 'Task added.');
+    }
+
+    public function updateTask(Request $request, OdpTask $odpTask, EditTimeline $timeline): RedirectResponse
+    {
+        $timeline->updateTask($odpTask, $this->task($request) + ['done' => $request->boolean('done')], $request->user());
+
+        return back()->with('status', 'Task saved.');
+    }
+
+    public function removeTask(Request $request, OdpTask $odpTask, EditTimeline $timeline): RedirectResponse
+    {
+        $timeline->removeTask($odpTask, $request->user());
+
+        return back()->with('status', 'Task removed.');
+    }
+
+    /**
+     * @return array{task: string, ref?: string|null, responsible?: string|null, due_on?: string|null}
+     */
+    private function task(Request $request): array
+    {
+        return $request->validate([
+            'task' => ['required', 'string', 'max:4000'],
+            'ref' => ['nullable', 'string', 'max:16'],
+            'responsible' => ['nullable', 'string', 'max:500'],
+            'due_on' => ['nullable', 'date_format:Y-m-d'],
+        ], ['task.required' => 'Say what the task is.']);
     }
 
     public function setGate(Request $request, Assessment $assessment, EditTimeline $timeline): RedirectResponse

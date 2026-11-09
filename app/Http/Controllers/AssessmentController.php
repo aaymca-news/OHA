@@ -6,19 +6,21 @@ use App\Actions\Oha\DeleteAssessment;
 use App\Actions\Oha\HandBackAssessment;
 use App\Actions\Oha\OpenAssessment;
 use App\Enums\ArtefactKind;
-use App\Enums\DocumentPurpose;
 use App\Enums\FindingSeverity;
+use App\Enums\Role;
 use App\Models\Artefact;
 use App\Models\Assessment;
 use App\Models\AssessmentMilestone;
 use App\Models\Document;
 use App\Models\FormUpload;
 use App\Models\Movement;
+use App\Models\User;
 use App\Oha\CategoryRows;
 use App\Oha\DqaSummary;
 use App\Oha\Report\ReadReport;
 use App\Oha\Report\ReportChecker;
 use App\Oha\Scorer;
+use App\Queries\EvidenceLibrary;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
@@ -28,16 +30,38 @@ use Illuminate\View\View;
 
 class AssessmentController extends Controller
 {
-    /** Every assessment, with who holds it now and when it is due. */
+    /**
+     * The Administrators' page for handing out the work: who assesses each National
+     * Movement (one or more staff, changed at any time), and every assessment, with
+     * who holds it now and when it is due.
+     */
     public function index(Request $request): View
     {
-        abort_unless($request->user()->isSecretariat(), 403);
+        abort_unless($request->user()->oversees(), 403);
+
+        $assessments = Assessment::query()
+            ->with(['movement', 'score.band', 'workItem', 'artefacts.status', 'opener'])
+            ->latest('opened_at')->latest('id')
+            ->get();
+        // Each movement's assessment under way, if it has one.
+        $underWay = $assessments->filter(fn (Assessment $a) => $a->workItem !== null)->keyBy('movement_id');
+
+        $movements = Movement::query()
+            ->with(['zone', 'assessors' => fn ($q) => $q->where('active', true)->orderBy('name')])
+            ->withCount('assessments')
+            ->orderBy('name')->get();
+        $needing = $movements->filter(fn (Movement $m) => $m->assessors->isEmpty() && ($underWay->has($m->id) || $m->assessments_count === 0));
+        $show = $request->query('show') === 'unassigned' ? 'unassigned' : 'all';
 
         return view('assessments.index', [
-            'assessments' => Assessment::query()
-                ->with(['movement', 'score.band', 'workItem', 'artefacts.status', 'opener'])
-                ->latest('opened_at')->latest('id')
-                ->get(),
+            'assessments' => $assessments,
+            'movements' => $show === 'unassigned' ? $needing->values() : $movements,
+            'needing' => $needing->count(),
+            'total' => $movements->count(),
+            'show' => $show,
+            'underWay' => $underWay,
+            'assessorsOf' => $movements->mapWithKeys(fn (Movement $m) => [$m->id => $m->assessors]),
+            'staff' => User::query()->where('active', true)->whereNotIn('role', [Role::Board, Role::Ngs])->orderBy('name')->get(),
         ]);
     }
 
@@ -48,7 +72,7 @@ class AssessmentController extends Controller
             'period_start' => ['required', 'date_format:Y-m'],
         ]);
 
-        $assessment = $open->handle($request->user(), $movement, $data['period_label'], Carbon::createFromFormat('Y-m', $data['period_start'])->startOfMonth());
+        $assessment = $open->handle($request->user(), $movement, $data['period_label'], Carbon::createFromFormat('!Y-m', $data['period_start']));
 
         return redirect()->route('assessments.show', $assessment)->with('status', 'Assessment opened. Upload the completed OHA form to begin.');
     }
@@ -73,7 +97,7 @@ class AssessmentController extends Controller
         return redirect()->route('movements.show', $movement)->with('status', "The {$movement->name} assessment ({$assessment->period_label}) has been deleted.");
     }
 
-    public function show(Request $request, Assessment $assessment, Scorer $scorer): View
+    public function show(Request $request, Assessment $assessment, Scorer $scorer, EvidenceLibrary $evidence): View
     {
         Gate::authorize('view', $assessment);
         $user = $request->user();
@@ -86,6 +110,7 @@ class AssessmentController extends Controller
         // Tabs this user may open: each document by its own rule; the timeline and audit
         // trail for the Administrators and the movement's assessors.
         $canAudit = Gate::forUser($user)->allows('viewAudit', $assessment);
+        $who = $request->integer('who') ?: null;
         $tabs = collect(['form', 'report', 'odp'])
             ->filter(fn (string $kind) => Gate::forUser($user)->allows('view', $artefacts[$kind]))
             ->when($canAudit, fn ($t) => $t->push('timeline', 'audit'))
@@ -123,7 +148,8 @@ class AssessmentController extends Controller
             'provisional' => $upload !== null ? array_sum(array_filter($scorer->score($upload->answers, $upload->form_meta['missing_sheets'] ?? []))) : null,
             'dqa' => $upload !== null ? DqaSummary::of($upload->findings, (bool) ($formMilestone?->overdue || $formMilestone?->completed_late)) : null,
             'openGaps' => $upload?->findings->where('severity', FindingSeverity::Missing)->whereNull('resolved_at')->count() ?? 0,
-            'documents' => fn (string $kind) => $artefacts[$kind]->documents()->where('purpose', DocumentPurpose::Reference)->latest('id')->get(),
+            // The evidence library: its documents and their links, worked out once when a tab asks.
+            'evidence' => fn () => once(fn () => $evidence->for($assessment)),
             // The report check for a version: worked out now, against the current OHA form.
             // Only for those who see the movement's gaps (its assessors and the Administrators).
             'reportCheck' => fn (Document $version) => $version->extracted !== null && Gate::forUser($user)->allows('viewGaps', $assessment)
@@ -138,8 +164,19 @@ class AssessmentController extends Controller
                 : collect()]),
             'comments' => fn (string $kind) => $artefacts[$kind]->comments()->with('author')->latest('id')->get(),
             'timeline' => $assessment->timelineItems()->whereNull('gate_id')->orderBy('due_on')->orderBy('id')->get(),
-            'audit' => $canAudit ? $assessment->auditEvents()->with('actor')->latest('id')->limit(200)->get() : collect(),
+            // The work, and apart from it the download log: who downloaded the movement's files, and when.
+            // The work can be narrowed to one person (?who=), to see what each assessor did.
+            'audit' => $canAudit ? $assessment->auditEvents()->where('action', '!=', 'file.downloaded')
+                ->when($who, fn ($q, int $id) => $q->where('actor_id', $id))->with('actor')->latest('id')->limit(200)->get() : collect(),
+            'auditPeople' => $canAudit ? User::query()->whereIn('id', $assessment->auditEvents()->where('action', '!=', 'file.downloaded')->whereNotNull('actor_id')->select('actor_id'))
+                ->orderBy('name')->get(['id', 'name']) : collect(),
+            'who' => $who,
+            'downloads' => $canAudit ? $assessment->auditEvents()->where('action', 'file.downloaded')->with('actor')->latest('id')->limit(200)->get() : collect(),
             'canAudit' => $canAudit,
+            // The latest change to the form (with its gaps), the report or the ODP, for those working on it.
+            'lastChange' => $seesDrafts ? fn (string $kind) => $assessment->auditEvents()
+                ->where(fn ($q) => $q->where('action', 'like', $kind.'.%')->when($kind === 'form', fn ($q) => $q->orWhere('action', 'like', 'gap.%')))
+                ->with('actor')->latest('id')->first() : null,
             'kinds' => ArtefactKind::cases(),
         ]);
     }

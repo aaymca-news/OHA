@@ -1,8 +1,7 @@
 <?php
 
-use App\Actions\Oha\AttachDocument;
+use App\Actions\Evidence\UploadEvidence;
 use App\Actions\Oha\UploadForm;
-use App\Enums\DocumentPurpose;
 use Illuminate\Support\Facades\Notification;
 use Tests\Support\Journey;
 
@@ -67,12 +66,13 @@ it('keeps showing the approved form while a corrected one waits for approval', f
     $this->actingAs($this->j->chair)->get(route('downloads.form', $corrected))->assertForbidden();
 });
 
-it('lists the ODP’s reference files with it, for whoever may see the approved ODP', function () {
+it('links each movement to its evidence library, with how many documents it holds', function () {
     $assessment = $this->j->assessmentAt('odp_approved');
-    $path = tempnam(sys_get_temp_dir(), 'ref');
+    $path = tempnam(sys_get_temp_dir(), 'ev');
     file_put_contents($path, '%PDF-1.4 board minutes');
-    app(AttachDocument::class)->handle($this->j->odp($assessment), $path, 'Board minutes March 2026.pdf', DocumentPurpose::Reference, $this->j->assessor);
+    app(UploadEvidence::class)->handle($this->j->assessor, $assessment, $path, 'Board minutes March 2026.pdf');
 
-    $this->actingAs($this->j->otherStaff)->get(route('resources'))->assertSee('ODP reference files')->assertSee('Board minutes March 2026.pdf');
-    $this->actingAs($this->j->chair)->get(route('resources'))->assertSee('Board minutes March 2026.pdf');
+    $this->actingAs($this->j->otherStaff)->get(route('resources'))
+        ->assertSee('Evidence library')->assertSee('1 document')->assertSee(route('evidence.index', $this->j->zambia), false);
+    $this->actingAs($this->j->chair)->get(route('evidence.index', $this->j->zambia))->assertOk()->assertSee('Board minutes March 2026');
 });

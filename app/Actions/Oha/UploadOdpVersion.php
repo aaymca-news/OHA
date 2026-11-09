@@ -27,7 +27,10 @@ final class UploadOdpVersion
 
     public function __construct(private readonly LinkOdpToDrive $link) {}
 
-    public function handle(Artefact $odp, string $sourcePath, string $originalName, User $uploader, ?string $note = null, ?string $driveUrl = null): Document
+    /**
+     * @param  array<string, string>  $replacing  what the audit trail keeps when it replaces a version (ReplaceGuard)
+     */
+    public function handle(Artefact $odp, string $sourcePath, string $originalName, User $uploader, ?string $note = null, ?string $driveUrl = null, array $replacing = []): Document
     {
         if ($odp->kind !== ArtefactKind::Odp) {
             throw new WorkflowRuleBroken('Only the ODP is uploaded here.');
@@ -43,7 +46,7 @@ final class UploadOdpVersion
         $version = $this->storeVersion($odp, $sourcePath, $originalName, $uploader, $uploader, 'upload', [
             'source' => DocumentSource::Upload,
             'note' => $note !== null && trim($note) !== '' ? trim($note) : null,
-        ]);
+        ], $replacing);
 
         if ($driveUrl !== null && $driveUrl !== $odp->drive_url) {
             $this->link->handle($odp->refresh(), $driveUrl, $uploader);

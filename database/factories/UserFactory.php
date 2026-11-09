@@ -75,6 +75,17 @@ class UserFactory extends Factory
         ]);
     }
 
+    /**
+     * The National General Secretary of the given (or a new) movement, who supplies its evidence.
+     */
+    public function generalSecretary(?Movement $movement = null): static
+    {
+        return $this->state(fn (array $attributes) => [
+            'role' => Role::Ngs,
+            'movement_id' => $movement !== null ? $movement->id : Movement::factory(),
+        ]);
+    }
+
     /** Invited, but has not yet followed the link to set a password. */
     public function invitationPending(): static
     {

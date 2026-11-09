@@ -164,6 +164,11 @@ final class DocxEditor
         $last = [];
         $current = null;
         foreach (ReportReader::paragraphs($this->x, $this->headingStyles) as $p) {
+            if (ReadReport::isTitle($p['p']) && ReportChecker::startsOtherSection($p['p']['text'])) {
+                $current = null;
+
+                continue;
+            }
             $code = ReadReport::isTitle($p['p']) ? ReportChecker::categoryNamedBy($p['p']['text']) : null;
             if ($code !== null) {
                 $current = $code;

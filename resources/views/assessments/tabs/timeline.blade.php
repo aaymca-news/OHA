@@ -17,7 +17,7 @@
             <p>When the next assessment is due is a separate rule, set by the movement’s health band: the weaker the band, the sooner it is re-assessed.</p>
         </div>
     </details>
-    <div class="overflow-x-auto">
+    <div class="relative overflow-x-auto">
         <table class="w-full text-[0.875rem]">
             <thead class="text-left text-[0.8125rem] uppercase tracking-wider text-on-surface-variant">
                 <tr><th class="py-xs pr-md">Gate</th><th class="py-xs pr-md">Due</th><th class="py-xs pr-md">Status</th>@if ($canEdit)<th class="py-xs">Change the deadline</th>@endif</tr>

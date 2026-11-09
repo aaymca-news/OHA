@@ -66,7 +66,7 @@ it('stores the uploaded file unchanged and records its checksum', function () {
     expect($upload->sha256)->toBe(hash_file('sha256', zambiaFormPath()))
         ->and(hash('sha256', Storage::disk('oha')->get($upload->path)))->toBe($upload->sha256)
         ->and($upload->answers['Q102'])->toBe('Zambia')
-        ->and($upload->findings()->count())->toBe(4)
+        ->and($upload->findings()->count())->toBe(5)
         ->and($form->refresh()->state)->toBe(ArtefactState::Ready);
 });
 
@@ -162,10 +162,10 @@ it('refuses uploads from anyone not assigned to the movement, and takes a correc
     ($this->upload)($form);
     app(SubmitForApproval::class)->handle($form->refresh(), $this->assessor, acknowledgeGaps: true);
 
-    // A corrected form while it waits: still with the Administrators; only the newest upload is kept.
+    // A corrected form while it waits: still with the Administrators; the newest upload and the one it replaced are kept.
     ($this->upload)($form->refresh());
     expect($form->refresh()->state)->toBe(ArtefactState::PendingApproval)
-        ->and($form->uploads()->count())->toBe(1);
+        ->and($form->uploads()->count())->toBe(2);
 
     // Once approved, a corrected form may be uploaded: it goes back for approval (see FormCorrectionTest).
     app(ApproveArtefact::class)->handle($form->refresh(), $this->admin);

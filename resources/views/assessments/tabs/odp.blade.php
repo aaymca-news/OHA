@@ -8,7 +8,6 @@
     $status = $artefact->status;
     $effective = $status->effective_state;
     $latestId = $artefact->latestVersion?->id;
-    $docs = $documents('odp');
     $signature = $artefact->signature;
     $me = auth()->user();
     $seesDrafts = $me->oversees() || $me->canAssess($assessment->movement);
@@ -31,8 +30,13 @@
     @if ($status->published && ! $artefact->isApproved() && ! $signature && $seesDrafts)
         <span class="flex items-center gap-xs text-on-surface-variant">
             <span class="material-symbols-outlined text-[1.125rem]" aria-hidden="true">visibility</span>
-            Staff and the Board Chairperson see the last approved version until the new one is approved.
+            Staff and the movement’s Board Chairperson and National General Secretary see the last approved version until the new one is approved.
         </span>
+    @endif
+    @if ($me->isSecretariat())
+    <a href="{{ route('downloads.odp-template') }}" class="ml-auto inline-flex items-center gap-xs text-primary underline">
+        <span class="material-symbols-outlined text-[1.125rem]" aria-hidden="true">download</span> Download the ODP template
+    </a>
     @endif
 </div>
 
@@ -147,7 +151,7 @@
               x-data="{ name: '', over: false }" class="flex flex-col gap-sm">
             @csrf
             @if ($artefact->isApproved())
-                <p class="p-sm rounded bg-surface-container text-[0.875rem]">This ODP is approved. A new version goes back to the Administrators for approval; until then, staff and the Board Chairperson keep seeing the approved version.</p>
+                <p class="p-sm rounded bg-surface-container text-[0.875rem]">This ODP is approved. A new version goes back to the Administrators for approval; until then, staff and the movement’s Board Chairperson and National General Secretary keep seeing the approved version.</p>
             @endif
             <label x-on:dragover.prevent="over = true" x-on:dragleave="over = false" x-on:drop="over = false"
                    :class="over ? 'border-primary bg-surface-container-low' : 'border-outline-variant'"
@@ -168,6 +172,7 @@
                     <textarea name="note" rows="2" class="px-sm py-2 rounded border-[1.5px] border-outline-variant">{{ old('note') }}</textarea>
                 </label>
             @endif
+            @include('assessments.tabs._replace-guard')
             <x-button class="self-start">
                 <span class="inline-flex items-center gap-xs"><span class="material-symbols-outlined text-[1.125rem]" aria-hidden="true">save</span> Save</span>
             </x-button>
@@ -179,6 +184,7 @@
 @if (Gate::allows('submit', $artefact) && Gate::denies('approve', $artefact))
     <form method="POST" action="{{ route('artefacts.submit', $artefact) }}" class="flex flex-wrap items-center gap-sm">
         @csrf
+        <input type="hidden" name="seen" value="{{ \App\Support\ReplaceGuard::current($artefact)?->id ?? 0 }}">
         <x-button>Submit version {{ $versions->firstWhere('id', $latestId)?->number }} for approval</x-button>
         <span class="text-[0.8125rem] text-on-surface-variant">It goes to the Administrators to approve.</span>
     </form>
@@ -280,7 +286,7 @@
                             </a>
                         </div>
                         @if (($c['kind'] ?? '') === 'cells')
-                            <div x-show="open" x-cloak class="overflow-x-auto">
+                            <div x-show="open" x-cloak class="relative overflow-x-auto">
                                 <table class="w-full text-[0.8125rem]">
                                     <thead class="text-left text-on-surface-variant"><tr><th class="py-1 pr-sm">Sheet · cell</th><th class="py-1 pr-sm">Before</th><th class="py-1">After</th></tr></thead>
                                     <tbody>
@@ -316,26 +322,22 @@
 
 @include('assessments.tabs._versions')
 
-@if ($docs->isNotEmpty() || ($me->canAssess($assessment->movement) && $effective !== 'locked' && ! $signature))
-    <x-card title="Reference files" subtitle="Supporting documents for the ODP. Stored once, never overwritten.">
-        @foreach ($docs as $doc)
-            <p class="text-[0.875rem] flex flex-wrap items-center gap-sm">
-                <a href="{{ route('downloads.document', $doc) }}" class="text-primary underline inline-flex items-center gap-xs">
-                    <span class="material-symbols-outlined text-[1.125rem]" aria-hidden="true">download</span>{{ $doc->original_name }}
-                </a>
-                <span class="text-on-surface-variant">{{ number_format($doc->size_bytes / 1024) }} KB · {{ $doc->created_at->format('j M Y') }}</span>
-            </p>
-        @endforeach
-        @if ($me->canAssess($assessment->movement) && $effective !== 'locked' && ! $signature)
-            <form method="POST" action="{{ route('artefacts.attach', $artefact) }}" enctype="multipart/form-data" class="flex flex-wrap items-end gap-sm">
-                @csrf
-                <label class="flex flex-col gap-xs text-[0.875rem]">
-                    <span class="font-semibold">Attach a reference document (.docx, .pdf or .xlsx)</span>
-                    <input type="file" name="document" accept=".docx,.pdf,.xlsx" required
-                           class="text-[0.875rem] file:mr-sm file:px-md file:py-1.5 file:rounded file:border-[1.5px] file:border-outline-variant file:bg-surface-container-lowest file:text-primary file:font-semibold hover:file:border-primary">
-                </label>
-                <x-button variant="secondary">Attach</x-button>
-            </form>
-        @endif
-    </x-card>
-@endif
+{{-- The evidence linked to the ODP's tasks, from the movement's evidence library. --}}
+@php($byTask = app(\App\Queries\EvidenceLibrary::class)->byOdpTask($evidence()))
+<x-card title="Evidence for the ODP tasks" subtitle="Supporting documents linked to the ODP’s tasks (1.1 to 9.3), from the movement’s evidence library.">
+    <x-slot:actions>
+        <a href="{{ route('evidence.index', ['movement' => $assessment->movement, 'assessment' => $assessment->id]) }}" class="inline-flex items-center gap-xs text-[0.875rem] text-primary underline">
+            <span class="material-symbols-outlined text-[1.125rem]" aria-hidden="true">folder_open</span> Open the evidence library
+        </a>
+    </x-slot:actions>
+    @forelse ($byTask as $task => $documents)
+        <div class="flex flex-wrap items-baseline gap-x-sm gap-y-xs text-[0.875rem]">
+            <span class="font-semibold min-w-16">Task {{ $task }}</span>
+            @foreach ($documents as $doc)
+                <x-evidence-link :doc="$doc" />
+            @endforeach
+        </div>
+    @empty
+        <x-empty-state icon="attach_file">No document is linked to an ODP task yet. Add evidence in the evidence library and choose the tasks it supports.</x-empty-state>
+    @endforelse
+</x-card>

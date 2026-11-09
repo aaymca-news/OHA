@@ -1,5 +1,5 @@
-{{-- Who assesses the movement. Expects $movement, $assessors, $staff, $canAssign, $assignmentHistory, $assignedSince. --}}
-<x-card title="Assessed by" :subtitle="$canAssign ? 'Only the Administrators assign or reassign assessors. Every change is in the audit trail.' : null">
+{{-- Who assesses the movement. Expects $movement, $assessors, $canAssign, $assignmentHistory, $assignedSince. --}}
+<x-card title="Assessed by" :subtitle="$canAssign ? 'The Administrators assign and change assessors on the Assessments page. Every change is in the audit trail.' : null">
     @if ($assessors->isNotEmpty())
         <ul class="flex flex-col gap-xs">
             @foreach ($assessors as $person)
@@ -28,25 +28,10 @@
     @endif
 
     @if ($canAssign)
-        <details class="border-t border-surface-container pt-sm" @if ($assessors->isEmpty()) open @endif>
-            <summary class="cursor-pointer text-[0.875rem] font-semibold text-primary">
-                {{ $assessors->isEmpty() ? 'Assign an assessor' : 'Reassign the assessor' }}
-            </summary>
-            <form method="POST" action="{{ route('movements.assessors', $movement) }}" class="flex flex-col gap-sm mt-sm">
-                @csrf
-                @method('PUT')
-                <fieldset class="flex flex-col gap-xs text-[0.875rem] max-h-64 overflow-y-auto">
-                    <legend class="text-[0.8125rem] text-on-surface-variant mb-xs">Tick who should assess {{ $movement->name }}. Untick someone to take them off.</legend>
-                    @foreach ($staff as $person)
-                        <label class="flex items-center gap-sm">
-                            <input type="checkbox" name="assessor_ids[]" value="{{ $person->id }}" @checked($assessors->contains('id', $person->id))>
-                            {{ $person->name }} <span class="text-[0.8125rem] text-on-surface-variant">{{ $person->role->label() }}</span>
-                        </label>
-                    @endforeach
-                </fieldset>
-                <x-button variant="secondary" class="self-start">Save assessors</x-button>
-            </form>
-        </details>
+        {{-- Assessors are handed out in one place: the Assessments page. --}}
+        <a href="{{ route('assessments.index') }}#assessors-{{ $movement->slug }}" class="self-start inline-flex items-center gap-xs text-[0.875rem] font-semibold text-primary underline">
+            <span class="material-symbols-outlined text-[1.125rem]" aria-hidden="true">person_add</span>{{ $assessors->isEmpty() ? 'Assign an assessor' : 'Change the assessors' }} on the Assessments page
+        </a>
 
         @if ($assignmentHistory->isNotEmpty())
             <details class="border-t border-surface-container pt-sm">

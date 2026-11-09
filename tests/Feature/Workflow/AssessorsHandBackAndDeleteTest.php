@@ -41,10 +41,10 @@ it('writes a reassignment into the audit trail of the assessment under way, and 
 it('shows plainly when no assessor was ever assigned, who assesses now, and the history', function () {
     $page = fn ($movement) => $this->actingAs($this->j->admin)->get(route('movements.show', $movement));
 
-    $page($this->j->ghana)->assertSee('No assessor has ever been assigned to Ghana YMCA.')->assertSee('Assign an assessor');
+    $page($this->j->ghana)->assertSee('No assessor has ever been assigned to Ghana YMCA.')->assertSee('Assign an assessor on the Assessments page');
 
     app(AssignAssessors::class)->handle($this->j->admin, $this->j->ghana, [$this->j->otherStaff->id]);
-    $page($this->j->ghana)->assertSee('Aminata Diallo')->assertSee('Current assessor')->assertSee('Reassign the assessor')->assertSee('Assignment history (1)');
+    $page($this->j->ghana)->assertSee('Aminata Diallo')->assertSee('Current assessor')->assertSee('Change the assessors on the Assessments page')->assertSee('Assignment history (1)');
 
     app(AssignAssessors::class)->handle($this->j->admin, $this->j->ghana, []);
     $page($this->j->ghana)->assertSee('Nobody is assessing Ghana YMCA at the moment.')->assertSee('Last: Aminata Diallo');
