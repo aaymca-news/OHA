@@ -85,8 +85,31 @@ it('lists the assessments started in My Work, apart from the movements to start'
 
 });
 
-it('takes a finished assessment off the list of assessments started', function () {
+it('shows a signed assessment as Stage 1 done, its follow-ups ongoing, until the next one is due', function () {
     $this->j->assessmentAt('odp_signed');
+    $groups = fn () => collect(app(MyWork::class)->for($this->j->assessor))->keyBy('key');
 
-    expect(collect(app(MyWork::class)->for($this->j->assessor))->keyBy('key')->has('started'))->toBeFalse();
+    // My Work: under "Assessments done", not "started" nor "to start".
+    expect($groups()->has('started'))->toBeFalse()
+        ->and($groups()->has('start'))->toBeFalse()
+        ->and(collect($groups()['done']['items'])->pluck('movement.slug')->all())->toBe(['zambia'])
+        ->and($groups()['done']['items'][0]['actionable'])->toBeFalse();
+    $this->actingAs($this->j->assessor)->get(route('my-work', ['group' => 'done']))->assertOk()
+        ->assertSee('Assessments done')->assertSee('Zambia YMCA · Feb 2026')->assertSee('Stage 1 done')->assertSee('Follow-ups ongoing')
+        ->assertDontSee('Not started');
+
+    // The movement page: the label, and starting the next one early tucked away.
+    $this->actingAs($this->j->assessor)->get(route('movements.show', $this->j->zambia))->assertOk()
+        ->assertSee('Stage 1 done')->assertSee('Follow-ups ongoing')->assertSee('Start the next assessment early');
+    // The movement's own dashboard.
+    $this->actingAs($this->j->chair)->get(route('dashboard'))->assertOk()
+        ->assertSee('Stage 1 done')->assertSee('Follow-ups ongoing')->assertDontSee('No assessment is under way');
+    // The National Movements table.
+    $this->actingAs($this->j->admin)->get(route('movements.index', ['view' => 'table']))->assertOk()->assertSee('Stage 1 done · follow-ups ongoing');
+
+    // Once the next assessment is due, it is back among the movements to start.
+    $this->travelTo(now()->addYears(3));
+    expect($groups()->has('done'))->toBeFalse()
+        ->and(collect($groups()['start']['items'])->pluck('movement.slug')->all())->toBe(['zambia']);
+    $this->actingAs($this->j->assessor)->get(route('my-work', ['group' => 'start']))->assertOk()->assertSee('Next assessment due');
 });

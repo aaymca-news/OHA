@@ -12,7 +12,7 @@
         'report' => ['Report', 'bg-heat-2'],
         'odp' => ['ODP', 'bg-heat-3'],
         'sign' => ['Awaiting signature', 'bg-heat-4'],
-        'complete' => ['Stage 1 complete', 'bg-heat-5'],
+        'complete' => ['Stage 1 done', 'bg-heat-5'],
     ];
     $total = max(1, $pipeline['total']);
 @endphp

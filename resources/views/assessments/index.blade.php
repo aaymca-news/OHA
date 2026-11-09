@@ -97,7 +97,7 @@
                         @foreach (['form', 'report', 'odp'] as $kind)
                             <td class="px-md py-sm"><span class="flex flex-col items-start gap-xs"><x-state-chip :state="$a[$kind]->status->effective_state" />@if ($kind === 'odp')<x-validation-chip :status="$a[$kind]->status" />@endif</span></td>
                         @endforeach
-                        <td class="px-md py-sm">{{ $assessment->workItem?->holder_role->label() ?? 'Stage 1 complete' }}</td>
+                        <td class="px-md py-sm">{{ $assessment->workItem?->holder_role->label() ?? 'Stage 1 done' }}</td>
                         <td class="px-md py-sm">@if ($assessment->workItem) <x-due-chip :days="$assessment->workItem->days_left" /> @else — @endif</td>
                         <td class="px-md py-sm">@if ($assessment->score) <x-band-chip :band="$assessment->score->band" /> {{ number_format((float) $assessment->score->pct, 1) }}% @else — @endif</td>
                     </tr>

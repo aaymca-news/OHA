@@ -55,6 +55,16 @@ class Movement extends Model
     }
 
     /**
+     * The latest assessment done (its ODP signed by the board), whose follow-ups are under way.
+     */
+    public function lastAssessmentDone(): ?Assessment
+    {
+        return $this->assessments()->whereDoesntHave('workItem')
+            ->whereHas('odp', fn ($odp) => $odp->whereHas('signature'))
+            ->latest('assessed_on')->latest('id')->first();
+    }
+
+    /**
      * The movements with an assessment under way, for marking them on a list.
      *
      * @return array<int, true> keyed by movement id

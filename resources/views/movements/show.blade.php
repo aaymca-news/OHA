@@ -86,6 +86,32 @@
                     @endcan
                 </span>
             </x-slot:actions>
+        @elseif ($lastDone && $followingUp)
+            {{-- Stage 1 done: the ODP is signed and its follow-ups are under way until the next assessment is due. --}}
+            <x-slot:actions>
+                <div class="flex flex-col items-end gap-xs">
+                    <span class="inline-flex flex-wrap items-center gap-sm text-[0.875rem]">
+                        <x-chip tone="good" icon="verified">Stage 1 done</x-chip>
+                        <x-chip tone="info" icon="autorenew">Follow-ups ongoing</x-chip>
+                        @can('view', $lastDone)
+                            <a href="{{ route('assessments.show', ['assessment' => $lastDone, 'tab' => 'odp']) }}" class="font-semibold text-primary underline">{{ $lastDone->period_label }}</a>
+                        @else
+                            <span class="font-semibold">{{ $lastDone->period_label }}</span>
+                        @endcan
+                    </span>
+                    @if ($canOpen)
+                        <details class="text-[0.8125rem]">
+                            <summary class="cursor-pointer text-primary underline text-right">Start the next assessment early</summary>
+                            <form method="POST" action="{{ route('assessments.store', $movement) }}" class="flex flex-wrap items-end gap-sm mt-sm">
+                                @csrf
+                                <x-input name="period_label" label="Period" :value="now()->format('M Y')" class="w-32" required />
+                                <x-input name="period_start" label="Starting month" type="month" :value="now()->format('Y-m')" required />
+                                <x-button>Start new assessment</x-button>
+                            </form>
+                        </details>
+                    @endif
+                </div>
+            </x-slot:actions>
         @elseif ($canOpen)
             <x-slot:actions>
                 <form method="POST" action="{{ route('assessments.store', $movement) }}" class="flex flex-wrap items-end gap-sm">

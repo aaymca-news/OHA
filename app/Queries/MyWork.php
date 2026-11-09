@@ -8,6 +8,7 @@ use App\Enums\FindingSeverity;
 use App\Enums\HolderRole;
 use App\Enums\Role;
 use App\Models\Artefact;
+use App\Models\Assessment;
 use App\Models\Movement;
 use App\Models\User;
 use App\Models\WorkItem;
@@ -22,6 +23,7 @@ use Illuminate\Support\Facades\Gate;
  *   mine      assessors: work waiting on them, including anything sent back
  *   start     assessors: their movements with no assessment under way, to open
  *   started   assessors: their movements whose assessment has started (Administrators: every one)
+ *   done      assessors: their movements whose assessment is done (ODP signed), follow-ups under way
  *   approve   Administrators: everything awaiting approval (what they submitted themselves is shown locked, with why)
  *   sign      the Board Chairperson: the approved ODP awaiting their signature
  *   gaps      forms on your movements that went forward with missing information still open
@@ -33,7 +35,7 @@ use Illuminate\Support\Facades\Gate;
 final class MyWork
 {
     /**
-     * @return list<array{key: string, items: list<array{artefact: Artefact|null, movement?: Movement, started?: true, holder: string, days_left: int|null, actionable: bool, blocked: string|null}>}>
+     * @return list<array{key: string, items: list<array{artefact: Artefact|null, movement?: Movement, started?: true, done?: Assessment|null, holder: string, days_left: int|null, actionable: bool, blocked: string|null}>}>
      */
     public function for(User $user): array
     {
@@ -53,6 +55,12 @@ final class MyWork
             $started = $this->started($user, $assigned);
             if ($started !== []) {
                 $groups[] = ['key' => 'started', 'items' => $started];
+            }
+
+            // …and those whose assessment is done (ODP signed), its follow-ups under way.
+            $done = $this->done($user);
+            if ($done !== []) {
+                $groups[] = ['key' => 'done', 'items' => $done];
             }
         }
 
@@ -112,9 +120,8 @@ final class MyWork
      */
     private function toStart(User $user): array
     {
-        return $user->assignedMovements()
-            ->whereDoesntHave('assessments', fn (Builder $a) => $a->whereHas('workItem'))
-            ->with('status')->orderBy('name')->get()
+        return $this->idle($user)
+            ->reject(fn (Movement $m) => $this->followingUp($m))
             ->map(function (Movement $m) use ($user) {
                 $response = Gate::forUser($user)->inspect('openAssessment', $m);
 
@@ -127,6 +134,52 @@ final class MyWork
                     'blocked' => $response->denied() ? $response->message() : null,
                 ];
             })->values()->all();
+    }
+
+    /**
+     * The movements this person assesses with no assessment under way.
+     *
+     * @return Collection<int, Movement>
+     */
+    private function idle(User $user): Collection
+    {
+        return $user->assignedMovements()
+            ->whereDoesntHave('assessments', fn (Builder $a) => $a->whereHas('workItem'))
+            ->with('status')->orderBy('name')->get();
+    }
+
+    /**
+     * Its assessment is done (ODP signed) and the next one is not yet due: the
+     * follow-ups are what is under way, not a new assessment.
+     */
+    private function followingUp(Movement $m): bool
+    {
+        $next = $m->status?->next_assessment_on;
+
+        return (bool) $m->status?->has_odp && $next !== null && $next->isFuture();
+    }
+
+    /**
+     * The movements this person assesses whose assessment is done (Stage 1: ODP signed),
+     * with its follow-ups under way, until the next assessment is due. For reference.
+     *
+     * @return list<array{artefact: null, movement: Movement, done: Assessment, holder: string, days_left: null, actionable: bool, blocked: null}>
+     */
+    private function done(User $user): array
+    {
+        return $this->idle($user)
+            ->filter(fn (Movement $m) => $this->followingUp($m))
+            ->map(fn (Movement $m) => [
+                'artefact' => null,
+                'movement' => $m,
+                'done' => $m->lastAssessmentDone(),
+                'holder' => __('oha.holder.assessor'),
+                'days_left' => null,
+                'actionable' => false,
+                'blocked' => null,
+            ])
+            ->filter(fn (array $entry) => $entry['done'] !== null)
+            ->values()->all();
     }
 
     /**

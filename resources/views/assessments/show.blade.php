@@ -12,7 +12,7 @@
             @if ($assessment->workItem)
                 <x-due-chip :days="$assessment->workItem->days_left" />
             @else
-                <x-chip tone="good" icon="verified_user">Stage 1 complete</x-chip>
+                <x-chip tone="good" icon="verified_user">Stage 1 done</x-chip>
             @endif
             @if ($tabs->contains('odp'))
                 <span class="text-[0.8125rem] text-on-surface-variant">ODP</span> <x-validation-chip :status="$artefacts['odp']->status" />

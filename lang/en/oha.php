@@ -58,6 +58,7 @@ return [
             'mine' => 'Awaiting my action',
             'start' => 'Movements to start',
             'started' => 'Assessments started',
+            'done' => 'Assessments done',
             'approve' => 'Awaiting my approval',
             'sign' => 'Awaiting my signature',
             'gaps' => 'Missing information',

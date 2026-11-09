@@ -121,6 +121,9 @@ class MovementController extends Controller
             'assignmentHistory' => $assignmentHistory,
             'assignedSince' => $assignedSince,
             'underWay' => $movement->assessmentUnderWay(),
+            // Stage 1 done (ODP signed): its follow-ups are under way until the next assessment is due.
+            'lastDone' => $movement->lastAssessmentDone(),
+            'followingUp' => $status->has_odp && $status->next_assessment_on?->isFuture(),
             'canOpen' => Gate::forUser($user)->allows('openAssessment', $movement),
             'canAssign' => Gate::forUser($user)->allows('assignAssessors', $movement),
         ]);

@@ -2,7 +2,7 @@
     @php
         $stageLabels = ['not_assessed' => ['Not yet assessed', 'radio_button_unchecked', 'neutral'], 'form' => ['OHA form under way', 'table_view', 'info'],
             'report' => ['Report under way', 'description', 'info'], 'odp' => ['ODP under way', 'checklist', 'info'],
-            'sign' => ['Awaiting signature', 'draw', 'warning'], 'complete' => ['Stage 1 complete', 'verified', 'good']];
+            'sign' => ['Awaiting signature', 'draw', 'warning'], 'complete' => ['Stage 1 done · follow-ups ongoing', 'verified', 'good']];
         $short = ['financial' => 'Financial', 'governance' => 'Governance', 'constitution' => 'Constitution', 'me' => 'M&E', 'strategy' => 'Strategy',
             'diversity' => 'Diversity & youth', 'comms' => 'Comms', 'staff' => 'Staff & volunteers'];
         $query = fn (array $change) => route('movements.index', array_filter(array_merge($filters, $change), fn ($v) => $v !== null && $v !== ''));

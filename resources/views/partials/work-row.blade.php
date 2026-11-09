@@ -2,6 +2,7 @@
     One item in a queue. Expects $entry = ['artefact', 'holder', 'days_left', 'actionable', 'blocked'] and optionally $group.
     A movement assigned to someone with no assessment under way comes as ['movement', 'artefact' => null, …].
     A movement whose assessment has started comes as ['movement', 'artefact' (where it stands), 'started' => true, …].
+    A movement whose assessment is done (ODP signed) comes as ['movement', 'done' => the assessment, …].
 --}}
 @if (isset($entry['started']))
     @php
@@ -22,6 +23,25 @@
         @endif
         <a href="{{ $url }}" class="px-md py-1.5 rounded border-[1.5px] border-primary text-primary text-[0.8125rem] font-semibold">Open</a>
     </li>
+@elseif (isset($entry['done']))
+    @php
+        $m = $entry['movement'];
+        $done = $entry['done'];
+        $url = route('assessments.show', ['assessment' => $done->id, 'tab' => 'odp']);
+        $next = $m->status?->next_assessment_on;
+    @endphp
+    <li class="flex flex-wrap items-center gap-sm p-sm rounded-lg border-[1.5px] border-outline-variant bg-surface-container-lowest">
+        <span class="material-symbols-outlined text-primary" aria-hidden="true">verified</span>
+        <div class="flex-1 min-w-[min(14rem,100%)]">
+            <a href="{{ $url }}" class="text-[0.875rem] font-semibold text-primary underline">{{ $m->name }} · {{ $done->period_label }}</a>
+            <p class="text-[0.8125rem] text-on-surface-variant">
+                ODP signed by the board · follow-ups ongoing{{ $next ? ' · next assessment due '.$next->format('M Y') : '' }}
+            </p>
+        </div>
+        <x-chip tone="good" icon="verified">Stage 1 done</x-chip>
+        <x-chip tone="info" icon="autorenew">Follow-ups ongoing</x-chip>
+        <a href="{{ $url }}" class="px-md py-1.5 rounded border-[1.5px] border-primary text-primary text-[0.8125rem] font-semibold">Open</a>
+    </li>
 @elseif (isset($entry['movement']))
     @php
         $m = $entry['movement'];
@@ -39,7 +59,12 @@
                 <p class="text-[0.8125rem] flex items-center gap-xs mt-0.5"><span class="material-symbols-outlined text-[1rem]" aria-hidden="true">lock</span>{{ $entry['blocked'] }}</p>
             @endif
         </div>
-        <x-chip icon="radio_button_unchecked">Not started</x-chip>
+        @if ($last)
+            {{-- Assessed before, and the next assessment is now due. --}}
+            <x-chip tone="warning" icon="event_repeat">Next assessment due</x-chip>
+        @else
+            <x-chip icon="radio_button_unchecked">Not started</x-chip>
+        @endif
         @if ($entry['actionable'])
             <a href="{{ $url }}" class="px-md py-1.5 rounded bg-primary text-on-primary text-[0.8125rem] font-semibold">Start the assessment</a>
         @endif

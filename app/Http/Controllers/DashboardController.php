@@ -95,6 +95,7 @@ class DashboardController extends Controller
             'rows' => $scored !== null ? CategoryRows::for($scored) : [],
             'profile' => $profile,
             'current' => $current,
+            'lastDone' => $current === null ? $movement->lastAssessmentDone() : null,
             'milestones' => $current !== null ? AssessmentMilestone::query()->where('assessment_id', $current->id)->orderBy('sort_order')->get() : collect(),
             'odpAssessment' => $showOdp ? $odpAssessment : null,
             'tasks' => $tasks,

@@ -44,6 +44,16 @@
         @if ($current && $milestones->isNotEmpty())
             <x-gate-stepper :milestones="$milestones" :current="$holder?->holder_role->value === 'board' ? 'board' : $holder?->artefact_kind->value" />
             <p class="text-[0.8125rem] text-on-surface-variant">AAYMCA checks your OHA form, writes the report and agrees the ODP with you; the Board Chairperson then signs the ODP.</p>
+        @elseif ($lastDone)
+            {{-- Stage 1 done: the ODP is signed; the follow-ups are what is under way now. --}}
+            <div class="flex flex-wrap items-center gap-sm">
+                <x-chip tone="good" icon="verified">Stage 1 done</x-chip>
+                <x-chip tone="info" icon="autorenew">Follow-ups ongoing</x-chip>
+            </div>
+            <p class="text-[0.875rem]">
+                Your {{ $lastDone->period_label }} assessment is done: the ODP is signed by the board, and its follow-ups are under way.
+                {{ $status->next_assessment_on ? 'The next assessment is due in '.$status->next_assessment_on->format('F Y').'.' : '' }}
+            </p>
         @else
             <x-empty-state icon="event_available">
                 No assessment is under way.

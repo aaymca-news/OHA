@@ -11,7 +11,7 @@
             @forelse ($assessments as $assessment)
                 <p class="text-[0.875rem] flex flex-wrap items-center gap-sm">
                     <a href="{{ route('assessments.show', $assessment) }}" class="text-primary underline">{{ $assessment->movement->name }} · {{ $assessment->period_label }}</a>
-                    <span class="text-on-surface-variant">{{ $assessment->workItem?->holder_role->label() ?? 'Stage 1 complete' }}</span>
+                    <span class="text-on-surface-variant">{{ $assessment->workItem?->holder_role->label() ?? 'Stage 1 done' }}</span>
                 </p>
             @empty
                 <x-empty-state icon="search_off">No assessment matches.</x-empty-state>
