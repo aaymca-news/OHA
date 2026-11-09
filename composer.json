@@ -82,6 +82,7 @@
             "phpstan analyse --memory-limit=1G"
         ],
         "check": [
+            "Composer\\Config::disableProcessTimeout",
             "pint --test",
             "phpstan analyse --memory-limit=1G",
             "@php artisan test"

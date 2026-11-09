@@ -131,8 +131,13 @@
                         <form method="POST" action="{{ route('artefacts.drive', $artefact) }}" class="flex flex-col gap-sm mt-sm">
                             @csrf
                             @method('PUT')
-                            <x-input name="drive_url" label="Link to the ODP in Google Drive" type="url" :value="$artefact->drive_url" required
-                                     hint="In Google Drive, open the ODP and use Share → Copy link." />
+                            <div x-data="driveLink(@js(old('drive_url', $artefact->drive_url)))" class="flex flex-col gap-xs">
+                            <x-input name="drive_url" label="Link to the ODP in Google Drive" type="url" :value="$artefact->drive_url" required x-on:input="link = $event.target.value"
+                                     hint="The ODP file itself, not its folder. In Google Drive, open the ODP and use Share → Copy link." />
+                <p x-show="problem" x-cloak role="alert" class="flex items-start gap-xs text-[0.875rem] text-error">
+                    <span class="material-symbols-outlined text-[1.125rem]" aria-hidden="true">error</span><span x-text="problem"></span>
+                </p>
+                            </div>
                             <x-button variant="secondary" class="self-start">Save the link</x-button>
                         </form>
                     </details>
@@ -148,23 +153,21 @@
                 ? 'Changes made in Google Drive are saved as versions by themselves. Upload here only to add a version by hand, as an Excel (.xlsx), Word (.docx) or PDF file.'
                 : 'The ODP as an Excel (.xlsx), Word (.docx) or PDF file, as in AAYMCA’s ODP template. The newest is what you submit for approval; the approved version is kept until a newer one is approved.'">
         <form method="POST" action="{{ route('artefacts.versions', $artefact) }}" enctype="multipart/form-data"
-              x-data="{ name: '', over: false }" class="flex flex-col gap-sm">
+              class="flex flex-col gap-sm">
             @csrf
             @if ($artefact->isApproved())
                 <p class="p-sm rounded bg-surface-container text-[0.875rem]">This ODP is approved. A new version goes back to the Administrators for approval; until then, staff and the movement’s Board Chairperson and National General Secretary keep seeing the approved version.</p>
             @endif
-            <label x-on:dragover.prevent="over = true" x-on:dragleave="over = false" x-on:drop="over = false"
-                   :class="over ? 'border-primary bg-surface-container-low' : 'border-outline-variant'"
-                   class="flex flex-col items-center gap-xs p-lg rounded-lg border-2 border-dashed text-[0.875rem] cursor-pointer text-center">
-                <span class="material-symbols-outlined text-[2rem] text-primary" aria-hidden="true">upload_file</span>
-                <span x-text="name || 'Drop the ODP here, or choose the file (.xlsx, .docx or .pdf)'">Choose the ODP file (.xlsx, .docx or .pdf)</span>
-                <input type="file" name="odp" accept=".xlsx,.docx,.pdf" required class="sr-only focus:not-sr-only"
-                       x-on:change="name = $event.target.files[0]?.name ?? ''">
-            </label>
+            <x-file-drop name="odp" accept=".xlsx,.docx,.pdf" label="ODP file" prompt="Drop the ODP here, or click to choose the file (.xlsx, .docx or .pdf)" />
             @unless ($artefact->drive_file_id)
-                <x-input name="drive_url" label="Link to the ODP in Google Drive" type="url" required
+                <div x-data="driveLink(@js(old('drive_url', '')))" class="flex flex-col gap-xs">
+                <x-input name="drive_url" label="Link to the ODP in Google Drive" type="url" required x-on:input="link = $event.target.value"
                          placeholder="https://docs.google.com/spreadsheets/d/…"
-                         hint="The Google Sheet (or Doc) the staff write the ODP in. In Google Drive, open it and use Share → Copy link." />
+                         hint="The ODP file itself, not its folder: the Google Sheet (or Doc) the staff write the ODP in. In Google Drive, open it and use Share → Copy link." />
+                <p x-show="problem" x-cloak role="alert" class="flex items-start gap-xs text-[0.875rem] text-error">
+                    <span class="material-symbols-outlined text-[1.125rem]" aria-hidden="true">error</span><span x-text="problem"></span>
+                </p>
+                </div>
             @endunless
             @if ($versions->isNotEmpty())
                 <label class="flex flex-col gap-xs text-[0.875rem]">

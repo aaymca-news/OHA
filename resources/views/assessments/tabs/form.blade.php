@@ -54,19 +54,12 @@
     <x-card :title="$upload ? 'Upload a corrected OHA form' : 'Upload the completed OHA form'"
             subtitle="The .xlsx the movement returned. It is stored unchanged; the answers read from it become the record.">
         <form method="POST" action="{{ route('artefacts.upload', $form) }}" enctype="multipart/form-data"
-              x-data="{ name: '', over: false }" class="flex flex-col gap-sm">
+              class="flex flex-col gap-sm">
             @csrf
             @if ($form->isApproved())
                 <p class="p-sm rounded bg-surface-container text-[0.875rem]">This form is approved. A corrected form goes back to the Administrators, who are told; until they approve it, everyone keeps seeing the approved form and its score.</p>
             @endif
-            <label x-on:dragover.prevent="over = true" x-on:dragleave="over = false" x-on:drop="over = false"
-                   :class="over ? 'border-primary bg-surface-container-low' : 'border-outline-variant'"
-                   class="flex flex-col items-center gap-xs p-lg rounded-lg border-2 border-dashed text-[0.875rem] cursor-pointer text-center">
-                <span class="material-symbols-outlined text-[2rem] text-primary" aria-hidden="true">upload_file</span>
-                <span x-text="name || 'Drop the .xlsx here, or choose the file'">Choose the .xlsx file</span>
-                <input type="file" name="form" accept=".xlsx" required class="sr-only focus:not-sr-only"
-                       x-on:change="name = $event.target.files[0]?.name ?? ''">
-            </label>
+            <x-file-drop name="form" accept=".xlsx" label="OHA form" prompt="Drop the .xlsx here, or click to choose the file" />
             @include('assessments.tabs._replace-guard', ['artefact' => $form])
             <x-button class="self-start">Upload and check</x-button>
         </form>

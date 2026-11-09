@@ -38,7 +38,7 @@ final readonly class ReadReport
 
     /**
      * A paragraph that stands as a title: a Word heading, a short bold line, or a
-     * short numbered line ("3. Governance", "Category 4. Monitoring").
+     * short numbered line ("3. Governance", "Category 4. Monitoring", "Catégorie 2. Gouvernance").
      *
      * @param  array{text: string, heading: int|null, bold: bool, list: bool}  $p
      */
@@ -48,7 +48,7 @@ final readonly class ReadReport
 
         return ($p['heading'] !== null && $short)
             || ($p['bold'] && $short)
-            || ($short && preg_match('/^\s*(?:category\s+)?\d{1,2}\s*[.)]\s+\S/i', $p['text']) === 1);
+            || ($short && preg_match('/^\s*(?:category\s+|cat[ée]gorie\s+)?\d{1,2}\s*[.)]\s+\S/iu', $p['text']) === 1);
     }
 
     /**

@@ -14,6 +14,7 @@ use App\Http\Controllers\MovementController;
 use App\Http\Controllers\MyWorkController;
 use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\ProfileController;
+use App\Http\Controllers\ReportDraftController;
 use App\Http\Controllers\ReportFixController;
 use App\Http\Controllers\ResourceController;
 use App\Http\Controllers\SearchController;
@@ -72,6 +73,19 @@ Route::middleware('auth')->group(function () {
         Route::post('sign', 'sign')->name('sign');
     });
     Route::delete('versions/{document}', [ArtefactController::class, 'withdraw'])->name('versions.withdraw');
+
+    // The report drafted from the OHA form, corrected on screen section by section.
+    Route::prefix('artefacts/{artefact}/draft')->name('report-draft.')->controller(ReportDraftController::class)->group(function () {
+        Route::get('/', 'show')->name('show');
+        Route::post('/', 'start')->name('start');
+        Route::delete('/', 'destroy')->name('destroy');
+        Route::post('facts', 'facts')->name('facts');
+        Route::post('word', 'make')->name('make');
+        Route::post('sections', 'add')->name('add');
+        Route::put('sections/{key}', 'save')->where('key', '[a-z0-9_:]+')->name('save');
+        Route::post('sections/{key}/rewrite', 'rewrite')->where('key', '[a-z0-9_:]+')->name('rewrite');
+        Route::delete('sections/{key}', 'remove')->where('key', '[a-z0-9_:]+')->name('remove');
+    });
 
     Route::post('findings/{finding}/resolve', [GapController::class, 'resolve'])->name('findings.resolve');
     Route::post('findings/{finding}/reopen', [GapController::class, 'reopen'])->name('findings.reopen');

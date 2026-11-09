@@ -20,27 +20,32 @@ use App\Oha\Scorer;
  * overview; state the overall score (points out of the form's maximum); list key
  * strengths, risks and opportunities; and analyse every category, each with its
  * opportunities for growth.
+ *
+ * A report written in French is read the same way: its section and category titles
+ * ("Aperçu", "Points forts", "Risques", "Stabilité financière" …), its overall score
+ * ("score global de 69,05 %") and its author ("Rapport rédigé par"). Its findings are in
+ * English, as everything the platform writes is.
  */
 final class ReportChecker
 {
     /** How each category is recognised in a report's titles. */
     private const CATEGORY_TITLES = [
-        'financial' => '/financial\s+(stability|sustainability)/i',
-        'governance' => '/\bgovernance\b/i',
-        'constitution' => '/constitution|by-?\s?laws|polic(y|ies)\s+(and|&)\s+(procedures|compliance)/i',
-        'me' => '/monitoring/i',
-        'strategy' => '/strategic\s+planning/i',
-        'diversity' => '/diversity|youth\s+participation/i',
-        'comms' => '/communications?\b/i',
-        'property' => '/property\s+management/i',
-        'staff' => '/staff\s*(and|&|\+)\s*volunteer/i',
+        'financial' => '/financial\s+(stability|sustainability)|(stabilit[ée]|viabilit[ée]|p[ée]rennit[ée]|durabilit[ée])\s+financi[èe]re/iu',
+        'governance' => '/\b(governance|gouvernance)\b/iu',
+        'constitution' => '/constitution|by-?\s?laws|polic(y|ies)\s+(and|&)\s+(procedures|compliance)|\bstatuts\b|r[èe]glement\s+int[ée]rieur|politiques\s+(et|&)\s+proc[ée]dures/iu',
+        'me' => '/monitoring|suivi\s*(et|&|-)?\s*[ée]valuation/iu',
+        'strategy' => '/strategic\s+planning|planification\s+strat[ée]gique/iu',
+        'diversity' => '/diversity|youth\s+participation|diversit[ée]|participation\s+des\s+jeunes/iu',
+        'comms' => '/communications?\b/iu',
+        'property' => '/property\s+management|gestion\s+(des\s+biens|immobili[èe]re|du\s+patrimoine)|\bpatrimoine\b/iu',
+        'staff' => '/staff\s*(and|&|\+)\s*volunteer|(d[ée]veloppement\s+du\s+)?personnel\s+(et|&)\s+(des\s+)?b[ée]n[ée]voles/iu',
     ];
 
     /**
      * Sections the report template adds that are not form categories. Each ends the
      * category section before it, so its text is not read as that category's analysis.
      */
-    private const OTHER_SECTIONS = '/^programmes?\s+(and|&)\s+projects?\b/i';
+    private const OTHER_SECTIONS = '/^programmes?\s+(and|&|et)\s+proj(ects?|ets?)\b/iu';
 
     /** The report's own score must be within this many percentage points of the form's. */
     private const TOLERANCE = 0.5;
@@ -71,8 +76,20 @@ final class ReportChecker
         $stated = $this->statedScore($report);
         $this->checkScore($stated, $baseline);
         $this->checkCategories($report, $assessment);
+        $this->checkToComplete($report);
 
         return ['findings' => $this->findings, 'stated' => $stated, 'baseline' => $baseline];
+    }
+
+    /** What a drafted report left for the assessors to write: "[To complete: …]". */
+    private function checkToComplete(ReadReport $report): void
+    {
+        $left = substr_count($report->text(), '[To complete');
+        if ($left > 0) {
+            $this->add(FindingSeverity::Missing, FindingRule::ReportSectionMissing,
+                "The report still has {$left} “[To complete …]” ".($left === 1 ? 'gap' : 'gaps').' to fill in.',
+                hint: 'Fill them in on the draft and create the Word report again, or in the Word file.', ref: 'r:todo');
+        }
     }
 
     /**
@@ -148,7 +165,7 @@ final class ReportChecker
                 location: 'Title', hint: 'Update the period, or check this is the report for this assessment.', ref: 'r:period');
         }
 
-        if (preg_match('/\b(report(ed)?\s+by|prepared\s+by|author)\b/i', $opening.' '.$report->text()) !== 1) {
+        if (preg_match('/\b(report(ed)?\s+by|prepared\s+by|author)\b|\b(r[ée]dig[ée]e?|pr[ée]par[ée]e?|[ée]tabli)\s+par\b|rapport\s+par\b|\bauteurs?\b/iu', $opening.' '.$report->text()) !== 1) {
             $this->add(FindingSeverity::Missing, FindingRule::ReportAuthorMissing,
                 'The report does not say who wrote it.',
                 location: 'Title', hint: 'Add "Report by:" with the names of the AAYMCA staff who prepared it.', ref: 'r:author');
@@ -163,9 +180,9 @@ final class ReportChecker
         // Strengths and opportunities are one requirement: a movement that is developing is
         // written up by its opportunities, one that is strong by its strengths. Either will do.
         $sections = [
-            'overview' => ['/overview|introduction|current\s+status|general\s+information|background|summary\s+of\s+findings/i', 'an overview of the movement', 'Describe the movement: its registration, structure, branches and reach.'],
-            'strengths' => ['/\bstrengths?\b|opportunit|priorit|areas?\s+of\s+growth/i', 'the key strengths or opportunities for growth', 'List what the movement does well, or where it can grow; these feed the ODP.'],
-            'risks' => ['/\brisks?\b|concern|challenge|weakness|threat|\bgaps?\b/i', 'the key risks', 'List the risks or challenges the assessment found.'],
+            'overview' => ['/overview|introduction|current\s+status|general\s+information|background|summary\s+of\s+findings|aper[çc]u|pr[ée]sentation|contexte|historique|situation\s+actuelle|informations\s+g[ée]n[ée]rales|r[ée]sum[ée]\s+des\s+(constats|conclusions)/iu', 'an overview of the movement', 'Describe the movement: its registration, structure, branches and reach.'],
+            'strengths' => ['/\bstrengths?\b|opportunit|priorit|areas?\s+of\s+growth|\bforces?\b|points?\s+forts?|axes?\s+d[e\'’]\s*(am[ée]lioration|croissance|d[ée]veloppement)/iu', 'the key strengths or opportunities for growth', 'List what the movement does well, or where it can grow; these feed the ODP.'],
+            'risks' => ['/\brisks?\b|concern|challenge|weakness|threat|\bgaps?\b|\brisques?\b|d[ée]fis?\b|faiblesses?|menaces?|lacunes?|pr[ée]occupations?/iu', 'the key risks', 'List the risks or challenges the assessment found.'],
         ];
 
         foreach ($sections as $key => [$pattern, $label, $hint]) {
@@ -192,11 +209,11 @@ final class ReportChecker
         $text = $report->text();
         $pct = $points = $outOf = null;
 
-        if (preg_match('/overall[^.%\n]{0,80}?(\d{1,3}(?:[.,]\d{1,2})?)\s*%/iu', $text, $m)) {
+        if (preg_match('/(?:overall|\b(?:score|note|r[ée]sultat|pourcentage)\s+globale?\b)[^.%\n]{0,80}?(\d{1,3}(?:[.,]\d{1,2})?)\s*%/iu', $text, $m)) {
             $pct = (float) str_replace(',', '.', $m[1]);
         }
-        if (preg_match('/overall[^.\n]{0,60}?(\d{1,3}(?:\.\d+)?)\s*\/\s*(\d{2,3})\b/iu', $text, $m)) {
-            [$points, $outOf] = [(float) $m[1], (float) $m[2]];
+        if (preg_match('/(?:overall|\b(?:score|note|r[ée]sultat|pourcentage)\s+globale?\b)[^.\n]{0,60}?(\d{1,3}(?:[.,]\d+)?)\s*\/\s*(\d{2,3})\b/iu', $text, $m)) {
+            [$points, $outOf] = [(float) str_replace(',', '.', $m[1]), (float) $m[2]];
             $pct ??= round($points * 100 / $outOf, 1);
         }
 
@@ -264,7 +281,7 @@ final class ReportChecker
 
             $body = $sections[$code];
             // A strong category may be written up by its strengths rather than its opportunities.
-            $hasGrowth = array_filter($body, fn ($p) => preg_match('/opportunit|priorit|recommend|\bstrengths?\b/i', $p['text']) === 1) !== [];
+            $hasGrowth = array_filter($body, fn ($p) => preg_match('/opportunit|priorit|recommend|recommand|\bstrengths?\b|\bforces?\b|points?\s+forts?|axes?\s+d/iu', $p['text']) === 1) !== [];
             $hasPoints = array_filter($body, fn ($p) => $p['list']) !== [];
             if (! $hasGrowth && ! $hasPoints) {
                 $this->add(FindingSeverity::Missing, FindingRule::ReportCategoryMissing,
@@ -277,8 +294,8 @@ final class ReportChecker
             // Only a figure worded as the category's score ("scored 55%", "55% score"), not any
             // percentage in the text (a funding share, a youth quota).
             if ($baseline !== null && isset($baseline['categories'][$code])
-                && preg_match('/(?:scor\w*|attain\w*|achiev\w*)[^.%\d]{0,30}(\d{1,3}(?:\.\d{1,2})?)\s*%|(\d{1,3}(?:\.\d{1,2})?)\s*%\s*(?:score|in this category)/i', $text, $found)) {
-                $m = [1 => $found[1] !== '' ? $found[1] : $found[2]];
+                && preg_match('/(?:scor\w*|attain\w*|achiev\w*|obten\w*|atteint\w*)[^.%\d]{0,30}(\d{1,3}(?:[.,]\d{1,2})?)\s*%|(\d{1,3}(?:[.,]\d{1,2})?)\s*%\s*(?:score|in this category|dans cette cat[ée]gorie)/iu', $text, $found)) {
+                $m = [1 => str_replace(',', '.', $found[1] !== '' ? $found[1] : $found[2])];
                 $numbersInText = true;
                 if (abs((float) $m[1] - $baseline['categories'][$code]) > 1.0 && (float) $m[1] <= 100) {
                     $this->add(FindingSeverity::Warning, FindingRule::ReportScoreMismatch,
@@ -339,7 +356,7 @@ final class ReportChecker
     public static function categoryNamedBy(string $title): ?string
     {
         // "Strategic priorities…" is a summary title; "Strategic Planning & Mission" is the category.
-        if (preg_match('/^(key|strategic(?!\s+planning)|summary|consolidated|overall)\b/i', $title) === 1) {
+        if (preg_match('/^(key|strategic(?!\s+planning)|summary|consolidated|overall|principa(l|ux|les?)|r[ée]sum[ée]|synth[èe]se|priorit[ée]s)\b/iu', $title) === 1) {
             return null;
         }
         foreach (self::CATEGORY_TITLES as $code => $pattern) {

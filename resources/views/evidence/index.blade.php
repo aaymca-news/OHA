@@ -72,7 +72,7 @@
                             <span class="font-semibold">File</span>
                             <input type="file" name="file" :required="kind === 'file'" :disabled="kind !== 'file'" accept="{{ '.'.implode(',.', Evidence::FORMATS) }}"
                                    class="text-[0.875rem] file:mr-sm file:px-md file:py-1.5 file:rounded file:border-[1.5px] file:border-outline-variant file:bg-surface-container-lowest file:text-primary file:font-semibold hover:file:border-primary">
-                            <span class="text-[0.8125rem] text-on-surface-variant">PDF, Word, Excel, PowerPoint, images or text, up to {{ (int) config('oha.max_upload_kb') / 1024 }} MB.</span>
+                            <span class="text-[0.8125rem] text-on-surface-variant">PDF, Word, Excel, PowerPoint, images or text, up to {{ \App\Support\UploadLimit::label() }}.</span>
                         </label>
                         <label x-show="kind === 'link'" x-cloak class="flex flex-col gap-xs text-[0.875rem]">
                             <span class="font-semibold">Link</span>

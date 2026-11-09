@@ -43,4 +43,8 @@
     @if ($hint)
         <span class="text-[0.8125rem] text-on-surface-variant">{{ $hint }}</span>
     @endif
+    {{-- What was wrong with this box, said under it (the page's summary at the top says it too). --}}
+    @error($name)
+        <span class="flex items-start gap-xs text-[0.8125rem] text-error"><span class="material-symbols-outlined text-[1rem]" aria-hidden="true">error</span>{{ $message }}</span>
+    @enderror
 </label>

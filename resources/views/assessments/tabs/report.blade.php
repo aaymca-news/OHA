@@ -44,23 +44,45 @@
     ])
 @endif
 
+{{-- The second way to the report: drafted by the platform from the OHA form, then corrected on screen. --}}
+@can('upload', $artefact)
+    @php
+        $reportDraft = $artefact->draft()->with('updater')->first();
+    @endphp
+    <x-card :title="$reportDraft ? 'Draft report' : 'Let the platform draft the report'"
+            :subtitle="$reportDraft
+                ? 'Drafted from the OHA form and being corrected on screen. Last saved by '.$reportDraft->updater->name.', '.$reportDraft->updated_at->diffForHumans().'.'
+                : 'The platform writes every section of the AAYMCA report template from the OHA form: the overview, the scores, the key strengths, risks and opportunities, and each category’s analysis. You then correct it and add what is missing.'">
+        @if ($reportDraft)
+            <div class="flex flex-wrap items-center gap-sm">
+                <a href="{{ route('report-draft.show', $artefact) }}" class="inline-flex items-center gap-xs px-md py-2 rounded-lg bg-primary text-on-primary font-semibold text-[0.9375rem] hover:bg-primary-container">
+                    <span class="material-symbols-outlined text-[1.125rem]" aria-hidden="true">edit_document</span> Open the draft
+                </a>
+                @if (($left = $reportDraft->toComplete()) > 0)
+                    <x-chip tone="warning" icon="edit_note">{{ $left }} “To complete” left</x-chip>
+                @endif
+            </div>
+        @else
+            <form method="POST" action="{{ route('report-draft.start', $artefact) }}">
+                @csrf
+                <x-button>
+                    <span class="inline-flex items-center gap-xs"><span class="material-symbols-outlined text-[1.125rem]" aria-hidden="true">auto_awesome</span> Generate a draft report</span>
+                </x-button>
+            </form>
+        @endif
+    </x-card>
+@endcan
+
 @can('upload', $artefact)
     <x-card :title="$versions->isEmpty() ? 'Upload the report' : 'Upload a new version'"
             subtitle="The report written for this assessment, as a Word (.docx) or PDF file. The newest is what you submit for approval; the approved version is kept until a newer one is approved.">
         <form method="POST" action="{{ route('artefacts.versions', $artefact) }}" enctype="multipart/form-data"
-              x-data="{ name: '', over: false }" class="flex flex-col gap-sm">
+              class="flex flex-col gap-sm">
             @csrf
             @if ($artefact->isApproved())
                 <p class="p-sm rounded bg-surface-container text-[0.875rem]">This report is approved. A new version goes back to the Administrators for approval; until then, staff and the movement’s Board Chairperson and National General Secretary keep seeing the approved version.</p>
             @endif
-            <label x-on:dragover.prevent="over = true" x-on:dragleave="over = false" x-on:drop="over = false"
-                   :class="over ? 'border-primary bg-surface-container-low' : 'border-outline-variant'"
-                   class="flex flex-col items-center gap-xs p-lg rounded-lg border-2 border-dashed text-[0.875rem] cursor-pointer text-center">
-                <span class="material-symbols-outlined text-[2rem] text-primary" aria-hidden="true">upload_file</span>
-                <span x-text="name || 'Drop the report here, or choose the file (.docx or .pdf)'">Choose the report file (.docx or .pdf)</span>
-                <input type="file" name="report" accept=".docx,.pdf" required class="sr-only focus:not-sr-only"
-                       x-on:change="name = $event.target.files[0]?.name ?? ''">
-            </label>
+            <x-file-drop name="report" accept=".docx,.pdf" label="report file" prompt="Drop the report here, or click to choose the file (.docx or .pdf)" />
             @if ($versions->isNotEmpty())
                 <label class="flex flex-col gap-xs text-[0.875rem]">
                     <span class="font-semibold">What changed in this version? (optional)</span>

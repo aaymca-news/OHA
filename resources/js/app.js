@@ -263,5 +263,107 @@ Alpine.data('layout', () => ({
     },
 }));
 
+/*
+ * A box a file is dropped on or chosen in (the OHA form, the report, the ODP). The file
+ * dropped is put in the form's own file input, so it is sent like a chosen one; its type
+ * and size are checked at once, and anything wrong is said beside the box, not in a
+ * browser bubble on an input nobody can see. A form whose file is missing says so too.
+ */
+Alpine.data('fileDrop', ({ accept, maxKb, required, label }) => ({
+    over: false,
+    name: '',
+    problem: '',
+
+    init() {
+        this.$el.closest('form')?.addEventListener('submit', (event) => {
+            if (required && !this.$refs.input.files.length) {
+                event.preventDefault();
+                this.problem = `Choose the ${label} first, or drop it in the box.`;
+            }
+        });
+    },
+
+    drop(event) {
+        this.over = false;
+        const file = event.dataTransfer?.files?.[0];
+        if (!file) {
+            return;
+        }
+        const files = new DataTransfer();
+        files.items.add(file);
+        this.$refs.input.files = files.files;
+        this.check();
+    },
+
+    check() {
+        const file = this.$refs.input.files[0];
+        this.name = '';
+        this.problem = '';
+        if (!file) {
+            return;
+        }
+        const allowed = accept.split(',').map((type) => type.trim().toLowerCase());
+        const type = '.' + file.name.split('.').pop().toLowerCase();
+        if (!allowed.includes(type)) {
+            this.problem = `“${file.name}” is not a ${allowed.join(', ')} file. Choose the ${label} in one of those formats.`;
+        } else if (file.size > maxKb * 1024) {
+            const mb = (n) => (Math.round((n / 1024) * 10) / 10).toString();
+            this.problem = `“${file.name}” is ${mb(file.size / 1024)} MB; the most that can be uploaded is ${mb(maxKb)} MB. Make it smaller (a scanned PDF saved at a lower quality, for example).`;
+        } else {
+            this.name = file.name;
+
+            return;
+        }
+        this.$refs.input.value = '';
+    },
+}));
+
+/*
+ * The ODP's Google Drive link, checked as it is pasted, so a folder link is caught before
+ * the form is sent (and the file chosen with it is not lost). The server checks it again.
+ */
+Alpine.data('driveLink', (initial = '') => ({
+    link: initial,
+
+    get problem() {
+        const url = this.link.trim();
+        if (url === '') {
+            return '';
+        }
+        if (!/^https:\/\/(docs|drive)\.google\.com\//i.test(url)) {
+            return 'Paste the link to the ODP in Google Drive: it starts with https://docs.google.com/ or https://drive.google.com/.';
+        }
+        if (/\/folders\//i.test(url)) {
+            return 'This is a link to a folder (such as the movement’s folder in Google Drive), not to the ODP. Open the folder, open the ODP file inside it, then copy its link with Share → Copy link.';
+        }
+        if (/\/(presentation|forms)\//i.test(url)) {
+            return 'This is a link to Google Slides or Forms. The ODP is a spreadsheet or a document: link the Google Sheet, the Google Doc, or the Excel or Word file in Drive.';
+        }
+
+        return '';
+    },
+
+    init() {
+        this.$el.closest('form')?.addEventListener('submit', (event) => {
+            if (this.problem) {
+                event.preventDefault();
+                this.$el.querySelector('input')?.focus();
+            }
+        });
+    },
+}));
+
+/*
+ * A file dropped beside a drop box would otherwise be opened by the browser, leaving the
+ * page and what was typed on it. Only a file input itself takes a drop outside a box.
+ */
+for (const type of ['dragover', 'drop']) {
+    window.addEventListener(type, (event) => {
+        if (event.dataTransfer?.types?.includes('Files') && !(event.target instanceof HTMLInputElement && event.target.type === 'file')) {
+            event.preventDefault();
+        }
+    });
+}
+
 window.Alpine = Alpine;
 Alpine.start();

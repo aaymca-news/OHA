@@ -8,6 +8,11 @@ namespace App\Oha;
  * "1-5 years", "USD 1.2 million". Each is read as the number or option it plainly
  * means, and that value is what is stored and scored; what was written is kept beside it.
  *
+ * Answers written in French are read the same way, into the form's own options and
+ * figures: "Oui", "Entité unique", "Conseil d'administration", "Plus de 5 ans",
+ * "2 fois ou plus", "12 mois", "environ 300", "1 234,5". Whatever the language, what
+ * the platform stores and writes is in English.
+ *
  * Nothing ambiguous is guessed: two numbers ("54 branches, 30 active"), comparisons
  * ("more than 5") and other wording stay as written, and the check flags them.
  *
@@ -30,11 +35,11 @@ final class Interpreter
 
     /** How each unit is written, by what it measures. */
     private const UNITS = [
-        'days' => ['day', 'days'],
-        'weeks' => ['week', 'weeks', 'wk', 'wks'],
-        'months' => ['month', 'months', 'mth', 'mths', 'mo', 'mos'],
-        'years' => ['year', 'years', 'yr', 'yrs'],
-        'percent' => ['%', 'percent', 'per cent', 'pct'],
+        'days' => ['day', 'days', 'jour', 'jours'],
+        'weeks' => ['week', 'weeks', 'wk', 'wks', 'semaine', 'semaines'],
+        'months' => ['month', 'months', 'mth', 'mths', 'mo', 'mos', 'mois'],
+        'years' => ['year', 'years', 'yr', 'yrs', 'an', 'ans', 'année', 'années', 'annee', 'annees'],
+        'percent' => ['%', 'percent', 'per cent', 'pct', 'pour cent', 'pourcent'],
         'weight' => ['kg', 'kgs', 'kilo', 'kilos', 'kilogram', 'kilograms', 'g', 'gram', 'grams', 'tonne', 'tonnes', 'ton', 'tons', 'lb', 'lbs'],
         'volume' => ['l', 'litre', 'litres', 'liter', 'liters', 'ml', 'millilitre', 'millilitres', 'gallon', 'gallons'],
         'length' => ['km', 'kms', 'kilometre', 'kilometres', 'kilometer', 'kilometers', 'm', 'metre', 'metres', 'meter', 'meters', 'cm', 'mile', 'miles'],
@@ -52,22 +57,40 @@ final class Interpreter
     ];
 
     /** Words that only say a figure is approximate; they are dropped. */
-    private const APPROXIMATELY = '/^(?:about|approximately|approx\.?|around|roughly|circa|ca\.|estimated|est\.|~|±)\s*/iu';
+    private const APPROXIMATELY = '/^(?:about|approximately|approx\.?|around|roughly|circa|ca\.|estimated|est\.|environ|approximativement|à peu près|a peu pres|près de|pres de|~|±)\s*/iu';
 
     /** Words that make a figure a comparison or a sum, which is never guessed at. */
-    private const COMPARISON = '/\b(?:more|less|fewer|greater|over|under|above|below|least|most|up|maximum|minimum|max|min|between|and|to|or|plus)\b|[<>≤≥+\/]|\d/iu';
+    private const COMPARISON = '/\b(?:more|less|fewer|greater|over|under|above|below|least|most|up|maximum|minimum|max|min|between|and|to|or|plus|moins|entre|et|ou|jusqu|supérieur|inférieur|au-dessus|au-dessous)\b|[<>≤≥+\/]|\d/iu';
 
     private const WORDS = [
         'zero' => 0, 'none' => 0, 'nil' => 0, 'nobody' => 0, 'never' => 0, 'one' => 1, 'two' => 2, 'three' => 3, 'four' => 4, 'five' => 5,
         'six' => 6, 'seven' => 7, 'eight' => 8, 'nine' => 9, 'ten' => 10, 'eleven' => 11, 'twelve' => 12, 'thirteen' => 13,
         'fourteen' => 14, 'fifteen' => 15, 'sixteen' => 16, 'seventeen' => 17, 'eighteen' => 18, 'nineteen' => 19,
         'twenty' => 20, 'thirty' => 30, 'forty' => 40, 'fifty' => 50, 'sixty' => 60, 'seventy' => 70, 'eighty' => 80, 'ninety' => 90,
+        // In French.
+        'zéro' => 0, 'aucun' => 0, 'aucune' => 0, 'jamais' => 0, 'un' => 1, 'une' => 1, 'deux' => 2, 'trois' => 3, 'quatre' => 4,
+        'cinq' => 5, 'sept' => 7, 'huit' => 8, 'neuf' => 9, 'dix' => 10, 'onze' => 11, 'douze' => 12, 'treize' => 13,
+        'quatorze' => 14, 'quinze' => 15, 'seize' => 16, 'vingt' => 20, 'trente' => 30, 'quarante' => 40, 'cinquante' => 50, 'soixante' => 60,
     ];
 
     /** Whole answers that are a number on their own. */
-    private const ALONE = ['a dozen' => 12, 'dozen' => 12, 'once' => 1, 'twice' => 2, 'no one' => 0];
+    private const ALONE = ['a dozen' => 12, 'dozen' => 12, 'once' => 1, 'twice' => 2, 'no one' => 0, 'une douzaine' => 12, 'personne' => 0, 'une fois' => 1, 'deux fois' => 2];
 
-    private const SCALES = ['thousand' => 1_000, 'k' => 1_000, 'million' => 1_000_000, 'mn' => 1_000_000, 'm' => 1_000_000, 'billion' => 1_000_000_000, 'bn' => 1_000_000_000];
+    private const SCALES = ['thousand' => 1_000, 'k' => 1_000, 'million' => 1_000_000, 'mn' => 1_000_000, 'm' => 1_000_000, 'billion' => 1_000_000_000, 'bn' => 1_000_000_000,
+        'mille' => 1_000, 'millions' => 1_000_000, 'milliard' => 1_000_000_000, 'milliards' => 1_000_000_000];
+
+    /**
+     * The form's choices as French-speaking movements write them, by their letters only
+     * (see key()), and the option each means.
+     */
+    private const FRENCH_OPTIONS = [
+        'entitunique' => 'Single Entity', 'entiteunique' => 'Single Entity', 'structurefdrative' => 'Federative Structure', 'structurefederative' => 'Federative Structure',
+        'fdration' => 'Federative Structure', 'federation' => 'Federative Structure', 'autre' => 'Other', 'autres' => 'Other',
+        'assemblegnrale' => 'General Assembly', 'assembleegenerale' => 'General Assembly', 'conseildadministration' => 'Board of Directors', 'conseil' => 'Board of Directors',
+        'moinsdunan' => 'Less than 1 year', '15ans' => '1 - 5 years', 'de1a5ans' => '1 - 5 years', 'entre1et5ans' => '1 - 5 years', 'plusde5ans' => 'More than 5 years',
+        'aucune' => 'None', 'aucun' => 'None', 'jamais' => 'None', '1fois' => '1 time', 'unefois' => '1 time', '2foisouplus' => '2 or more times', 'deuxfoisouplus' => '2 or more times',
+        'nonapplicable' => 'Not Applicable', 'sansobjet' => 'Not Applicable',
+    ];
 
     /**
      * The form with every answer it can read put in plain form, and the answers it
@@ -184,10 +207,15 @@ final class Interpreter
                 return ['value' => $option];
             }
         }
+        // The same choice written in French.
+        $french = self::FRENCH_OPTIONS[$key] ?? null;
+        if ($french !== null && in_array($french, $options, true)) {
+            return ['value' => $french];
+        }
 
         // Yes / No / Not applicable, however written: "Y", "yes.", "Yes, we have one", "N/A".
         $yesNo = match (true) {
-            (bool) preg_match('/^(?:n\/a|n\.a\.?|na|not applicable|non applicable)(?![\p{L}])/iu', $text) => 'Not Applicable',
+            (bool) preg_match('/^(?:n\/a|n\.a\.?|na|not applicable|non applicable|sans objet|s\/o)(?![\p{L}])/iu', $text) => 'Not Applicable',
             (bool) preg_match('/^(?:y|yes|yeah|yep|true|oui)(?![\p{L}])/iu', $text) => 'Yes',
             (bool) preg_match('/^(?:n|no|nope|false|non)(?![\p{L}])/iu', $text) => 'No',
             default => null,
@@ -198,7 +226,7 @@ final class Interpreter
 
         // A number where the options count times ("None", "1 time", "2 or more times").
         if (in_array('2 or more times', $options, true)) {
-            [$n, $unit] = self::split((string) preg_replace('/\btimes?\b/iu', '', $text) ?: '0');
+            [$n, $unit] = self::split((string) preg_replace('/\b(?:times?|fois)\b/iu', '', $text) ?: '0');
             if ($n !== null && $unit === null) {
                 return ['value' => $n <= 0 ? 'None' : ($n < 2 ? '1 time' : '2 or more times')];
             }
@@ -257,7 +285,7 @@ final class Interpreter
         }
 
         // "USD 1.2 million", "90 thousand", "R 2,5m".
-        if (preg_match('/^(.*?\d[\d\s.,]*?)\s*(million|thousand|billion|mn|bn|m|k)\.?\s*(?:[A-Z]{3})?$/iu', $text, $m)
+        if (preg_match('/^(.*?\d[\d\s.,]*?)\s*(millions|milliards|milliard|million|thousand|billion|mille|mn|bn|m|k)\.?\s*(?:[A-Z]{3})?$/iu', $text, $m)
             && ($base = Answer::amount(trim($m[1]))) !== null) {
             return ['value' => self::tidy($base * self::SCALES[mb_strtolower($m[2])])];
         }
@@ -342,7 +370,7 @@ final class Interpreter
         $current = 0;
         $seen = false;
         foreach (explode(' ', $text) as $word) {
-            if ($word === 'and' && $seen) {
+            if (($word === 'and' || $word === 'et') && $seen) {
                 continue;
             }
             if (isset(self::WORDS[$word])) {
@@ -350,8 +378,12 @@ final class Interpreter
                 $seen = true;
             } elseif ($word === 'hundred' && $seen) {
                 $current *= 100;
-            } elseif (($word === 'thousand' || $word === 'million') && $seen) {
-                $total += $current * self::SCALES[$word];
+            } elseif ($word === 'cent' || $word === 'cents') {
+                $current = max(1, $current) * 100;
+                $seen = true;
+            } elseif (in_array($word, ['thousand', 'million', 'mille', 'millions'], true) && ($seen || $word === 'mille')) {
+                $total += max($word === 'mille' ? 1 : 0, $current) * self::SCALES[$word];
+                $seen = true;
                 $current = 0;
             } else {
                 return null;

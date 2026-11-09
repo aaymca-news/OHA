@@ -25,7 +25,7 @@ final class DriveLink
             throw new WorkflowRuleBroken('Paste the link to the ODP in Google Drive: it starts with https://docs.google.com/ or https://drive.google.com/.');
         }
         if (preg_match('#/(?:drive/)?(?:u/\d+/)?folders/#', $path) === 1) {
-            throw new WorkflowRuleBroken('This is a link to a folder. Open the ODP document itself and copy its link.');
+            throw new WorkflowRuleBroken('This is a link to a folder (such as the movement’s folder in Google Drive), not to the ODP. Open the folder, open the ODP file inside it, then copy its link with Share → Copy link.');
         }
         if (preg_match('#^/(presentation|forms)/#', $path, $m) === 1) {
             throw new WorkflowRuleBroken('This is a link to Google '.['presentation' => 'Slides', 'forms' => 'Forms'][$m[1]].'. The ODP is a spreadsheet or a document: link the Google Sheet, Google Doc, or the Excel or Word file in Drive.');

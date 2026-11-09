@@ -13,6 +13,7 @@ use App\Models\Movement;
 use App\Oha\EvidenceQuestions;
 use App\Queries\EvidenceLibrary;
 use App\Support\Audit;
+use App\Support\UploadLimit;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
@@ -57,7 +58,7 @@ class EvidenceController extends Controller
         $data = $request->validate([
             'assessment_id' => ['required', 'integer'],
             'kind' => ['required', 'in:file,link'],
-            'file' => ['required_if:kind,file', 'nullable', 'file', 'max:'.(int) config('oha.max_upload_kb')],
+            'file' => ['required_if:kind,file', 'nullable', 'file', 'max:'.UploadLimit::kb()],
             'url' => ['required_if:kind,link', 'nullable', 'string', 'max:2000'],
             'title' => ['nullable', 'string', 'max:200'],
             'category' => ['nullable', 'string', 'exists:categories,code'],
@@ -65,7 +66,7 @@ class EvidenceController extends Controller
             'questions.*' => ['string', 'max:10'],
             'tasks' => ['nullable', 'string', 'max:200'],
             'share' => ['boolean'],
-        ]);
+        ], UploadLimit::messages('file'));
         $assessment = Assessment::query()->where('movement_id', $movement->id)->findOrFail($data['assessment_id']);
         $file = $data['kind'] === 'file' ? $request->file('file') : null;
 

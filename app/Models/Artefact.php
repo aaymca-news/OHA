@@ -177,6 +177,16 @@ class Artefact extends Model
     }
 
     /**
+     * The report as the platform drafted it from the OHA form, being corrected on screen.
+     *
+     * @return HasOne<ReportDraft, $this>
+     */
+    public function draft(): HasOne
+    {
+        return $this->hasOne(ReportDraft::class);
+    }
+
+    /**
      * @return HasOne<ArtefactStatus, $this>
      */
     public function status(): HasOne

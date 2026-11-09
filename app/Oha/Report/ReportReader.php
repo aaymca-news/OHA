@@ -68,7 +68,12 @@ final class ReportReader
             if (! $p instanceof DOMElement) {
                 continue;
             }
-            $text = trim((string) preg_replace('/\s+/u', ' ', implode('', array_map(fn ($t) => $t->nodeValue, iterator_to_array($x->query('.//w:t', $p))))));
+            // A line break or tab inside the paragraph separates words, as on the page:
+            // "REPORT" ⏎ "Zambia YMCA" reads "REPORT Zambia YMCA", not "REPORTZambia YMCA".
+            $text = trim((string) preg_replace('/\s+/u', ' ', implode('', array_map(
+                fn ($n) => $n->localName === 't' ? $n->nodeValue : ' ',
+                iterator_to_array($x->query('.//w:t|.//w:br|.//w:cr|.//w:tab', $p)),
+            ))));
             if ($text === '') {
                 continue;
             }
