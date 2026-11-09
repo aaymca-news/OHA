@@ -4,20 +4,24 @@
     (shown beside each section, so the reviewer sees why it says what it says).
 --}}
 @php
-    $field = 'w-full px-sm py-2 rounded border-[1.5px] border-outline-variant bg-surface-container-lowest text-[0.9375rem] leading-relaxed';
+    // The boxes of each section's form: plain controls with the shared classes, not x-input or
+    // x-textarea, since every section's form uses the same names (an old value or error would
+    // show in all of them).
+    $box = [...\App\Support\Ui::control(), 'w-full text-[0.9375rem] leading-relaxed' => true];
     $rows = fn (string $text) => max(3, min(18, (int) ceil(mb_strlen($text) / 95) + substr_count($text, "\n") + 1));
+    // "Place it after": every section but the part headings; the last is chosen.
+    $places = collect($draft->sections)->reject(fn ($s) => $s['kind'] === 'heading')
+        ->mapWithKeys(fn ($s) => [$s['key'] => $s['kind'] === 'title' ? 'Title' : $s['title']])->all();
     $toComplete = $draft->toComplete();
     $anchor = fn (string $key) => str_replace(':', '-', $key);
 @endphp
 <x-layouts.app title="Draft report" :subtitle="$assessment->movement->name.' · '.$assessment->period_label.'. Drafted from the OHA form: read each section, correct it, and add what is missing.'">
-    <a href="{{ route('assessments.show', ['assessment' => $assessment, 'tab' => 'report']) }}" class="inline-flex items-center gap-xs text-[0.875rem] text-primary underline self-start">
-        <span class="material-symbols-outlined text-[1.125rem]" aria-hidden="true">arrow_back</span> Back to the Report tab
-    </a>
+    <x-button variant="link" icon="arrow_back" :href="route('assessments.show', ['assessment' => $assessment, 'tab' => 'report'])" class="text-[0.875rem] self-start">Back to the Report tab</x-button>
 
     <x-card title="About this draft">
         <div class="flex flex-col gap-sm text-[0.875rem]">
             <p>
-                Drafted by {{ $draft->creator->name }} on {{ $draft->created_at->format('j M Y') }} from the OHA form
+                Drafted by {{ $draft->creator->name }} on {{ $draft->created_at->asDay() }} from the OHA form
                 {{ $draft->formUpload ? '“'.$draft->formUpload->original_name.'”' : '' }}.
                 Last saved by <strong>{{ $draft->updater->name }}</strong>, {{ $draft->updated_at->diffForHumans() }}.
             </p>
@@ -30,38 +34,26 @@
                 <x-chip tone="info" icon="lock">The score table follows the OHA form</x-chip>
             </div>
             @if ($formChanged)
-                <div class="flex flex-wrap items-center gap-sm p-md rounded-lg bg-warning-wash text-warning-ink">
-                    <span class="material-symbols-outlined" aria-hidden="true">sync_problem</span>
-                    <span class="flex-1 min-w-[min(16rem,100%)]"><strong>The OHA form has changed since this draft was made.</strong> Update the facts to bring the scores and figures in line with it; your corrections to the text are kept.</span>
+                <x-callout tone="warning" icon="sync_problem">
+                    <p><strong>The OHA form has changed since this draft was made.</strong> Update the facts to bring the scores and figures in line with it; your corrections to the text are kept.</p>
                     <form method="POST" action="{{ route('report-draft.facts', $artefact) }}">
                         @csrf
                         <x-button>Update the facts</x-button>
                     </form>
-                </div>
+                </x-callout>
             @endif
             <p class="text-on-surface-variant">
                 Two people may work on the draft at once, on different sections. Each section shows who saved it last; if someone saved it after you opened this page, your save stops so their words are not lost.
             </p>
             <div class="flex flex-wrap items-center gap-md pt-xs">
-                <a href="#make" class="inline-flex items-center gap-xs text-primary underline font-semibold">
-                    <span class="material-symbols-outlined text-[1.125rem]" aria-hidden="true">description</span> Create the Word report
-                </a>
-                <form method="POST" action="{{ route('report-draft.start', $artefact) }}"
-                      x-data x-on:submit="if (! confirm('Write the whole draft again from the OHA form? Every correction made so far will be lost.')) $event.preventDefault()">
-                    @csrf
+                <x-button variant="link" icon="description" href="#make" class="font-semibold">Create the Word report</x-button>
+                <x-confirm-form :action="route('report-draft.start', $artefact)" confirm="Write the whole draft again from the OHA form? Every correction made so far will be lost.">
                     <input type="hidden" name="again" value="1">
-                    <button class="inline-flex items-center gap-xs text-primary underline">
-                        <span class="material-symbols-outlined text-[1.125rem]" aria-hidden="true">restart_alt</span> Start again from the form
-                    </button>
-                </form>
-                <form method="POST" action="{{ route('report-draft.destroy', $artefact) }}"
-                      x-data x-on:submit="if (! confirm('Discard this draft? It cannot be undone. Uploaded report versions are not affected.')) $event.preventDefault()">
-                    @csrf
-                    @method('DELETE')
-                    <button class="inline-flex items-center gap-xs text-error underline">
-                        <span class="material-symbols-outlined text-[1.125rem]" aria-hidden="true">delete</span> Discard the draft
-                    </button>
-                </form>
+                    <x-button variant="link" icon="restart_alt">Start again from the form</x-button>
+                </x-confirm-form>
+                <x-confirm-form :action="route('report-draft.destroy', $artefact)" method="DELETE" confirm="Discard this draft? It cannot be undone. Uploaded report versions are not affected.">
+                    <x-button variant="link-danger" icon="delete">Discard the draft</x-button>
+                </x-confirm-form>
             </div>
         </div>
     </x-card>
@@ -102,7 +94,7 @@
                                 @foreach ($section['rows'] as $r)
                                     <tr class="border-b border-surface-container">
                                         <td class="py-xs pr-sm">{{ $r['name'] }}</td>
-                                        <td class="py-xs pr-sm tabular-nums">{{ rtrim(rtrim(number_format((float) $r['points'], 2), '0'), '.') }}</td>
+                                        <td class="py-xs pr-sm tabular-nums">{{ \App\Support\Viz::figure((float) $r['points']) }}</td>
                                         <td class="py-xs pr-sm tabular-nums">{{ $r['max'] }}</td>
                                         <td class="py-xs pr-sm"><span class="inline-block size-2.5 rounded-full mr-xs align-middle" style="background-color: {{ $r['color'] }}"></span>{{ $r['band_label'] }}</td>
                                         <td class="py-xs tabular-nums">{{ number_format((float) $r['pct'], 2) }}%</td>
@@ -110,7 +102,7 @@
                                 @endforeach
                                 <tr class="font-semibold">
                                     <td class="py-xs pr-sm">Overall</td>
-                                    <td class="py-xs pr-sm tabular-nums">{{ rtrim(rtrim(number_format((float) $section['overall']['points'], 2), '0'), '.') }}</td>
+                                    <td class="py-xs pr-sm tabular-nums">{{ \App\Support\Viz::figure((float) $section['overall']['points']) }}</td>
                                     <td class="py-xs pr-sm tabular-nums">{{ $section['overall']['max'] }}</td>
                                     <td class="py-xs pr-sm">{{ $section['overall']['band_label'] }}</td>
                                     <td class="py-xs tabular-nums">{{ number_format((float) $section['overall']['pct'], 2) }}%</td>
@@ -131,72 +123,57 @@
                         @switch($section['kind'])
                             @case('title')
                                 @foreach (['Report title', 'Movement and month', 'Report by'] as $i => $label)
-                                    <label class="flex flex-col gap-xs text-[0.875rem]">
-                                        <span class="font-semibold">{{ $label }}</span>
-                                        <input type="text" name="lines[{{ $i }}]" value="{{ $section['lines'][$i] ?? '' }}" maxlength="300" class="{{ $field }}">
-                                    </label>
+                                    <x-field :label="$label">
+                                        <input type="text" name="lines[{{ $i }}]" value="{{ $section['lines'][$i] ?? '' }}" maxlength="300" @class($box)>
+                                    </x-field>
                                 @endforeach
                                 @break
                             @case('list')
-                                <label class="flex flex-col gap-xs text-[0.875rem]">
-                                    <span class="font-semibold">One point per line</span>
+                                <x-field label="One point per line">
                                     @php($value = implode("\n", $section['items']))
-                                    <textarea name="items" rows="{{ $rows($value) + count($section['items']) }}" class="{{ $field }}">{{ $value }}</textarea>
-                                </label>
+                                    <textarea name="items" rows="{{ $rows($value) + count($section['items']) }}" @class($box)>{{ $value }}</textarea>
+                                </x-field>
                                 @break
                             @case('category')
-                                <label class="flex flex-col gap-xs text-[0.875rem]">
-                                    <span class="font-semibold">Analysis</span>
-                                    <textarea name="text" rows="{{ $rows($section['text']) }}" class="{{ $field }}">{{ $section['text'] }}</textarea>
-                                </label>
-                                <label class="flex flex-col gap-xs text-[0.875rem]">
-                                    <span class="font-semibold">Opportunities for Growth: one per line</span>
+                                <x-field label="Analysis">
+                                    <textarea name="text" rows="{{ $rows($section['text']) }}" @class($box)>{{ $section['text'] }}</textarea>
+                                </x-field>
+                                <x-field label="Opportunities for Growth: one per line">
                                     @php($value = implode("\n", $section['items']))
-                                    <textarea name="items" rows="{{ max(2, count($section['items']) + 1) }}" class="{{ $field }}">{{ $value }}</textarea>
-                                </label>
+                                    <textarea name="items" rows="{{ max(2, count($section['items']) + 1) }}" @class($box)>{{ $value }}</textarea>
+                                </x-field>
                                 @break
                             @case('custom')
-                                <label class="flex flex-col gap-xs text-[0.875rem]">
-                                    <span class="font-semibold">Section title</span>
-                                    <input type="text" name="title" value="{{ $section['title'] }}" maxlength="200" class="{{ $field }}">
-                                </label>
-                                <label class="flex flex-col gap-xs text-[0.875rem]">
-                                    <span class="font-semibold">Text</span>
-                                    <textarea name="text" rows="{{ $rows($section['text']) }}" class="{{ $field }}" placeholder="Write this section. Leave an empty line between paragraphs.">{{ $section['text'] }}</textarea>
-                                </label>
+                                <x-field label="Section title">
+                                    <input type="text" name="title" value="{{ $section['title'] }}" maxlength="200" @class($box)>
+                                </x-field>
+                                <x-field label="Text">
+                                    <textarea name="text" rows="{{ $rows($section['text']) }}" @class($box) placeholder="Write this section. Leave an empty line between paragraphs.">{{ $section['text'] }}</textarea>
+                                </x-field>
                                 @break
                             @default
-                                <label class="flex flex-col gap-xs text-[0.875rem]">
-                                    <span class="font-semibold">Text <span class="font-normal text-on-surface-variant">(an empty line between paragraphs)</span></span>
-                                    <textarea name="text" rows="{{ $rows($section['text']) }}" class="{{ $field }}">{{ $section['text'] }}</textarea>
+                                <label @class(\App\Support\Ui::field())>
+                                    <span class="font-semibold text-on-surface">Text <span class="font-normal text-on-surface-variant">(an empty line between paragraphs)</span></span>
+                                    <textarea name="text" rows="{{ $rows($section['text']) }}" @class($box)>{{ $section['text'] }}</textarea>
                                 </label>
                         @endswitch
 
                         <div class="flex flex-wrap items-center gap-md">
-                            <x-button>
-                                <span class="inline-flex items-center gap-xs"><span class="material-symbols-outlined text-[1.125rem]" aria-hidden="true">save</span> Save</span>
-                            </x-button>
+                            <x-button icon="save">Save</x-button>
                         </div>
                     </form>
 
                     <div class="flex flex-wrap items-center gap-md text-[0.875rem]">
                         @if ($section['kind'] !== 'custom')
-                            <form method="POST" action="{{ route('report-draft.rewrite', ['artefact' => $artefact, 'key' => $key]) }}"
-                                  x-data x-on:submit="if (! confirm(@js('Write “'.($section['kind'] === 'title' ? 'Title' : $section['title']).'” again from the OHA form? The corrections made to it will be lost.'))) $event.preventDefault()">
-                                @csrf
-                                <button class="inline-flex items-center gap-xs text-primary underline">
-                                    <span class="material-symbols-outlined text-[1.125rem]" aria-hidden="true">autorenew</span> Rewrite this section from the form
-                                </button>
-                            </form>
+                            <x-confirm-form :action="route('report-draft.rewrite', ['artefact' => $artefact, 'key' => $key])"
+                                            :confirm="'Write “'.($section['kind'] === 'title' ? 'Title' : $section['title']).'” again from the OHA form? The corrections made to it will be lost.'">
+                                <x-button variant="link" icon="autorenew">Rewrite this section from the form</x-button>
+                            </x-confirm-form>
                         @else
-                            <form method="POST" action="{{ route('report-draft.remove', ['artefact' => $artefact, 'key' => $key]) }}"
-                                  x-data x-on:submit="if (! confirm(@js('Remove the section “'.$section['title'].'”?'))) $event.preventDefault()">
-                                @csrf
-                                @method('DELETE')
-                                <button class="inline-flex items-center gap-xs text-error underline">
-                                    <span class="material-symbols-outlined text-[1.125rem]" aria-hidden="true">delete</span> Remove this section
-                                </button>
-                            </form>
+                            <x-confirm-form :action="route('report-draft.remove', ['artefact' => $artefact, 'key' => $key])" method="DELETE"
+                                            :confirm="'Remove the section “'.$section['title'].'”?'">
+                                <x-button variant="link-danger" icon="delete">Remove this section</x-button>
+                            </x-confirm-form>
                         @endif
                     </div>
                 @endif
@@ -221,19 +198,8 @@
     <x-card title="Add a section" subtitle="For anything the form does not cover: Programmes and Projects, Recommendations, a note on the assessment visit…">
         <form method="POST" action="{{ route('report-draft.add', $artefact) }}" class="flex flex-col sm:flex-row sm:items-end gap-sm">
             @csrf
-            <label class="flex flex-col gap-xs text-[0.875rem] flex-1">
-                <span class="font-semibold">Title</span>
-                <input type="text" name="title" required maxlength="200" class="{{ $field }}" placeholder="e.g. Programmes and Projects">
-            </label>
-            <label class="flex flex-col gap-xs text-[0.875rem] sm:w-72">
-                <span class="font-semibold">Place it after</span>
-                <select name="after" class="{{ $field }}">
-                    @foreach ($draft->sections as $s)
-                        @continue($s['kind'] === 'heading')
-                        <option value="{{ $s['key'] }}" @selected($loop->last)>{{ $s['kind'] === 'title' ? 'Title' : $s['title'] }}</option>
-                    @endforeach
-                </select>
-            </label>
+            <x-input name="title" label="Title" required maxlength="200" placeholder="e.g. Programmes and Projects" wrap="flex-1" />
+            <x-select name="after" label="Place it after" :options="$places" :value="array_key_last($places)" wrap="sm:w-72" />
             <x-button>Add</x-button>
         </form>
     </x-card>
@@ -244,26 +210,20 @@
             <form method="POST" action="{{ route('report-draft.make', $artefact) }}" class="flex flex-col gap-sm" x-data="{ read: false }">
                 @csrf
                 @if ($toComplete > 0)
-                    <p class="flex items-start gap-sm p-md rounded-lg bg-warning-wash text-warning-ink text-[0.875rem]">
-                        <span class="material-symbols-outlined" aria-hidden="true">edit_note</span>
-                        <span>{{ $toComplete }} “To complete” {{ $toComplete === 1 ? 'is' : 'are' }} still in the draft. {{ $toComplete === 1 ? 'It' : 'They' }} would appear in the report as {{ $toComplete === 1 ? 'it is' : 'they are' }}, and the report check would flag {{ $toComplete === 1 ? 'it' : 'them' }}.</span>
-                    </p>
+                    <x-callout tone="warning" icon="edit_note">
+                        <p>{{ $toComplete }} “To complete” {{ $toComplete === 1 ? 'is' : 'are' }} still in the draft. {{ $toComplete === 1 ? 'It' : 'They' }} would appear in the report as {{ $toComplete === 1 ? 'it is' : 'they are' }}, and the report check would flag {{ $toComplete === 1 ? 'it' : 'them' }}.</p>
+                    </x-callout>
                 @endif
                 @include('assessments.tabs._replace-guard')
                 @if (\App\Support\ReplaceGuard::current($artefact))
-                    <label class="flex flex-col gap-xs text-[0.875rem]">
-                        <span class="font-semibold">What changed in this version? (optional)</span>
-                        <textarea name="note" rows="2" maxlength="2000" class="{{ $field }}">{{ old('note') }}</textarea>
-                    </label>
+                    <x-textarea name="note" label="What changed in this version? (optional)" rows="2" maxlength="2000" />
                 @endif
                 <label class="flex items-start gap-sm text-[0.875rem] font-semibold">
                     <input type="hidden" name="read_every_section" value="0">
                     <input type="checkbox" name="read_every_section" value="1" class="mt-1" x-model="read">
                     I have read and checked every section of this draft.
                 </label>
-                <x-button class="self-start disabled:opacity-50 disabled:cursor-not-allowed" x-bind:disabled="! read">
-                    <span class="inline-flex items-center gap-xs"><span class="material-symbols-outlined text-[1.125rem]" aria-hidden="true">description</span> Create the Word report</span>
-                </x-button>
+                <x-button class="self-start" icon="description" x-bind:disabled="! read">Create the Word report</x-button>
             </form>
         </x-card>
     </section>

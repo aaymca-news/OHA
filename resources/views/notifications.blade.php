@@ -1,5 +1,5 @@
 <x-layouts.app :title="__('oha.nav.notifications')" subtitle="Work routed to you, and news on work you are waiting for. Each one is also sent by email.">
-    @if ($notifications->whereNull('read_at')->isNotEmpty())
+    @if ($hasUnread)
         <x-slot:actions>
             <form method="POST" action="{{ route('notifications.read') }}">
                 @csrf
@@ -22,4 +22,5 @@
     @empty
         <x-empty-state icon="notifications_off">Nothing yet. Notifications appear here when work is routed to you.</x-empty-state>
     @endforelse
+    <x-pagination :paginator="$notifications" />
 </x-layouts.app>

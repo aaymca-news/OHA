@@ -14,16 +14,13 @@
                subtitle="What each “Yes” on the OHA form needs as evidence, what has been supplied, and the evidence behind the ODP’s tasks.">
 
     <div class="flex flex-wrap items-center gap-sm text-[0.875rem]">
-        <a href="{{ route('resources') }}" class="inline-flex items-center gap-xs text-primary underline">
-            <span class="material-symbols-outlined text-[1.125rem]" aria-hidden="true">arrow_back</span> Resources
-        </a>
+        <x-button variant="link" icon="arrow_back" :href="route('resources')">Resources</x-button>
         @if ($assessments->count() > 1)
-            <nav class="ml-auto flex flex-wrap rounded border-[1.5px] border-outline-variant overflow-hidden text-[0.8125rem]" aria-label="Which assessment">
+            <x-segmented label="Which assessment" variant="joined" class="ml-auto flex-wrap">
                 @foreach ($assessments as $a)
-                    <a href="{{ route('evidence.index', ['movement' => $movement, 'assessment' => $a->id]) }}" @if ($a->id === $assessment->id) aria-current="page" @endif
-                       @class(['px-sm py-1.5', 'bg-primary text-on-primary' => $a->id === $assessment->id, 'hover:bg-surface-container' => $a->id !== $assessment->id])>{{ $a->period_label }}</a>
+                    <x-segmented.link :href="route('evidence.index', ['movement' => $movement, 'assessment' => $a->id])" :active="$a->id === $assessment->id">{{ $a->period_label }}</x-segmented.link>
                 @endforeach
-            </nav>
+            </x-segmented>
         @endif
     </div>
 
@@ -45,20 +42,17 @@
         </div>
 
         @if ($canUpload)
-            <details id="add" class="bg-surface-container-lowest border-[1.5px] border-outline-variant rounded-lg" @if ($errors->any() || $for) open @endif>
-                <summary class="cursor-pointer px-md py-sm font-semibold text-primary inline-flex items-center gap-xs">
-                    <span class="material-symbols-outlined text-[1.25rem]" aria-hidden="true">upload_file</span> Add evidence
-                </summary>
+            <x-card.details id="add" title="Add evidence" :open="$errors->any() || $for">
                 <form method="POST" action="{{ route('evidence.store', $movement) }}" enctype="multipart/form-data"
                       x-data="{ category: @js(old('category', $forCategory ?? '')), kind: @js(old('kind', $for !== null && EvidenceQuestions::accepts($for) === EvidenceQuestions::LINK ? 'link' : 'file')) }"
-                      class="flex flex-col gap-md px-md pb-md">
+                      class="flex flex-col gap-md">
                     @csrf
                     <input type="hidden" name="assessment_id" value="{{ $assessment->id }}">
 
                     @if ($for)
-                        <p class="text-[0.875rem] p-sm rounded bg-info-wash text-info-ink">
-                            For <strong>{{ EvidenceQuestions::shown($for) }} {{ EvidenceQuestions::label($for) }}</strong>. Needed: {{ EvidenceQuestions::needed($for) }}
-                        </p>
+                        <x-callout tone="info">
+                            <p>For <strong>{{ EvidenceQuestions::shown($for) }} {{ EvidenceQuestions::label($for) }}</strong>. Needed: {{ EvidenceQuestions::needed($for) }}</p>
+                        </x-callout>
                     @endif
 
                     <fieldset class="flex flex-wrap gap-md text-[0.875rem]">
@@ -68,30 +62,21 @@
                     </fieldset>
 
                     <div class="grid sm:grid-cols-2 gap-md">
-                        <label x-show="kind === 'file'" class="flex flex-col gap-xs text-[0.875rem]">
-                            <span class="font-semibold">File</span>
+                        {{-- A plain file input (not x-file-drop): it is required, and sent, only while "A file" is chosen. --}}
+                        <x-field label="File" name="file" x-show="kind === 'file'"
+                                 :hint="'PDF, Word, Excel, PowerPoint, images or text, up to '.\App\Support\UploadLimit::label().'.'">
                             <input type="file" name="file" :required="kind === 'file'" :disabled="kind !== 'file'" accept="{{ '.'.implode(',.', Evidence::FORMATS) }}"
                                    class="text-[0.875rem] file:mr-sm file:px-md file:py-1.5 file:rounded file:border-[1.5px] file:border-outline-variant file:bg-surface-container-lowest file:text-primary file:font-semibold hover:file:border-primary">
-                            <span class="text-[0.8125rem] text-on-surface-variant">PDF, Word, Excel, PowerPoint, images or text, up to {{ \App\Support\UploadLimit::label() }}.</span>
-                        </label>
-                        <label x-show="kind === 'link'" x-cloak class="flex flex-col gap-xs text-[0.875rem]">
-                            <span class="font-semibold">Link</span>
-                            <input type="url" name="url" value="{{ old('url') }}" placeholder="https://" :required="kind === 'link'" :disabled="kind !== 'link'"
-                                   class="px-sm py-2 rounded border-[1.5px] border-outline-variant bg-surface-container-lowest">
-                            <span class="text-[0.8125rem] text-on-surface-variant">The full address, starting with https://.</span>
-                        </label>
+                        </x-field>
+                        <div x-show="kind === 'link'" x-cloak>
+                            <x-input name="url" type="url" label="Link" placeholder="https://" x-bind:required="kind === 'link'" x-bind:disabled="kind !== 'link'"
+                                     hint="The full address, starting with https://." />
+                        </div>
                         <x-input name="title" label="Title" :value="old('title')" hint="For example: Safeguarding Policy 2024. Left empty, the file’s name or the website is used." />
                     </div>
 
-                    <label class="flex flex-col gap-xs text-[0.875rem] sm:max-w-[24rem]">
-                        <span class="font-semibold">File it under</span>
-                        <select name="category" x-model="category" class="px-sm py-2 rounded border-[1.5px] border-outline-variant bg-surface-container-lowest">
-                            <option value="">General (not one category)</option>
-                            @foreach ($categories as $category)
-                                <option value="{{ $category->code }}">{{ $category->form_order }}. {{ $category->name }}</option>
-                            @endforeach
-                        </select>
-                    </label>
+                    <x-select name="category" label="File it under" x-model="category" wrap="sm:max-w-[24rem]" placeholder="General (not one category)"
+                              :options="$categories->mapWithKeys(fn ($c) => [$c->code => $c->form_order.'. '.$c->name])->all()" />
 
                     <fieldset class="flex flex-col gap-xs text-[0.875rem]">
                         <legend class="font-semibold mb-xs">The form’s questions it proves <span class="font-normal text-on-surface-variant">(optional; a website takes a link, a policy a document)</span></legend>
@@ -126,12 +111,11 @@
 
                     <x-button class="self-start">Add evidence</x-button>
                 </form>
-            </details>
+            </x-card.details>
         @elseif (auth()->user()->isGeneralSecretaryOf($movement))
-            <p class="flex items-start gap-sm p-md rounded-lg bg-info-wash text-info-ink text-[0.875rem]">
-                <span class="material-symbols-outlined" aria-hidden="true">schedule</span>
-                You can add your supporting documents here once AAYMCA has approved this assessment’s ODP. You will be told when it is.
-            </p>
+            <x-callout tone="info" icon="schedule">
+                <p>You can add your supporting documents here once AAYMCA has approved this assessment’s ODP. You will be told when it is.</p>
+            </x-callout>
         @endif
 
         {{-- Ten folders: in each, what its "Yes" answers need (missing flagged here), then the evidence filed in it. --}}
@@ -180,7 +164,7 @@
                                         @endif
                                     </div>
                                     <p class="text-[0.8125rem] text-on-surface-variant break-words">
-                                        {{ $doc->describe() }} · added by {{ $doc->uploader->name }}, {{ $doc->uploaded_at->format('j M Y') }}
+                                        {{ $doc->describe() }} · added by {{ $doc->uploader->name }}, {{ $doc->uploaded_at->asDay() }}
                                     </p>
                                     @if ($row['questions'] !== [] || $row['tasks'] !== [])
                                         <p class="flex flex-wrap gap-xs">
@@ -200,7 +184,8 @@
                                                     @csrf
                                                     @method('PUT')
                                                     <label class="sr-only" for="move-{{ $doc->id }}">Move “{{ $doc->title }}” to</label>
-                                                    <select id="move-{{ $doc->id }}" name="category" required class="px-sm py-1.5 rounded border-[1.5px] border-outline-variant bg-surface-container-lowest text-[0.8125rem]">
+                                                    {{-- A plain select: x-select would show the add form's "category" error under every one. --}}
+                                                    <select id="move-{{ $doc->id }}" name="category" required @class(\App\Support\Ui::control(false, 'sm'))>
                                                         <option value="" selected disabled>Move to another folder…</option>
                                                         @foreach ($folders as $target)
                                                             @continue($target['id'] === $doc->category_id)
@@ -219,18 +204,15 @@
                                                 </form>
                                             @endcan
                                             @can('remove', $doc)
-                                                <form method="POST" action="{{ route('evidence.destroy', $doc) }}" x-data
-                                                      @submit="if (! confirm('Remove “{{ addslashes($doc->title) }}” from the evidence?')) $event.preventDefault()">
-                                                    @csrf
-                                                    @method('DELETE')
+                                                <x-confirm-form :action="route('evidence.destroy', $doc)" method="DELETE" :confirm="'Remove “'.$doc->title.'” from the evidence?'">
                                                     <x-button variant="danger">Remove</x-button>
-                                                </form>
+                                                </x-confirm-form>
                                             @endcan
                                         </div>
                                     @endcanany
                                 </div>
                             @empty
-                                <p class="text-on-surface-variant">Nothing filed here yet.</p>
+                                <x-empty-state icon="folder">Nothing filed here yet.</x-empty-state>
                             @endforelse
                         </div>
                     </div>

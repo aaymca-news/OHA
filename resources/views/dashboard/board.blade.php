@@ -14,7 +14,7 @@
         <x-stat-tile label="Health score" :value="$status->pct !== null ? number_format((float) $status->pct, 1) : '—'" :unit="$status->pct !== null ? '%' : null">
             <x-slot:sub><x-band-chip :band="$status->band" :under-way="$holder !== null" /></x-slot:sub>
         </x-stat-tile>
-        <x-stat-tile label="Next assessment" :value="$status->next_assessment_on?->format('M Y') ?? 'Not scheduled'">
+        <x-stat-tile label="Next assessment" :value="$status->next_assessment_on?->asMonth() ?? 'Not scheduled'">
             <x-slot:sub>{{ $status->reassessment_overdue ? 'Past its date' : ($latest ? 'Last: '.$latest->period_label : 'Not yet assessed') }}</x-slot:sub>
         </x-stat-tile>
         <x-stat-tile label="ODP tasks done" :value="$odpAssessment ? $tasks->where('done', true)->count() : '—'" :unit="$odpAssessment ? ' / '.$tasks->count() : null">

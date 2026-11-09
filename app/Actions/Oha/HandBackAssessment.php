@@ -2,8 +2,7 @@
 
 namespace App\Actions\Oha;
 
-use App\Actions\Oha\Concerns\EnforcesPolicy;
-use App\Enums\Role;
+use App\Actions\Concerns\EnforcesPolicy;
 use App\Exceptions\WorkflowRuleBroken;
 use App\Models\Assessment;
 use App\Models\User;
@@ -32,7 +31,7 @@ final class HandBackAssessment
         return DB::transaction(function () use ($assessment, $assessor, $reason): Assessment {
             $movement = $assessment->movement;
             $movement->assessors()->detach($assessor->id);
-            $remaining = $movement->assessors()->where('active', true)->orderBy('name')->pluck('name')->all();
+            $remaining = $movement->activeAssessors()->pluck('name')->all();
 
             Audit::record($assessor, 'assessment.handed_back', $assessment, $assessment, payload: [
                 'reason' => trim($reason),
@@ -44,7 +43,7 @@ final class HandBackAssessment
                 'now' => $remaining, 'handed_back' => true, 'reason' => trim($reason),
             ]);
 
-            $admins = User::query()->whereIn('role', [Role::Admin, Role::SuperAdmin])->where('active', true)->get();
+            $admins = User::query()->administrators()->get();
             Notify::send($admins, new WorkflowNotice(
                 "Assessor needed: {$movement->name}",
                 "{$assessor->name} has stopped working on the {$movement->name} assessment ({$assessment->period_label}): ".trim($reason).' '

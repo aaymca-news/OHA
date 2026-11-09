@@ -12,7 +12,6 @@
                     : 'Your movement’s approved OHA form, report and ODP, to read or download, its evidence, and what other movements share.'">
 
     @php($here = fn (array $change = []) => route('resources', array_filter([...$filters, ...$change], fn ($v, $k) => $v !== null && $v !== '' && ! ($k === 'sort' && $v === 'movement') && ! ($k === 'dir' && $v === 'asc'), ARRAY_FILTER_USE_BOTH)))
-    @php($select = 'px-sm py-1.5 rounded border-[1.5px] border-outline-variant bg-surface-container-lowest text-[0.875rem]')
     <form method="GET" class="flex flex-wrap items-end gap-sm" aria-label="Find resources">
         @foreach (['show', 'view', 'sort', 'dir'] as $keep)
             @if ($filters[$keep] !== null && ! ($keep === 'sort' && $filters[$keep] === 'movement') && ! ($keep === 'dir' && $filters[$keep] === 'asc'))
@@ -20,79 +19,34 @@
             @endif
         @endforeach
         @if ($secretariat)
-            <label class="flex flex-col gap-xs text-[0.8125rem] grow sm:grow-0">
-                <span class="font-semibold">Search</span>
-                <input type="search" name="q" value="{{ $filters['q'] }}" placeholder="Movement or country" class="{{ $select }} sm:w-48">
-            </label>
-            <label class="flex flex-col gap-xs text-[0.8125rem]">
-                <span class="font-semibold">Zone</span>
-                <select name="zone" class="{{ $select }}">
-                    <option value="">All zones</option>
-                    @foreach ($zones as $zone)
-                        <option value="{{ $zone->id }}" @selected($filters['zone'] === $zone->id)>{{ $zone->name }}</option>
-                    @endforeach
-                </select>
-            </label>
-            <label class="flex flex-col gap-xs text-[0.8125rem]">
-                <span class="font-semibold">Health band</span>
-                <select name="band" class="{{ $select }}">
-                    <option value="">All bands</option>
-                    @foreach ($bands as $band)
-                        <option value="{{ $band->code }}" @selected($filters['band'] === $band->code)>{{ $band->label }}</option>
-                    @endforeach
-                </select>
-            </label>
+            <x-input name="q" type="search" label="Search" size="sm" :value="$filters['q']" placeholder="Movement or country" wrap="grow sm:grow-0" class="sm:w-48" />
+            <x-select name="zone" label="Zone" size="sm" placeholder="All zones" :value="$filters['zone']" :options="$zones->pluck('name', 'id')->all()" />
+            <x-select name="band" label="Health band" size="sm" placeholder="All bands" :value="$filters['band']" :options="$bands->pluck('label', 'code')->all()" />
         @endif
-        <label class="flex flex-col gap-xs text-[0.8125rem]">
-            <span class="font-semibold">Year</span>
-            <select name="year" class="{{ $select }}">
-                <option value="">All years</option>
-                @foreach ($years as $year)
-                    <option value="{{ $year }}" @selected($filters['year'] === (int) $year)>{{ $year }}</option>
-                @endforeach
-            </select>
-        </label>
-        <label class="flex flex-col gap-xs text-[0.8125rem]">
-            <span class="font-semibold">ODP</span>
-            <select name="odp" class="{{ $select }}">
-                <option value="">Any</option>
-                <option value="validated" @selected($filters['odp'] === 'validated')>Validated</option>
-                <option value="not_validated" @selected($filters['odp'] === 'not_validated')>Approved, not validated</option>
-            </select>
-        </label>
+        <x-select name="year" label="Year" size="sm" placeholder="All years" :value="$filters['year']" :options="$years->combine($years)->all()" />
+        <x-select name="odp" label="ODP" size="sm" placeholder="Any" :value="$filters['odp']" :options="['validated' => 'Validated', 'not_validated' => 'Approved, not validated']" />
         @if ($filters['view'] === 'table')
-            <label class="flex flex-col gap-xs text-[0.8125rem]">
-                <span class="font-semibold">Document</span>
-                <select name="type" class="{{ $select }}">
-                    <option value="">All types</option>
-                    @foreach (['form' => 'OHA forms', 'report' => 'Reports', 'odp' => 'ODPs', 'evidence' => 'Evidence'] as $value => $label)
-                        <option value="{{ $value }}" @selected($filters['type'] === $value)>{{ $label }}</option>
-                    @endforeach
-                </select>
-            </label>
+            <x-select name="type" label="Document" size="sm" placeholder="All types" :value="$filters['type']"
+                      :options="['form' => 'OHA forms', 'report' => 'Reports', 'odp' => 'ODPs', 'evidence' => 'Evidence']" />
         @endif
         <x-button variant="secondary">Filter</x-button>
         @if ($filters['q'] !== '' || $filters['zone'] || $filters['band'] || $filters['year'] || $filters['odp'] || $filters['type'])
-            <a href="{{ route('resources', array_filter(['show' => $filters['show'], 'view' => $filters['view']])) }}" class="text-[0.875rem] text-primary underline pb-2">Clear</a>
+            <x-button variant="link" :href="route('resources', array_filter(['show' => $filters['show'], 'view' => $filters['view']]))" class="text-[0.875rem] pb-2">Clear</x-button>
         @endif
 
         <div class="ml-auto flex flex-wrap gap-sm">
             @if ($secretariat)
-                <nav class="flex rounded border-[1.5px] border-outline-variant overflow-hidden text-[0.8125rem]" aria-label="Which movements">
+                <x-segmented label="Which movements" variant="joined">
                     @foreach ([null => 'With documents ('.$counts['with'].')', 'all' => 'All movements'] as $key => $label)
-                        <a href="{{ $here(['show' => $key]) }}" @if ($filters['show'] === ($key ?: null)) aria-current="page" @endif
-                           @class(['px-sm py-1.5', 'bg-primary text-on-primary' => $filters['show'] === ($key ?: null), 'hover:bg-surface-container' => $filters['show'] !== ($key ?: null)])>{{ $label }}</a>
+                        <x-segmented.link :href="$here(['show' => $key])" :active="$filters['show'] === ($key ?: null)">{{ $label }}</x-segmented.link>
                     @endforeach
-                </nav>
+                </x-segmented>
             @endif
-            <nav class="flex rounded border-[1.5px] border-outline-variant overflow-hidden text-[0.8125rem]" aria-label="Show as">
+            <x-segmented label="Show as" variant="joined">
                 @foreach ([null => ['grid_view', 'Cards'], 'table' => ['table_rows', 'Table']] as $key => [$icon, $label])
-                    <a href="{{ $here(['view' => $key, 'type' => $key ? $filters['type'] : null]) }}" @if ($filters['view'] === $key) aria-current="page" @endif
-                       @class(['px-sm py-1.5 inline-flex items-center gap-xs', 'bg-primary text-on-primary' => $filters['view'] === $key, 'hover:bg-surface-container' => $filters['view'] !== $key])>
-                        <span class="material-symbols-outlined text-[1.125rem]" aria-hidden="true">{{ $icon }}</span>{{ $label }}
-                    </a>
+                    <x-segmented.link :href="$here(['view' => $key, 'type' => $key ? $filters['type'] : null])" :active="$filters['view'] === ($key ?: null)" :icon="$icon">{{ $label }}</x-segmented.link>
                 @endforeach
-            </nav>
+            </x-segmented>
         </div>
     </form>
 
@@ -146,7 +100,7 @@
                                 <span class="flex-1">
                                     <a href="{{ route('assessments.show', $a) }}" class="underline">{{ $a->period_label }}</a>
                                     @if ($a->score)
-                                        · {{ rtrim(rtrim(number_format((float) $a->score->points_achieved, 1), '0'), '.') }} / {{ $a->score->points_available }} points
+                                        · {{ \App\Support\Viz::figure((float) $a->score->points_achieved, 1) }} / {{ $a->score->points_available }} points
                                     @endif
                                 </span>
                                 <a href="{{ route('downloads.zip.assessment', $a) }}" class="inline-flex items-center gap-xs font-normal text-primary underline"
@@ -166,7 +120,7 @@
                                             <span class="block font-semibold">{{ $label }}</span>
                                             @if ($file)
                                                 <span class="block text-[0.8125rem] text-on-surface-variant break-words">
-                                                    {{ $file->original_name }}{{ $kind !== 'form' ? ' · version '.$file->versionNumber() : '' }} · approved {{ $file->approved_at->format('j M Y') }}
+                                                    {{ $file->original_name }}{{ $kind !== 'form' ? ' · version '.$file->versionNumber() : '' }} · approved {{ $file->approved_at->asDay() }}
                                                 </span>
                                             @else
                                                 <span class="block text-[0.8125rem] text-on-surface-variant">Not approved yet</span>
@@ -174,7 +128,7 @@
                                         </span>
                                         @if ($kind === 'odp' && $file)
                                             @if ($r['signature'])
-                                                <x-chip tone="good" icon="verified">Validated · {{ $r['signature']->signed_at->format('j M Y') }}</x-chip>
+                                                <x-chip tone="good" icon="verified">Validated · {{ $r['signature']->signed_at->asDay() }}</x-chip>
                                             @else
                                                 <x-chip tone="neutral" icon="gpp_maybe">Not validated</x-chip>
                                             @endif
@@ -196,7 +150,7 @@
                             </details>
                         @endif
                     @empty
-                        <p class="text-[0.875rem] text-on-surface-variant">Nothing approved yet.</p>
+                        <x-empty-state icon="folder_open">Nothing approved yet.</x-empty-state>
                     @endforelse
 
                     {{-- The movement's evidence library: supporting documents linked to the form and the ODP. --}}

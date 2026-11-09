@@ -2,7 +2,7 @@
 
 namespace App\Actions\Oha;
 
-use App\Actions\Oha\Concerns\EnforcesPolicy;
+use App\Actions\Concerns\EnforcesPolicy;
 use App\Exceptions\WorkflowRuleBroken;
 use App\Models\Assessment;
 use App\Models\Gate;
@@ -223,7 +223,7 @@ final class EditTimeline
         Notify::send(Notify::assessorsOf($assessment), new WorkflowNotice(
             "Timeline changed: {$movement}",
             "{$user->name} changed the timeline for {$movement} ({$assessment->period_label}): {$change}.",
-            Notify::link($assessment).'?tab=timeline', 'info',
+            Notify::link($assessment, 'timeline'), 'info',
         ), except: $user);
     }
 }

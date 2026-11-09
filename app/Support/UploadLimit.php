@@ -24,7 +24,18 @@ final class UploadLimit
     /** "20 MB", "2 MB", "1.5 MB". */
     public static function label(): string
     {
-        return rtrim(rtrim(number_format(self::kb() / 1024, 1), '0'), '.').' MB';
+        return Viz::figure(self::kb() / 1024, 1).' MB';
+    }
+
+    /**
+     * The validation rule for an uploaded document: a file within the limit in force.
+     * Use with messages() for the plain "too large" wording.
+     *
+     * @return list<string>
+     */
+    public static function rule(bool $required = true): array
+    {
+        return [$required ? 'required' : 'nullable', 'file', 'max:'.self::kb()];
     }
 
     /** What a person is told when a file is too large. */

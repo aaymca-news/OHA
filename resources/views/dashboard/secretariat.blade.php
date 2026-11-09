@@ -4,7 +4,6 @@
     @php
         $rated = $insights->rated();
         $n = $rated->count();
-        $tones = ['excellent' => 'good', 'strong' => 'good', 'developing' => 'warning', 'atrisk' => 'serious', 'critical' => 'critical'];
         $overdueTasks = $odp['counts']['overdue'] ?? 0;
     @endphp
 
@@ -44,7 +43,7 @@
                         {{-- The bar's colour is the band (as in Health bands); its name is read out with the score. --}}
                         <li class="grid grid-cols-[minmax(6rem,10rem)_1fr] items-center gap-sm text-[0.875rem]" title="{{ $status->band->label }}">
                             <a href="{{ route('movements.show', $status->movement) }}" class="truncate text-primary underline">{{ str_replace(' YMCA', '', $status->name) }}</a>
-                            <x-bar :value="(float) $status->pct" :tone="$tones[$status->band_code] ?? 'neutral'" :label="number_format((float) $status->pct, 1).'%'" />
+                            <x-bar :value="(float) $status->pct" :tone="\App\Enums\BandCode::toneOf($status->band_code)" :label="\App\Support\Viz::pct($status->pct)" />
                             <span class="sr-only">{{ $status->band->label }}</span>
                         </li>
                     @endforeach
@@ -64,39 +63,35 @@
                 <ul class="flex flex-col gap-sm">
                     @foreach ($bands as $row)
                         {{-- Side by side from 22rem; on the narrowest phones the band sits above its bar. --}}
-                        <li class="grid min-[22rem]:grid-cols-[8rem_minmax(0,1fr)] items-center gap-x-sm gap-y-xs">
+                        <li class="grid min-[22rem]:grid-cols-[11rem_minmax(0,1fr)] items-center gap-x-sm gap-y-xs">
                             <x-band-chip :band="$row['band']" :under-way="$row['underWay']" />
                             <x-bar wide :value="$row['count']" :max="$bandTotal" :label="$row['count'].' '.($row['count'] === 1 ? 'movement' : 'movements')"
-                                   :tone="$row['underWay'] ? 'primary' : ($tones[$row['band']->code] ?? 'neutral')" />
+                                   :tone="$row['underWay'] ? 'primary' : \App\Enums\BandCode::toneOf($row['band']->code)" />
                         </li>
                     @endforeach
                 </ul>
             </x-card>
 
             <x-card title="By zone" subtitle="Each zone’s movements, how many are rated, their average score, and how many are At Risk or Critical.">
-                <div class="relative overflow-x-auto">
-                    <table class="w-full text-[0.875rem]">
-                        <thead class="text-left text-[0.8125rem] uppercase tracking-wider text-on-surface-variant">
-                            <tr><th class="py-xs pr-sm">Zone</th><th class="py-xs pr-sm text-right">Rated</th><th class="py-xs pr-sm w-2/5">Average</th><th class="py-xs text-right">At risk</th></tr>
-                        </thead>
-                        <tbody>
-                            @foreach ($zones as $zone)
-                                <tr class="border-t border-surface-container">
-                                    <td class="py-xs pr-sm">{{ $zone['zone'] }}</td>
-                                    <td class="py-xs pr-sm text-right tabular-nums">{{ $zone['rated'] }} / {{ $zone['movements'] }}</td>
-                                    <td class="py-xs pr-sm">
-                                        @if ($zone['pct'] !== null)
-                                            <x-bar :value="$zone['pct']" :label="number_format($zone['pct'], 1).'%'" />
-                                        @else
-                                            <span class="text-on-surface-variant">None rated</span>
-                                        @endif
-                                    </td>
-                                    <td class="py-xs text-right tabular-nums {{ $zone['at_risk'] > 0 ? 'font-bold text-critical-ink' : '' }}">{{ $zone['at_risk'] }}</td>
-                                </tr>
-                            @endforeach
-                        </tbody>
-                    </table>
-                </div>
+                <x-table bare>
+                    <x-slot:head>
+                        <tr><th>Zone</th><th class="text-right">Rated</th><th class="w-2/5">Average</th><th class="text-right">At risk</th></tr>
+                    </x-slot:head>
+                    @foreach ($zones as $zone)
+                        <tr class="border-t border-surface-container">
+                            <td>{{ $zone['zone'] }}</td>
+                            <td class="text-right tabular-nums">{{ $zone['rated'] }} / {{ $zone['movements'] }}</td>
+                            <td>
+                                @if ($zone['pct'] !== null)
+                                    <x-bar :value="$zone['pct']" :label="number_format($zone['pct'], 1).'%'" />
+                                @else
+                                    <span class="text-on-surface-variant">None rated</span>
+                                @endif
+                            </td>
+                            <td class="text-right tabular-nums {{ $zone['at_risk'] > 0 ? 'font-bold text-critical-ink' : '' }}">{{ $zone['at_risk'] }}</td>
+                        </tr>
+                    @endforeach
+                </x-table>
             </x-card>
         </div>
     </div>
@@ -145,22 +140,18 @@
             @if ($due->isEmpty())
                 <x-empty-state icon="event_available">No movement is past its re-assessment date.</x-empty-state>
             @else
-                <div class="relative overflow-x-auto">
-                <table class="w-full text-[0.875rem]">
-                    <thead class="text-left text-[0.8125rem] uppercase tracking-wider text-on-surface-variant">
-                        <tr><th class="py-xs">Movement</th><th class="py-xs">Band</th><th class="py-xs">Was due</th></tr>
-                    </thead>
-                    <tbody>
-                        @foreach ($due as $status)
-                            <tr class="border-t border-surface-container">
-                                <td class="py-xs"><a href="{{ route('movements.show', $status->movement) }}" class="text-primary underline">{{ $status->name }}</a></td>
-                                <td class="py-xs"><x-band-chip :band="$status->band" :under-way="isset($underWay[$status->movement_id])" /></td>
-                                <td class="py-xs">{{ $status->next_assessment_on->format('M Y') }} <span class="text-on-surface-variant">({{ $status->next_assessment_on->diffForHumans(['parts' => 1]) }})</span></td>
-                            </tr>
-                        @endforeach
-                    </tbody>
-                </table>
-                </div>
+                <x-table bare>
+                    <x-slot:head>
+                        <tr><th>Movement</th><th>Band</th><th>Was due</th></tr>
+                    </x-slot:head>
+                    @foreach ($due as $status)
+                        <tr class="border-t border-surface-container">
+                            <td><a href="{{ route('movements.show', $status->movement) }}" class="text-primary underline">{{ $status->name }}</a></td>
+                            <td><x-band-chip :band="$status->band" :under-way="isset($underWay[$status->movement_id])" /></td>
+                            <td>{{ $status->next_assessment_on->asMonth() }} <span class="text-on-surface-variant">({{ $status->next_assessment_on->diffForHumans(['parts' => 1]) }})</span></td>
+                        </tr>
+                    @endforeach
+                </x-table>
             @endif
         </x-card>
     </div>
@@ -197,79 +188,70 @@
         </x-card>
 
         {{-- The detail by category and topic: there for whoever wants it, out of the way of the regional picture. --}}
-        <details class="group bg-surface-container-lowest border-[1.5px] border-outline-variant rounded-lg">
-            <summary class="cursor-pointer list-none flex items-center gap-sm p-md">
-                <span class="material-symbols-outlined text-primary transition-transform group-open:rotate-90" aria-hidden="true">chevron_right</span>
-                <span>
-                    <span class="block text-[1rem] font-bold text-primary">Detail by category and topic</span>
-                    <span class="block text-[0.8125rem] text-on-surface-variant">Every category for every movement, where the region is weakest, funding and spending, policies, governance and Vision 2030.</span>
-                </span>
-            </summary>
-            <div class="flex flex-col gap-md p-md pt-0">
-                <x-card title="Every movement, every category" subtitle="Percentage scored in each category of the latest approved form. Darker is healthier.">
-                    <x-viz.heatmap :heatmap="$insights->heatmap()" />
-                </x-card>
+        <x-card.details title="Detail by category and topic" subtitle="Every category for every movement, where the region is weakest, funding and spending, policies, governance and Vision 2030.">
+            <x-card title="Every movement, every category" subtitle="Percentage scored in each category of the latest approved form. Darker is healthier.">
+                <x-viz.heatmap :heatmap="$insights->heatmap()" />
+            </x-card>
 
-                <x-card title="Where the region is weakest" subtitle="Average score per category, weakest first.">
-                    @foreach ($weakest as $row)
-                        <div class="grid sm:grid-cols-[12rem_1fr] items-center gap-x-sm gap-y-xs text-[0.875rem]">
-                            <span>{{ $row['category']->name }}</span>
-                            <x-bar :value="$row['pct']" :label="number_format($row['pct'], 1).'%'" />
-                        </div>
-                    @endforeach
-                </x-card>
-
-                <div class="grid lg:grid-cols-2 gap-md items-start">
-                    @foreach ([['income_mix', Profile::INCOME_GROUPS, 'Where the money comes from', 'Average share of income by source (Q214–Q222).'], ['expense_mix', Profile::EXPENSE_GROUPS, 'Where the money goes', 'Average share of expenditure by type (Q229–Q237).']] as [$key, $groups, $title, $subtitle])
-                        @php($avg = $insights->averageMix($key))
-                        <x-card :title="$title" :subtitle="$subtitle">
-                            @if ($avg === null)
-                                <x-empty-state icon="pie_chart">No rated movement gave these figures.</x-empty-state>
-                            @else
-                                <x-viz.stacked :segments="collect($groups)->map(fn ($g, $k) => ['label' => $g['label'], 'value' => $avg['shares'][$k]])->values()->all()"
-                                               :caption="'Regional average · '.$avg['movements'].' movements'" />
-                                <div class="flex flex-col gap-sm border-t border-surface-container pt-sm">
-                                    @foreach ($rated as $r)
-                                        @continue(empty($r['profile'][$key]))
-                                        <div class="grid grid-cols-[minmax(6rem,9rem)_1fr] items-center gap-sm">
-                                            <span class="text-[0.8125rem] truncate">{{ str_replace(' YMCA', '', $r['movement']->name) }}</span>
-                                            <x-viz.stacked thin :legend="false" :segments="collect($groups)->map(fn ($g, $k) => ['label' => $g['label'], 'value' => $r['profile'][$key][$k]])->values()->all()" />
-                                        </div>
-                                    @endforeach
-                                </div>
-                                <details class="text-[0.8125rem]">
-                                    <summary class="cursor-pointer text-primary underline">Show as a table</summary>
-                                    <div class="relative overflow-x-auto mt-xs">
-                                        <table class="w-full text-[0.8125rem]">
-                                            <thead><tr class="text-left text-on-surface-variant"><th class="py-1 pr-sm">Movement</th>@foreach ($groups as $g)<th class="py-1 pr-sm">{{ $g['label'] }}</th>@endforeach</tr></thead>
-                                            <tbody>
-                                                @foreach ($rated as $r)
-                                                    @continue(empty($r['profile'][$key]))
-                                                    <tr class="border-t border-surface-container"><td class="py-1 pr-sm">{{ $r['movement']->name }}</td>@foreach (array_keys($groups) as $k)<td class="py-1 pr-sm tabular-nums">{{ Viz::number($r['profile'][$key][$k], 1) }}%</td>@endforeach</tr>
-                                                @endforeach
-                                            </tbody>
-                                        </table>
-                                    </div>
-                                </details>
-                            @endif
-                        </x-card>
-                    @endforeach
-                </div>
-
-                <div class="grid lg:grid-cols-2 gap-md items-start">
-                    <x-card title="Policies in place" subtitle="Share of rated movements with each policy (Q412–Q430). Weakest at the bottom.">
-                        <x-viz.adoption :rows="$insights->adoption('policies', Profile::POLICIES)" />
-                    </x-card>
-                    <div class="flex flex-col gap-md">
-                        <x-card title="Governance practice" subtitle="Share of rated movements following each practice.">
-                            <x-viz.adoption :rows="$insights->adoption('governance', Profile::GOVERNANCE_PRACTICES)" labelWidth="14rem" />
-                        </x-card>
-                        <x-card title="Vision 2030 in the Strategic Plan" subtitle="Of the movements whose plan reflects Vision 2030 (Q620), how many cover each component.">
-                            <x-viz.adoption :rows="$insights->adoption('vision_2030', Profile::VISION_2030)" />
-                        </x-card>
+            <x-card title="Where the region is weakest" subtitle="Average score per category, weakest first.">
+                @foreach ($weakest as $row)
+                    <div class="grid sm:grid-cols-[12rem_1fr] items-center gap-x-sm gap-y-xs text-[0.875rem]">
+                        <span>{{ $row['category']->name }}</span>
+                        <x-bar :value="$row['pct']" :label="number_format($row['pct'], 1).'%'" />
                     </div>
+                @endforeach
+            </x-card>
+
+            <div class="grid lg:grid-cols-2 gap-md items-start">
+                @foreach ([['income_mix', Profile::INCOME_GROUPS, 'Where the money comes from', 'Average share of income by source (Q214–Q222).'], ['expense_mix', Profile::EXPENSE_GROUPS, 'Where the money goes', 'Average share of expenditure by type (Q229–Q237).']] as [$key, $groups, $title, $subtitle])
+                    @php($avg = $insights->averageMix($key))
+                    <x-card :title="$title" :subtitle="$subtitle">
+                        @if ($avg === null)
+                            <x-empty-state icon="pie_chart">No rated movement gave these figures.</x-empty-state>
+                        @else
+                            <x-viz.stacked :segments="collect($groups)->map(fn ($g, $k) => ['label' => $g['label'], 'value' => $avg['shares'][$k]])->values()->all()"
+                                           :caption="'Regional average · '.$avg['movements'].' movements'" />
+                            <div class="flex flex-col gap-sm border-t border-surface-container pt-sm">
+                                @foreach ($rated as $r)
+                                    @continue(empty($r['profile'][$key]))
+                                    <div class="grid grid-cols-[minmax(6rem,9rem)_1fr] items-center gap-sm">
+                                        <span class="text-[0.8125rem] truncate">{{ str_replace(' YMCA', '', $r['movement']->name) }}</span>
+                                        <x-viz.stacked thin :legend="false" :segments="collect($groups)->map(fn ($g, $k) => ['label' => $g['label'], 'value' => $r['profile'][$key][$k]])->values()->all()" />
+                                    </div>
+                                @endforeach
+                            </div>
+                            <details class="text-[0.8125rem]">
+                                <summary class="cursor-pointer text-primary underline">Show as a table</summary>
+                                <div class="relative overflow-x-auto mt-xs">
+                                    <table class="w-full text-[0.8125rem]">
+                                        <thead><tr class="text-left text-on-surface-variant"><th class="py-1 pr-sm">Movement</th>@foreach ($groups as $g)<th class="py-1 pr-sm">{{ $g['label'] }}</th>@endforeach</tr></thead>
+                                        <tbody>
+                                            @foreach ($rated as $r)
+                                                @continue(empty($r['profile'][$key]))
+                                                <tr class="border-t border-surface-container"><td class="py-1 pr-sm">{{ $r['movement']->name }}</td>@foreach (array_keys($groups) as $k)<td class="py-1 pr-sm tabular-nums">{{ Viz::number($r['profile'][$key][$k], 1) }}%</td>@endforeach</tr>
+                                            @endforeach
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </details>
+                        @endif
+                    </x-card>
+                @endforeach
+            </div>
+
+            <div class="grid lg:grid-cols-2 gap-md items-start">
+                <x-card title="Policies in place" subtitle="Share of rated movements with each policy (Q412–Q430). Weakest at the bottom.">
+                    <x-viz.adoption :rows="$insights->adoption('policies', Profile::POLICIES)" />
+                </x-card>
+                <div class="flex flex-col gap-md">
+                    <x-card title="Governance practice" subtitle="Share of rated movements following each practice.">
+                        <x-viz.adoption :rows="$insights->adoption('governance', Profile::GOVERNANCE_PRACTICES)" labelWidth="14rem" />
+                    </x-card>
+                    <x-card title="Vision 2030 in the Strategic Plan" subtitle="Of the movements whose plan reflects Vision 2030 (Q620), how many cover each component.">
+                        <x-viz.adoption :rows="$insights->adoption('vision_2030', Profile::VISION_2030)" />
+                    </x-card>
                 </div>
             </div>
-        </details>
+        </x-card.details>
     @endif
 </x-layouts.app>

@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Actions\Oha\EditTimeline;
+use App\Http\Controllers\Concerns\BacksToAssessment;
 use App\Models\Assessment;
 use App\Models\AssessmentMilestone;
 use App\Models\OdpTask;
@@ -15,6 +16,8 @@ use Illuminate\View\View;
 
 class TimelineController extends Controller
 {
+    use BacksToAssessment;
+
     /**
      * Two timelines on one page: each movement's ODP tasks and their deadlines (read
      * from its ODP, or typed in), and the deadlines of the assessments under way.
@@ -23,8 +26,8 @@ class TimelineController extends Controller
     public function index(Request $request): View
     {
         $user = $request->user();
-        abort_unless($user->isAssessor(), 403);
-        $mine = $user->oversees() ? null : $user->assignedMovements()->pluck('movements.id')->all();
+        Gate::authorize('viewTimelines');
+        $mine = $user->visibleMovementIds();
 
         return $request->query('tab') === 'gates'
             ? $this->gates($request, $mine)
@@ -37,7 +40,6 @@ class TimelineController extends Controller
     private function odpTasks(Request $request, ?array $mine): View
     {
         $assessments = OdpTimeline::assessments($mine);
-        $assessments->each(fn (Assessment $a) => OdpTimeline::refresh($a));
 
         $tasks = OdpTask::query()->whereIn('assessment_id', $assessments->pluck('id'))
             ->orderBy('sort_order')->orderBy('id')->get()->groupBy('assessment_id');
@@ -71,7 +73,7 @@ class TimelineController extends Controller
     {
         $assessments = Assessment::query()
             ->with(['movement', 'workItem'])
-            ->whereHas('workItem')
+            ->underWay()
             ->when($mine !== null, fn ($q) => $q->whereIn('movement_id', $mine))
             ->orderBy('opened_at')->orderBy('id')
             ->get();
@@ -91,7 +93,7 @@ class TimelineController extends Controller
             'start' => $start,
             'end' => $end,
             'missed' => $milestones->flatten()->where('overdue', true)->count(),
-            'dueSoon' => $milestones->flatten()->filter(fn ($m) => $m->done_at === null && ! $m->overdue && $m->due_on->lte(now()->addDays(7)))->count(),
+            'dueSoon' => $milestones->flatten()->filter(fn ($m) => $m->done_at === null && ! $m->overdue && $m->due_on->lte(now()->addDays(config('oha.due_soon_days.deadlines'))))->count(),
             'view' => $request->query('view') === 'table' ? 'table' : 'chart',
         ]);
     }
@@ -164,6 +166,6 @@ class TimelineController extends Controller
 
     private function back(Assessment $assessment, string $status): RedirectResponse
     {
-        return redirect()->route('assessments.show', ['assessment' => $assessment, 'tab' => 'timeline'])->with('status', $status);
+        return $this->toTab($assessment, $status, 'timeline');
     }
 }

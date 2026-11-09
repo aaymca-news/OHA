@@ -27,7 +27,7 @@
         <div class="flex flex-col items-start sm:items-end gap-xs text-[0.8125rem]">
             <x-chip :tone="$tone" :icon="$icon">{{ $label }}</x-chip>
             @if ($task->due_on)
-                <span class="font-semibold tabular-nums">{{ $task->due_on->format('j M Y') }}</span>
+                <span class="font-semibold tabular-nums">{{ $task->due_on->asDay() }}</span>
             @endif
             @if ($task->date_guessed)
                 <span class="text-serious-ink" title="The ODP gave no year, so the year was taken from its period of implementation.">Year guessed: check</span>
@@ -45,29 +45,27 @@
                 @csrf
                 @method('PUT')
                 <input type="hidden" name="odp_task" value="{{ $task->id }}">
-                <label class="flex flex-col gap-xs">
-                    <span class="font-semibold">Task</span>
-                    <textarea name="task" rows="2" required maxlength="4000" class="px-sm py-1.5 rounded border-[1.5px] border-outline-variant bg-surface-container-lowest">{{ $task->task }}</textarea>
-                </label>
-                {{-- Plain boxes, not x-input: a refused save must not fill every task's boxes with its values. --}}
+                {{--
+                    Plain boxes in x-field, not x-input/x-textarea: a refused save must not fill every
+                    task's boxes with its values (x-field is given no name, so no error shows under every task either).
+                --}}
+                <x-field label="Task">
+                    <textarea name="task" rows="2" required maxlength="4000" @class(\App\Support\Ui::control(false, 'sm'))>{{ $task->task }}</textarea>
+                </x-field>
                 <div class="grid sm:grid-cols-[1fr_auto_auto] gap-sm items-end">
-                    <label class="flex flex-col gap-xs">
-                        <span class="font-semibold">Responsible</span>
-                        <input name="responsible" value="{{ $task->responsible }}" maxlength="500" class="px-sm py-1.5 rounded border-[1.5px] border-outline-variant bg-surface-container-lowest">
-                    </label>
-                    <label class="flex flex-col gap-xs">
-                        <span class="font-semibold">Deadline</span>
-                        <input type="date" name="due_on" value="{{ $task->due_on?->format('Y-m-d') }}" class="px-sm py-1.5 rounded border-[1.5px] border-outline-variant bg-surface-container-lowest">
-                    </label>
+                    <x-field label="Responsible">
+                        <input name="responsible" value="{{ $task->responsible }}" maxlength="500" @class(\App\Support\Ui::control(false, 'sm'))>
+                    </x-field>
+                    <x-field label="Deadline">
+                        <input type="date" name="due_on" value="{{ $task->due_on?->format('Y-m-d') }}" @class(\App\Support\Ui::control(false, 'sm'))>
+                    </x-field>
                     <label class="flex items-center gap-xs pb-2"><input type="hidden" name="done" value="0"><input type="checkbox" name="done" value="1" @checked($task->done)> Done</label>
                 </div>
                 <x-button variant="secondary" class="self-start">Save the task</x-button>
             </form>
-            <form method="POST" action="{{ route('timeline.tasks.destroy', $task) }}" class="mt-xs" x-data x-on:submit="if (! confirm('Remove this task from the timeline?')) $event.preventDefault()">
-                @csrf
-                @method('DELETE')
-                <button class="text-[0.8125rem] text-error underline">Remove this task</button>
-            </form>
+            <x-confirm-form :action="route('timeline.tasks.destroy', $task)" method="DELETE" :confirm="'Remove this task from the timeline?'" class="mt-xs">
+                <x-button variant="link-danger" class="text-[0.8125rem]">Remove this task</x-button>
+            </x-confirm-form>
         </details>
     @endif
 </li>

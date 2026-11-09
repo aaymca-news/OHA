@@ -6,6 +6,8 @@ use App\Actions\Users\UpdateOwnProfile;
 use App\Actions\Users\UpdateProfilePhoto;
 use App\Models\User;
 use App\Support\SignedInDevices;
+use App\Support\UploadLimit;
+use App\Support\Viz;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
@@ -33,9 +35,7 @@ class ProfileController extends Controller
             'title' => ['nullable', 'string', 'max:80'],
         ]);
 
-        // The Board Chairperson and General Secretary keep the title the Administrators gave them.
-        $user = $request->user();
-        $action->handle($user, $data['name'], $user->isSecretariat() ? ($data['title'] ?? null) : $user->title);
+        $action->handle($request->user(), $data['name'], $data['title'] ?? null);
 
         return back()->with('status', 'Your details are saved.');
     }
@@ -43,12 +43,15 @@ class ProfileController extends Controller
     /** Adds or replaces their own profile photo. */
     public function updatePhoto(Request $request, UpdateProfilePhoto $action): RedirectResponse
     {
+        // The photo limit, or PHP's own if that is lower (as for every upload).
+        $kb = min((int) config('oha.max_photo_kb'), UploadLimit::kb());
         $request->validate(
-            ['photo' => ['required', 'file', 'mimes:jpg,jpeg,png,webp', 'max:5120', 'dimensions:min_width=64,min_height=64']],
+            ['photo' => ['required', 'file', 'mimes:jpg,jpeg,png,webp', 'max:'.$kb, 'dimensions:min_width=64,min_height=64']],
             [
                 'photo.required' => 'Choose a photo to upload.',
                 'photo.mimes' => 'The photo must be a JPG, PNG or WebP image.',
-                'photo.max' => 'The photo must be smaller than 5 MB.',
+                'photo.max' => 'The photo must be smaller than '.Viz::figure($kb / 1024, 1).' MB.',
+                'photo.uploaded' => 'The photo must be smaller than '.Viz::figure($kb / 1024, 1).' MB.',
                 'photo.dimensions' => 'The photo is too small: use one at least 64 pixels wide and high.',
             ],
         );

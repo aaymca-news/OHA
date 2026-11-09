@@ -18,9 +18,9 @@
             </span>
             <span class="text-[0.8125rem] text-on-surface-variant">
                 @if ($done)
-                    Done {{ $m->done_at->format('j M Y') }}{{ $m->completed_late ? ' (late)' : '' }}
+                    Done {{ $m->done_at->asDay() }}{{ $m->completed_late ? ' (late)' : '' }}
                 @else
-                    Due {{ $m->due_on->format('j M Y') }}{{ $m->set_by_hand ? ' · set by hand' : '' }}{{ $m->overdue ? ' · overdue' : '' }}
+                    Due {{ $m->due_on->asDay() }}{{ $m->set_by_hand ? ' · set by hand' : '' }}{{ $m->overdue ? ' · overdue' : '' }}
                 @endif
             </span>
         </li>

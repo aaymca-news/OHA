@@ -48,9 +48,11 @@ class DownloadController extends Controller
      * The same file, shown in the page rather than saved: a PDF opens in the browser's
      * own viewer, and a Word file is drawn on the page by docx-preview.
      */
-    public function preview(Document $document): StreamedResponse
+    public function preview(Request $request, Document $document): StreamedResponse
     {
         abort_unless($document->canPreview(), 404);
+        // In the download log like a download: the file was opened, in the page.
+        Audit::record($request->user(), 'file.downloaded', $document, $document->artefact->assessment, payload: ['file' => $document->original_name, 'viewed' => true]);
 
         $type = $document->format === DocumentFormat::Pdf
             ? 'application/pdf'
@@ -95,7 +97,7 @@ class DownloadController extends Controller
     /** The Alliance's scores as a CSV: each movement's latest, or with ?all=1 every approved assessment. AAYMCA staff only. */
     public function scores(Request $request, ScoresCsv $scores): Response
     {
-        abort_unless($request->user()->isSecretariat(), 403, 'Only AAYMCA staff download the Alliance’s scores.');
+        Gate::authorize('viewAllianceStats');
         $every = $request->boolean('all');
         Audit::record($request->user(), 'scores.exported', $request->user(), payload: ['scope' => $every ? 'every assessment' : 'latest per movement']);
 

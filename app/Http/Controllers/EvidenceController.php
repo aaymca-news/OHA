@@ -49,7 +49,7 @@ class EvidenceController extends Controller
             'questions' => EvidenceQuestions::byCategory(),
             'checklist' => $assessment !== null ? $library->checklist($library->answersFor($user, $assessment), $documents) : [],
             'canUpload' => $assessment !== null && Gate::forUser($user)->allows('upload', [Evidence::class, $assessment]),
-            'canShareNew' => $user->isAdmin() || $user->isGeneralSecretaryOf($movement),
+            'canShareNew' => Gate::forUser($user)->allows('shareFor', [Evidence::class, $movement]),
         ]);
     }
 
@@ -58,7 +58,7 @@ class EvidenceController extends Controller
         $data = $request->validate([
             'assessment_id' => ['required', 'integer'],
             'kind' => ['required', 'in:file,link'],
-            'file' => ['required_if:kind,file', 'nullable', 'file', 'max:'.UploadLimit::kb()],
+            'file' => ['required_if:kind,file', ...UploadLimit::rule(required: false)],
             'url' => ['required_if:kind,link', 'nullable', 'string', 'max:2000'],
             'title' => ['nullable', 'string', 'max:200'],
             'category' => ['nullable', 'string', 'exists:categories,code'],

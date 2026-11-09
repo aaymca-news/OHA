@@ -2,7 +2,6 @@
 
 namespace App\Support;
 
-use App\Enums\Role;
 use App\Models\User;
 use Illuminate\Auth\Access\Response;
 use Illuminate\Database\Eloquent\Collection;
@@ -22,8 +21,7 @@ final class Approvers
     public static function for(User $submitter): Collection
     {
         return User::query()
-            ->whereIn('role', [Role::Admin, Role::SuperAdmin])
-            ->where('active', true)
+            ->administrators()
             ->whereKeyNot($submitter->id)
             ->orderBy('name')
             ->get();

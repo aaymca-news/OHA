@@ -1,17 +1,15 @@
 <x-layouts.app :title="$movement->name" :subtitle="$movement->city.' · '.$movement->zone->name.' · '.$movement->membershipStatus->label">
     @can('update', $movement)
-        <a href="{{ route('admin.movements.edit', $movement) }}" class="self-start -mt-sm inline-flex items-center gap-xs text-[0.875rem] text-primary underline">
-            <span class="material-symbols-outlined text-[1.125rem]" aria-hidden="true">edit</span> Edit the movement’s details
-        </a>
+        <x-button variant="link" icon="edit" :href="route('admin.movements.edit', $movement)" class="self-start -mt-sm text-[0.875rem]">Edit the movement’s details</x-button>
     @endcan
     <div class="grid sm:grid-cols-3 gap-md">
         <x-stat-tile label="Latest health score" :value="$status->pct !== null ? number_format((float) $status->pct, 1) : '—'" :unit="$status->pct !== null ? '%' : null">
             <x-slot:sub><x-band-chip :band="$status->band" :under-way="$underWay !== null" /></x-slot:sub>
         </x-stat-tile>
-        <x-stat-tile label="Points" :value="$status->points_achieved !== null ? rtrim(rtrim(number_format((float) $status->points_achieved, 2), '0'), '.') : '—'" :unit="$status->points_available ? ' / '.$status->points_available : null">
-            <x-slot:sub>{{ $status->last_assessed_on ? 'Assessed '.$status->last_assessed_on->format('M Y') : 'No approved form yet' }}</x-slot:sub>
+        <x-stat-tile label="Points" :value="$status->points_achieved !== null ? \App\Support\Viz::figure((float) $status->points_achieved) : '—'" :unit="$status->points_available ? ' / '.$status->points_available : null">
+            <x-slot:sub>{{ $status->last_assessed_on ? 'Assessed '.$status->last_assessed_on->asMonth() : 'No approved form yet' }}</x-slot:sub>
         </x-stat-tile>
-        <x-stat-tile label="Next assessment" :value="$status->next_assessment_on?->format('M Y') ?? 'Not scheduled'">
+        <x-stat-tile label="Next assessment" :value="$status->next_assessment_on?->asMonth() ?? 'Not scheduled'">
             <x-slot:sub>
                 @if ($status->reassessment_overdue)
                     <x-chip tone="critical" icon="alarm">Overdue</x-chip>
@@ -104,7 +102,7 @@
                             <summary class="cursor-pointer text-primary underline text-right">Start the next assessment early</summary>
                             <form method="POST" action="{{ route('assessments.store', $movement) }}" class="flex flex-wrap items-end gap-sm mt-sm">
                                 @csrf
-                                <x-input name="period_label" label="Period" :value="now()->format('M Y')" class="w-32" required />
+                                <x-input name="period_label" label="Period" :value="now()->asMonth()" class="w-32" required />
                                 <x-input name="period_start" label="Starting month" type="month" :value="now()->format('Y-m')" required />
                                 <x-button>Start new assessment</x-button>
                             </form>
@@ -116,7 +114,7 @@
             <x-slot:actions>
                 <form method="POST" action="{{ route('assessments.store', $movement) }}" class="flex flex-wrap items-end gap-sm">
                     @csrf
-                    <x-input name="period_label" label="Period" :value="now()->format('M Y')" class="w-32" required />
+                    <x-input name="period_label" label="Period" :value="now()->asMonth()" class="w-32" required />
                     <x-input name="period_start" label="Starting month" type="month" :value="now()->format('Y-m')" required />
                     <x-button>Start new assessment</x-button>
                 </form>

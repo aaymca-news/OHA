@@ -1,15 +1,16 @@
-@props(['name', 'label', 'type' => 'text', 'value' => null, 'hint' => null])
+{{--
+    A text box with its label, hint and error. Attributes go to the <input>; `wrap` adds
+    classes to the label around it.
+      size  md (default) · sm (filter bars)
+    type="password" adds a show/hide toggle.
+--}}
+@props(['name', 'label' => null, 'type' => 'text', 'value' => null, 'hint' => null, 'size' => 'md', 'wrap' => null])
 @php
-    $classes = [
-        'px-sm py-2 rounded border-[1.5px] bg-surface-container-lowest focus:border-primary outline-none',
-        'border-error' => $errors->has($name),
-        'border-outline-variant' => ! $errors->has($name),
-    ];
+    $classes = \App\Support\Ui::control($errors->has($name), $size);
     $id = $attributes->get('id') ?? 'input-'.$name.'-'.\Illuminate\Support\Str::random(6);
 @endphp
 
-<label class="flex flex-col gap-xs text-[0.875rem]" for="{{ $id }}">
-    <span class="font-semibold text-on-surface">{{ $label }}</span>
+<x-field :label="$label" :name="$name" :hint="$hint" :size="$size" :for="$id" :class="$wrap">
     @if ($type === 'password')
         {{--
             A password box with a show/hide toggle, so people can check what they typed.
@@ -22,7 +23,7 @@
                 :type="shown ? 'text' : 'password'"
                 name="{{ $name }}"
                 value=""
-                {{ $attributes->except('id')->class([...$classes, 'w-full pr-11']) }}
+                {{ $attributes->except('id')->class([...$classes, 'w-full pr-11' => true]) }}
             >
             <button type="button" x-on:click="shown = ! shown" aria-controls="{{ $id }}"
                     :aria-pressed="shown" :aria-label="shown ? 'Hide password' : 'Show password'" :title="shown ? 'Hide password' : 'Show password'"
@@ -40,11 +41,4 @@
             {{ $attributes->except('id')->class($classes) }}
         >
     @endif
-    @if ($hint)
-        <span class="text-[0.8125rem] text-on-surface-variant">{{ $hint }}</span>
-    @endif
-    {{-- What was wrong with this box, said under it (the page's summary at the top says it too). --}}
-    @error($name)
-        <span class="flex items-start gap-xs text-[0.8125rem] text-error"><span class="material-symbols-outlined text-[1rem]" aria-hidden="true">error</span>{{ $message }}</span>
-    @enderror
-</label>
+</x-field>

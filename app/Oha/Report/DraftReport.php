@@ -13,6 +13,7 @@ use App\Oha\FormDefinition;
 use App\Oha\Profile;
 use App\Oha\Question;
 use App\Oha\Scorer;
+use App\Support\Viz;
 use Illuminate\Support\Collection;
 
 /**
@@ -175,7 +176,7 @@ final class DraftReport
 
     private function band(float $pct): HealthBand
     {
-        return HealthBand::query()->where('min_pct', '>', 0)->where('min_pct', '<=', max($pct, 0.01))->orderByDesc('min_pct')->firstOrFail();
+        return HealthBand::forPercentage($pct, rated: true);
     }
 
     /**
@@ -264,7 +265,7 @@ final class DraftReport
      */
     private function title(Assessment $assessment): array
     {
-        $assessors = $assessment->movement->assessors()->where('active', true)->orderBy('name')->pluck('name')->all();
+        $assessors = $assessment->movement->activeAssessors()->pluck('name')->all();
 
         return [
             'key' => 'title', 'title' => 'Title', 'kind' => 'title', 'locked' => false,
@@ -576,6 +577,6 @@ final class DraftReport
 
     private function number(?float $value): string
     {
-        return $value === null ? '' : rtrim(rtrim(number_format($value, 2, '.', ','), '0'), '.');
+        return Viz::figure($value);
     }
 }

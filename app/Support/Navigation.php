@@ -9,6 +9,7 @@ use App\Models\MovementStatus;
 use App\Models\OdpTask;
 use App\Models\User;
 use App\Queries\MyWork;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Gate;
 
 /**
@@ -20,9 +21,33 @@ final class Navigation
     public function __construct(private readonly MyWork $myWork) {}
 
     /**
+     * The sidebar for one person. Its badges count work across the platform, so they are
+     * kept for oha.badge_cache_seconds (a minute) and worked out afresh as soon as anything
+     * is recorded in the audit trail (every change of work is): see forget().
+     *
      * @return list<array{label: string, route: string, params: array<string, mixed>, icon: string, badge: int, tone: string, active: string}>
      */
     public function for(User $user): array
+    {
+        $seconds = (int) config('oha.badge_cache_seconds');
+        if ($seconds <= 0) {
+            return $this->build($user);
+        }
+
+        return Cache::remember('nav:'.Cache::get('nav:version', 0).':'.$user->id, $seconds, fn () => $this->build($user));
+    }
+
+    /** Every sidebar is worked out afresh on its next page: something changed. */
+    public static function forget(): void
+    {
+        Cache::add('nav:version', 0);
+        Cache::increment('nav:version');
+    }
+
+    /**
+     * @return list<array{label: string, route: string, params: array<string, mixed>, icon: string, badge: int, tone: string, active: string}>
+     */
+    private function build(User $user): array
     {
         $item = fn (string $key, string $route, string $icon, int $badge = 0, string $tone = 'critical', array $params = [], ?string $active = null) => [
             'label' => __('oha.nav.'.$key), 'route' => $route, 'params' => $params, 'icon' => $icon,
@@ -73,14 +98,14 @@ final class Navigation
     private function unassigned(): int
     {
         return Movement::query()->whereDoesntHave('assessors', fn ($q) => $q->where('active', true))
-            ->where(fn ($q) => $q->whereHas('assessments', fn ($a) => $a->whereHas('workItem'))->orWhereDoesntHave('assessments'))
+            ->where(fn ($q) => $q->whereHas('assessments', fn ($a) => $a->underWay())->orWhereDoesntHave('assessments'))
             ->count();
     }
 
     /** Overdue gate milestones and ODP tasks on the movements this user may see on Timelines. */
     private function overdue(User $user): int
     {
-        $odps = OdpTimeline::assessments($user->oversees() ? null : $user->assignedMovements()->pluck('movements.id')->all());
+        $odps = OdpTimeline::assessments($user->visibleMovementIds());
 
         return $this->overdueMilestones($user) + OdpTask::query()
             ->whereIn('assessment_id', $odps->pluck('id'))
@@ -93,7 +118,7 @@ final class Navigation
     {
         return AssessmentMilestone::query()
             ->where('overdue', true)
-            ->whereHas('assessment', fn ($q) => $q->whereHas('workItem')
+            ->whereHas('assessment', fn ($q) => $q->underWay()
                 ->when(! $user->oversees(), fn ($q) => $q->whereIn('movement_id', $user->assignedMovements()->select('movements.id'))))
             ->count();
     }

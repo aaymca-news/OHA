@@ -2,17 +2,16 @@
 
 namespace App\Http\Controllers;
 
+use App\Enums\BandCode;
 use App\Models\Assessment;
 use App\Models\AssessmentMilestone;
-use App\Models\FormUpload;
 use App\Models\Movement;
 use App\Models\MovementStatus;
 use App\Models\OdpTask;
 use App\Models\User;
-use App\Oha\CategoryRows;
-use App\Oha\Profile;
 use App\Queries\AllianceInsights;
 use App\Queries\AllianceStats;
+use App\Queries\MovementSnapshot;
 use App\Queries\MyWork;
 use App\Queries\OdpActivity;
 use App\Support\OdpTimeline;
@@ -71,35 +70,31 @@ class DashboardController extends Controller
         $status = MovementStatus::query()->with(['band', 'movement'])->findOrFail($user->movement_id);
         $gate = Gate::forUser($user);
 
-        $scored = $status->latest_assessment_id !== null ? Assessment::query()->with('score.band')->find($status->latest_assessment_id) : null;
-        $frozen = $scored !== null ? FormUpload::query()->whereKey($scored->categoryScores()->value('form_upload_id'))->first() : null;
-        $profile = $frozen !== null ? (new Profile($frozen->answers ?? [], $frozen->form_meta ?? []))->toArray() : null;
+        $snapshot = MovementSnapshot::of($status);
 
         // The assessment under way, if any: where it stands, gate by gate.
-        $current = $movement->assessments()->whereHas('workItem')->with('workItem')->latest('id')->first();
+        $current = $movement->assessments()->underWay()->with('workItem')->latest('id')->first();
 
         // The ODP's tasks, once the ODP itself is theirs to see.
         $odpAssessment = OdpTimeline::assessments([$movement->id])->first();
         $odpArtefact = $odpAssessment?->odp()->first();
+        // Its tasks were read when the ODP was saved (and oha:read-odp-tasks catches up any missed).
         $showOdp = $odpArtefact !== null && $gate->allows('view', $odpArtefact);
-        if ($showOdp) {
-            OdpTimeline::refresh($odpAssessment);
-        }
         $tasks = $showOdp ? OdpTask::query()->where('assessment_id', $odpAssessment->id)->orderBy('sort_order')->orderBy('id')->get() : collect();
 
         return view('dashboard.board', [
             'movement' => $movement,
             'status' => $status,
             'work' => $work,
-            'latest' => $scored,
-            'rows' => $scored !== null ? CategoryRows::for($scored) : [],
-            'profile' => $profile,
+            'latest' => $snapshot->latest,
+            'rows' => $snapshot->rows,
+            'profile' => $snapshot->profile,
             'current' => $current,
             'lastDone' => $current === null ? $movement->lastAssessmentDone() : null,
             'milestones' => $current !== null ? AssessmentMilestone::query()->where('assessment_id', $current->id)->orderBy('sort_order')->get() : collect(),
             'odpAssessment' => $showOdp ? $odpAssessment : null,
             'tasks' => $tasks,
-            'assessors' => $movement->assessors()->where('active', true)->orderBy('name')->get(),
+            'assessors' => $movement->activeAssessors()->get(),
             'assessments' => Assessment::query()->with('score.band')->where('movement_id', $movement->id)->latest('assessed_on')->latest('id')->get()
                 ->filter(fn (Assessment $a) => $gate->allows('view', $a)),
         ]);
@@ -124,7 +119,7 @@ class DashboardController extends Controller
                     'movements' => $rows->count(),
                     'rated' => $rated->count(),
                     'pct' => $rated->isEmpty() ? null : round($rated->avg(fn (MovementStatus $s) => (float) $s->pct), 1),
-                    'at_risk' => $rows->whereIn('band_code', ['atrisk', 'critical'])->count(),
+                    'at_risk' => $rows->whereIn('band_code', BandCode::NEEDING_SUPPORT)->count(),
                 ];
             })->sortBy('zone')->values();
     }

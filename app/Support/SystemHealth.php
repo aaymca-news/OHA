@@ -24,7 +24,7 @@ final class SystemHealth
         $problems = [];
         $severity = null;
 
-        $administrators = User::query()->whereIn('role', [Role::Admin, Role::SuperAdmin])->where('active', true)->count();
+        $administrators = User::query()->administrators()->count();
 
         if ($administrators === 0) {
             $problems[] = 'There is no Administrator. Nothing can be approved.';
@@ -64,7 +64,7 @@ final class SystemHealth
      */
     public static function audience(): Collection
     {
-        return User::query()->where('active', true)->whereIn('role', [Role::Admin, Role::SuperAdmin])->get();
+        return User::query()->administrators()->get();
     }
 
     public static function shouldWarn(User $user): bool

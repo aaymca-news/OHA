@@ -10,13 +10,10 @@
 @endphp
 <input type="hidden" name="seen" value="{{ $current?->id ?? 0 }}">
 @if ($current)
-    <div class="flex flex-col gap-sm p-md rounded-lg bg-warning-wash text-warning-ink text-[0.875rem]" x-data="{ replace: @js((bool) old('replace')) }">
-        <p class="flex items-start gap-sm">
-            <span class="material-symbols-outlined text-[1.25rem]" aria-hidden="true">warning</span>
-            <span>
-                <span class="font-semibold">{{ ucfirst(\App\Support\ReplaceGuard::describe($current)) }} was saved by {{ \App\Support\ReplaceGuard::savedBy($current) }}.</span>
-                Uploading makes yours the current one. {{ $theirs ? 'Theirs' : 'The earlier one' }} is kept, and becomes current again if yours is withdrawn.
-            </span>
+    <x-callout tone="warning" x-data="{ replace: {{ old('replace') ? 'true' : 'false' }} }">
+        <p>
+            <span class="font-semibold">{{ ucfirst(\App\Support\ReplaceGuard::describe($current)) }} was saved by {{ \App\Support\ReplaceGuard::savedBy($current) }}.</span>
+            Uploading makes yours the current one. {{ $theirs ? 'Theirs' : 'The earlier one' }} is kept, and becomes current again if yours is withdrawn.
         </p>
         <label class="flex items-center gap-sm font-semibold">
             <input type="hidden" name="replace" value="0">
@@ -24,12 +21,11 @@
             I want to replace it
         </label>
         @if ($theirs)
-            <label class="flex flex-col gap-xs" x-show="replace" x-cloak>
-                <span class="font-semibold">Why are you replacing it?</span>
+            <x-field label="Why are you replacing it?" name="replace_reason" x-show="replace" x-cloak
+                     :hint="\Illuminate\Support\Str::before(\App\Support\ReplaceGuard::savedBy($current), ',').' and the other assessors see this in the audit trail.'">
                 <textarea name="replace_reason" rows="2" maxlength="2000" x-bind:required="replace"
-                          class="px-sm py-2 rounded border-[1.5px] border-outline-variant bg-surface-container-lowest text-on-surface">{{ old('replace_reason') }}</textarea>
-                <span class="text-[0.8125rem]">{{ \Illuminate\Support\Str::before(\App\Support\ReplaceGuard::savedBy($current), ',') }} and the other assessors see this in the audit trail.</span>
-            </label>
+                          @class([...\App\Support\Ui::control($errors->has('replace_reason')), 'text-on-surface' => true])>{{ old('replace_reason') }}</textarea>
+            </x-field>
         @endif
-    </div>
+    </x-callout>
 @endif

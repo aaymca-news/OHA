@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Actions\Oha\DeleteFormUpload;
 use App\Actions\Oha\ResolveGap;
 use App\Actions\Oha\SupplyAnswer;
+use App\Http\Controllers\Concerns\BacksToAssessment;
 use App\Models\FormFinding;
 use App\Models\FormUpload;
 use Illuminate\Http\RedirectResponse;
@@ -16,6 +17,8 @@ use Illuminate\Http\Request;
  */
 class GapController extends Controller
 {
+    use BacksToAssessment;
+
     public function resolve(Request $request, FormFinding $finding, ResolveGap $gaps): RedirectResponse
     {
         $data = $request->validate(['note' => ['required', 'string', 'max:2000']]);
@@ -70,7 +73,6 @@ class GapController extends Controller
 
     private function back(int $assessment, string $status): RedirectResponse
     {
-        return redirect()->route('assessments.show', ['assessment' => $assessment, 'tab' => 'form'])
-            ->with('status', $status);
+        return $this->toTab($assessment, $status, 'form');
     }
 }

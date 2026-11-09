@@ -2,15 +2,10 @@
 <x-card title="Audit trail" subtitle="Every step, who took it and when. The database refuses any change to these entries.">
     @if ($auditPeople->count() > 1)
         <x-slot:actions>
-            <form method="GET" action="{{ route('assessments.show', $assessment) }}" class="flex flex-wrap items-center gap-sm text-[0.875rem]">
+            <form method="GET" action="{{ route('assessments.show', $assessment) }}" class="flex flex-wrap items-end gap-sm text-[0.875rem]">
                 <input type="hidden" name="tab" value="audit">
-                <label for="audit-who" class="text-on-surface-variant">Show</label>
-                <select id="audit-who" name="who" onchange="this.form.submit()" class="px-sm py-1.5 rounded border-[1.5px] border-outline-variant bg-surface-container-lowest">
-                    <option value="">Everyone</option>
-                    @foreach ($auditPeople as $person)
-                        <option value="{{ $person->id }}" @selected($who === $person->id)>{{ $person->name }}</option>
-                    @endforeach
-                </select>
+                <x-select id="audit-who" name="who" label="Show" size="sm" placeholder="Everyone" onchange="this.form.submit()"
+                          :options="$auditPeople->pluck('name', 'id')->all()" :value="$who" />
                 <noscript><x-button>Show</x-button></noscript>
             </form>
         </x-slot:actions>
@@ -21,7 +16,7 @@
         <ol class="flex flex-col gap-xs text-[0.875rem]">
             @foreach ($audit as $event)
                 <li class="grid sm:grid-cols-[10rem_1fr] gap-x-md py-xs border-t border-surface-container first:border-0">
-                    <span class="text-on-surface-variant tabular-nums">{{ $event->occurred_at->format('j M Y, H:i') }}</span>
+                    <span class="text-on-surface-variant tabular-nums">{{ $event->occurred_at->asStamp() }}</span>
                     <span>
                         <strong>{{ $event->actor?->name ?? 'System' }}</strong>
                         {{ str_replace(['.', '_'], [': ', ' '], $event->action) }}
@@ -48,6 +43,7 @@
                 </li>
             @endforeach
         </ol>
+        <x-pagination :paginator="$audit" />
     @endif
 </x-card>
 
@@ -61,8 +57,8 @@
             <ol class="flex flex-col gap-xs mt-sm">
                 @foreach ($downloads as $event)
                     <li class="grid sm:grid-cols-[10rem_1fr] gap-x-md py-xs border-t border-surface-container first:border-0">
-                        <span class="text-on-surface-variant tabular-nums">{{ $event->occurred_at->format('j M Y, H:i') }}</span>
-                        <span><strong>{{ $event->actor?->name ?? 'System' }}</strong> downloaded <span class="break-words">{{ $event->payload['file'] ?? 'a file' }}</span></span>
+                        <span class="text-on-surface-variant tabular-nums">{{ $event->occurred_at->asStamp() }}</span>
+                        <span><strong>{{ $event->actor?->name ?? 'System' }}</strong> {{ ($event->payload['viewed'] ?? false) ? 'opened' : 'downloaded' }} <span class="break-words">{{ $event->payload['file'] ?? 'a file' }}</span></span>
                     </li>
                 @endforeach
             </ol>

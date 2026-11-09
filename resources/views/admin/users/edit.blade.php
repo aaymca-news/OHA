@@ -5,76 +5,71 @@
     </p>
 
     @unless ($canAdminister)
-        <p class="p-sm rounded bg-surface-container text-[0.875rem]">{{ Gate::inspect('administer', $target)->message() }}</p>
+        <x-callout tone="neutral">{{ Gate::inspect('administer', $target)->message() }}</x-callout>
     @endunless
 
     <div class="grid lg:grid-cols-2 gap-md items-start">
         {{-- Details --}}
         @if ($canAdminister)
-            <form method="POST" action="{{ route('admin.users.update', $target) }}"
-                  class="bg-surface-container-lowest border-[1.5px] border-outline-variant rounded-lg p-md sm:p-lg flex flex-col gap-md lg:col-span-2">
-                @csrf
-                @method('PUT')
-                <h2 class="text-[1.125rem] font-bold text-primary">Details</h2>
-                <div class="grid sm:grid-cols-3 gap-md">
-                    <x-input name="name" label="Full name" :value="$target->name" required />
-                    <x-input name="email" label="Email" type="email" :value="$target->email" required />
-                    <x-input name="title" label="Job title" :value="$target->title" />
-                </div>
-                <x-button class="self-start">Save details</x-button>
-                @if ($target->isAssessor())
-                    <div class="border-t border-surface-container pt-md">
-                        @include('admin.users._assignments')
+            <x-card title="Details" padding="lg" class="lg:col-span-2">
+                <form method="POST" action="{{ route('admin.users.update', $target) }}" class="flex flex-col gap-md">
+                    @csrf
+                    @method('PUT')
+                    <div class="grid sm:grid-cols-3 gap-md">
+                        <x-input name="name" label="Full name" :value="$target->name" required />
+                        <x-input name="email" label="Email" type="email" :value="$target->email" required />
+                        <x-input name="title" label="Job title" :value="$target->title" />
                     </div>
-                @endif
-            </form>
+                    <x-button class="self-start">Save details</x-button>
+                    @if ($target->isAssessor())
+                        <div class="border-t border-surface-container pt-md">
+                            @include('admin.users._assignments')
+                        </div>
+                    @endif
+                </form>
+            </x-card>
         @endif
 
         {{-- Role --}}
         @can('changeRole', $target)
-            <form method="POST" action="{{ route('admin.users.role', $target) }}" x-data="{ role: '{{ $target->role->value }}' }"
-                  class="bg-surface-container-lowest border-[1.5px] border-outline-variant rounded-lg p-md sm:p-lg flex flex-col gap-md">
-                @csrf
-                @method('PUT')
-                <h2 class="text-[1.125rem] font-bold text-primary">Role</h2>
-                <select name="role" x-model="role" class="px-sm py-2 rounded border-[1.5px] border-outline-variant bg-surface-container-lowest text-[0.875rem]">
-                    @foreach ($roles as $role)
-                        <option value="{{ $role->value }}">{{ $role->label() }}</option>
+            <x-card title="Role" padding="lg">
+                <form method="POST" action="{{ route('admin.users.role', $target) }}" x-data="{ role: '{{ $target->role->value }}' }" class="flex flex-col gap-md">
+                    @csrf
+                    @method('PUT')
+                    <x-select name="role" x-model="role" aria-label="Role"
+                              :hint="auth()->user()->isSuperAdmin() ? null : 'Only the Super Administrator gives the Administrator roles.'">
+                        @foreach ($roles as $role)
+                            <option value="{{ $role->value }}">{{ $role->label() }}</option>
+                        @endforeach
+                    </x-select>
+                    @foreach (['board' => 'chair', 'ngs' => 'generalSecretary'] as $value => $relation)
+                        @php($roleLabel = \App\Enums\Role::from($value)->label())
+                        <div x-show="role === '{{ $value }}'" x-cloak class="flex flex-col gap-sm">
+                            <x-select name="board_movement_id" x-bind:disabled="role !== '{{ $value }}'" :placeholder="$roleLabel.' of which movement…'" :aria-label="$roleLabel.' of which movement'">
+                                @foreach ($movements as $movement)
+                                    @php($now = $movement->{$relation})
+                                    <option value="{{ $movement->id }}" @selected($target->movement_id === $movement->id)>{{ $movement->name }}{{ $now && $now->id !== $target->id ? ' (now: '.$now->name.')' : '' }}</option>
+                                @endforeach
+                            </x-select>
+                            <label class="flex items-start gap-sm text-[0.875rem]">
+                                <input type="hidden" name="confirm_replace" value="0" :disabled="role !== '{{ $value }}'">
+                                <input type="checkbox" name="confirm_replace" value="1" class="mt-1" :disabled="role !== '{{ $value }}'">
+                                <span>If the movement already has a {{ $roleLabel }}, replace them (their account is deactivated).</span>
+                            </label>
+                        </div>
                     @endforeach
-                </select>
-                @unless (auth()->user()->isSuperAdmin())
-                    <p class="text-[0.8125rem] text-on-surface-variant">Only the Super Administrator gives the Administrator roles.</p>
-                @endunless
-                @foreach (['board' => 'chair', 'ngs' => 'generalSecretary'] as $value => $relation)
-                    @php($roleLabel = \App\Enums\Role::from($value)->label())
-                    <div x-show="role === '{{ $value }}'" x-cloak class="flex flex-col gap-sm">
-                        <select name="board_movement_id" :disabled="role !== '{{ $value }}'" class="px-sm py-2 rounded border-[1.5px] border-outline-variant bg-surface-container-lowest text-[0.875rem]">
-                            <option value="">{{ $roleLabel }} of which movement…</option>
-                            @foreach ($movements as $movement)
-                                @php($now = $movement->{$relation})
-                                <option value="{{ $movement->id }}" @selected($target->movement_id === $movement->id)>{{ $movement->name }}{{ $now && $now->id !== $target->id ? ' (now: '.$now->name.')' : '' }}</option>
-                            @endforeach
-                        </select>
-                        <label class="flex items-start gap-sm text-[0.875rem]">
-                            <input type="hidden" name="confirm_replace" value="0" :disabled="role !== '{{ $value }}'">
-                            <input type="checkbox" name="confirm_replace" value="1" class="mt-1" :disabled="role !== '{{ $value }}'">
-                            <span>If the movement already has a {{ $roleLabel }}, replace them (their account is deactivated).</span>
-                        </label>
-                    </div>
-                @endforeach
-                <x-button class="self-start">Change role</x-button>
-            </form>
+                    <x-button class="self-start">Change role</x-button>
+                </form>
+            </x-card>
         @else
-            <section class="bg-surface-container-lowest border-[1.5px] border-outline-variant rounded-lg p-md sm:p-lg">
-                <h2 class="text-[1.125rem] font-bold text-primary">Role</h2>
-                <p class="text-[0.875rem] text-on-surface-variant mt-xs">{{ Gate::inspect('changeRole', $target)->message() }}</p>
-            </section>
+            <x-card title="Role" padding="lg">
+                <p class="text-[0.875rem] text-on-surface-variant">{{ Gate::inspect('changeRole', $target)->message() }}</p>
+            </x-card>
         @endcan
 
         {{-- Account --}}
         @if ($canAdminister)
-            <section class="bg-surface-container-lowest border-[1.5px] border-outline-variant rounded-lg p-md sm:p-lg flex flex-col gap-md">
-                <h2 class="text-[1.125rem] font-bold text-primary">Account</h2>
+            <x-card title="Account" padding="lg">
                 <div class="flex flex-wrap gap-sm">
                     @if ($target->isInvitationPending() && $target->active)
                         <form method="POST" action="{{ route('admin.users.invitation', $target) }}">
@@ -97,7 +92,7 @@
                     @endif
                 </div>
                 <p class="text-[0.8125rem] text-on-surface-variant">Accounts are never deleted, because the audit trail refers to them. A deactivated user is signed out at once.</p>
-            </section>
+            </x-card>
         @endif
     </div>
 </x-layouts.app>

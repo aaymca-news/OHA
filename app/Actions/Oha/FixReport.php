@@ -17,6 +17,7 @@ use App\Oha\Report\ReadReport;
 use App\Oha\Report\ReportChecker;
 use App\Oha\Report\ReportFixes;
 use App\Oha\Report\ReportReader;
+use App\Support\Viz;
 use Illuminate\Support\Facades\Storage;
 use Throwable;
 
@@ -134,7 +135,7 @@ final class FixReport
         $assessment = $report->assessment;
         $baseline = $this->checker->baseline($assessment);
         $names = Category::query()->pluck('name', 'code');
-        $figure = fn (float $v) => rtrim(rtrim(number_format($v, 2, '.', ''), '0'), '.');
+        $figure = fn (float $v) => Viz::figure($v, thousands: '');
         $typed = trim((string) ($input['value'] ?? ''));
 
         if ($fix['kind'] === 'form') {
@@ -219,7 +220,7 @@ final class FixReport
         $baseline ?? throw new WorkflowRuleBroken('The OHA form has no scores yet to take them from.');
         $written = 0;
         foreach ($baseline['categories'] as $code => $pct) {
-            if ($doc->addToCategory($code, [['text' => 'Score in this category: '.rtrim(rtrim(number_format($pct, 1), '0'), '.').'%, from the OHA form.', 'kind' => 'normal']])) {
+            if ($doc->addToCategory($code, [['text' => 'Score in this category: '.Viz::figure($pct, 1).'%, from the OHA form.', 'kind' => 'normal']])) {
                 $written++;
             }
         }
@@ -235,7 +236,7 @@ final class FixReport
     {
         [, , $code, $said] = explode(':', (string) $finding->ref) + [2 => '', 3 => ''];
         $pct = $baseline['categories'][$code] ?? throw new WorkflowRuleBroken('The OHA form has no score for this category.');
-        $right = rtrim(rtrim(number_format($pct, 1), '0'), '.').'%';
+        $right = Viz::figure($pct, 1).'%';
         $name = $names[$code] ?? $code;
 
         if (! $doc->replace('/'.preg_quote($said, '/').'\s*%/', $right, category: $code)) {

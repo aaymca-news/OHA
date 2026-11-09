@@ -2,6 +2,7 @@
 
 namespace App\Queries;
 
+use App\Enums\Stage;
 use App\Models\Assessment;
 use App\Models\Category;
 use App\Models\Movement;
@@ -63,15 +64,13 @@ final class AllianceInsights
      */
     public function pipeline(): array
     {
-        $latest = Assessment::query()->select('movement_id', DB::raw('max(id) as id'))->groupBy('movement_id')->pluck('id', 'movement_id');
+        $latest = Assessment::query()->latestPerMovement()->pluck('id', 'movement_id');
         $work = WorkItem::query()->whereIn('assessment_id', $latest->values())->get()->keyBy('assessment_id');
         $total = Movement::query()->count();
         $counts = ['not_assessed' => $total - $latest->count(), 'form' => 0, 'report' => 0, 'odp' => 0, 'sign' => 0, 'complete' => 0, 'total' => $total];
 
         foreach ($latest as $assessmentId) {
-            $item = $work[$assessmentId] ?? null;
-            $key = $item === null ? 'complete' : ($item->holder_role->value === 'board' ? 'sign' : $item->artefact_kind->value);
-            $counts[$key]++;
+            $counts[Stage::ofWork($work[$assessmentId] ?? null)->value]++;
         }
 
         return $counts;

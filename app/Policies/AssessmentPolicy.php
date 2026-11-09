@@ -13,6 +13,14 @@ class AssessmentPolicy
      * rule). The Board Chairperson sees their own movement's once its OHA form, report or
      * ODP is approved.
      */
+    /** The Assessments page, where the work is handed out: the Administrators. */
+    public function viewAny(User $user): Response
+    {
+        return $user->oversees()
+            ? Response::allow()
+            : Response::deny('Only the Administrators hand out the assessments.');
+    }
+
     public function view(User $user, Assessment $assessment): Response
     {
         if (! $user->active) {
@@ -48,9 +56,27 @@ class AssessmentPolicy
      */
     public function viewGaps(User $user, Assessment $assessment): Response
     {
-        return $user->oversees() || $user->canAssess($assessment->movement)
+        return $this->worksOn($user, $assessment)
             ? Response::allow()
             : Response::deny('Missing information and data quality are shown only to the staff assessing this movement and the Administrators.');
+    }
+
+    /**
+     * The working versions (a form, report or ODP not yet approved): those working on the
+     * assessment, its assessors and the Administrators. Everyone else sees the approved
+     * version, also while a corrected one waits for approval.
+     */
+    public function viewDrafts(User $user, Assessment $assessment): Response
+    {
+        return $this->worksOn($user, $assessment)
+            ? Response::allow()
+            : Response::deny('Only the staff assessing this movement and the Administrators see versions not yet approved.');
+    }
+
+    /** The Administrators, and the staff assigned to assess the movement. */
+    private function worksOn(User $user, Assessment $assessment): bool
+    {
+        return $user->oversees() || $user->canAssess($assessment->movement);
     }
 
     /**
@@ -63,7 +89,7 @@ class AssessmentPolicy
             return Response::deny('Only an assessor on this movement can stop working on its assessment.');
         }
 
-        return $assessment->workItem()->exists()
+        return $assessment->isUnderWay()
             ? Response::allow()
             : Response::deny('This assessment is complete; there is no work left to hand back.');
     }

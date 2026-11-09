@@ -4,6 +4,7 @@ use App\Actions\Oha\OpenAssessment;
 use App\Actions\Oha\UploadForm;
 use App\Actions\Oha\UploadReportVersion;
 use App\Enums\ArtefactState;
+use App\Models\AuditEvent;
 use App\Models\Movement;
 use App\Models\User;
 use Database\Seeders\MovementsSeeder;
@@ -106,4 +107,12 @@ it('sends guests away from every download', function () {
     $this->get(route('downloads.form', $this->upload))->assertRedirect(route('login'));
     $this->get(route('downloads.document', $this->version))->assertRedirect(route('login'));
     $this->get(route('downloads.preview', $this->version))->assertRedirect(route('login'));
+});
+
+it('records a preview in the download log, as opened', function () {
+    $this->actingAs($this->staff)->get(route('downloads.preview', $this->version))->assertOk();
+
+    $event = AuditEvent::query()->where('action', 'file.downloaded')->latest('id')->firstOrFail();
+    expect($event->actor_id)->toBe($this->staff->id)
+        ->and($event->payload['viewed'] ?? false)->toBeTrue();
 });

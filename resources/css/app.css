@@ -216,6 +216,22 @@
 .workbook {
     color: #1f1f1f;
 }
+
+/*
+ * x-table: every cell gets the standard spacing, and the heading row its rule. :where()
+ * keeps these weaker than a cell's own utility classes, so a cell can still differ.
+ */
+.oha-table :where(th, td) {
+    padding: var(--spacing-sm) var(--spacing-md);
+}
+.oha-table :where(thead tr) {
+    border-bottom: 1.5px solid var(--color-outline-variant);
+}
+
+/* x-card.details: its own chevron instead of the browser's marker. */
+.oha-summary::-webkit-details-marker {
+    display: none;
+}
 .workbook td,
 .workbook th {
     border: 1px solid #d9d9d9;

@@ -41,10 +41,15 @@ final class SpreadsheetPreview
         $key = 'xlsx-preview:v'.self::CACHE_VERSION.":{$shown['sha256']}:{$maxRows}:{$maxColumns}";
 
         return Cache::remember($key, now()->addDay(), function () use ($shown, $maxRows, $maxColumns): ?array {
+            // Read from a temporary copy, so this works on any storage disk (a cloud disk has no local path).
+            $copy = (string) tempnam(sys_get_temp_dir(), 'xlsx');
             try {
-                $book = IOFactory::createReader('Xlsx')->load(Storage::disk($shown['disk'])->path($shown['path']));
+                file_put_contents($copy, Storage::disk($shown['disk'])->get($shown['path']));
+                $book = IOFactory::createReader('Xlsx')->load($copy);
             } catch (Throwable) {
                 return null;
+            } finally {
+                @unlink($copy);
             }
 
             $sheets = [];

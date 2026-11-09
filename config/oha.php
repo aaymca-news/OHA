@@ -11,6 +11,27 @@ return [
     /* Largest OHA form accepted, in kilobytes. The 2026 form is about 250 KB. */
     'max_upload_kb' => (int) env('OHA_MAX_UPLOAD_KB', 20480),
 
+    /* Largest profile photo accepted, in kilobytes (it is cropped and shrunk after). */
+    'max_photo_kb' => (int) env('OHA_MAX_PHOTO_KB', 5120),
+
+    /*
+    | When something counts as "due soon", in days: an assessment deadline (Timelines'
+    | gates view), and an ODP task (its "soon" state on Timelines and the dashboards).
+    */
+    'due_soon_days' => [
+        'deadlines' => 7,
+        'odp_tasks' => 30,
+    ],
+
+    /*
+    | How long the sidebar's badges are kept before they are counted again, in seconds.
+    | Any change recorded in the audit trail counts them again at once. 0: every page.
+    */
+    'badge_cache_seconds' => (int) env('OHA_BADGE_CACHE_SECONDS', 60),
+
+    /* How many rows a long list shows per page (assessments, users, audit, notifications). */
+    'per_page' => (int) env('OHA_PER_PAGE', 25),
+
     /*
     | Google Drive, where staff write the ODP together. The platform reads each linked
     | ODP document as a Google service account: a JSON key from AAYMCA's Google Cloud

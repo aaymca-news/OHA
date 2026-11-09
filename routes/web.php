@@ -152,4 +152,10 @@ Route::middleware('auth')->group(function () {
         Route::get('{movement}/edit', [AdminMovementController::class, 'edit'])->name('edit')->can('update', 'movement');
         Route::put('{movement}', [AdminMovementController::class, 'update'])->name('update')->can('update', 'movement');
     });
+
+    // Every shared component on one page, to build and check them in one place. On the
+    // developer's own machine only: the route does not exist on the live site.
+    if (app()->environment('local')) {
+        Route::view('dev/components', 'dev.components')->name('dev.components');
+    }
 });

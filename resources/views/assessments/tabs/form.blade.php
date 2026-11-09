@@ -11,7 +11,7 @@
     $frozen = $assessment->isFrozen();
     $approvedUpload = $uploads->first(fn ($u) => $u->isApproved());
     $labels = $upload?->form_meta['labels'] ?? [];
-    $figure = fn ($v) => is_float($v) ? rtrim(rtrim(number_format($v, 2, '.', ','), '0'), '.') : (is_int($v) ? number_format($v) : (string) $v);
+    $figure = fn ($v) => is_float($v) ? \App\Support\Viz::figure($v) : (is_int($v) ? number_format($v) : (string) $v);
 @endphp
 
 <div class="flex flex-wrap items-center gap-sm">
@@ -20,7 +20,7 @@
         <span class="text-[0.875rem] text-on-surface-variant">With the Administrators for approval</span>
     @endif
     @if ($form->isApproved())
-        <span class="text-[0.875rem] text-on-surface-variant">Approved by {{ $form->approver?->name }}, {{ $form->approved_at?->format('j M Y') }}</span>
+        <span class="text-[0.875rem] text-on-surface-variant">Approved by {{ $form->approver?->name }}, {{ $form->approved_at?->asDay() }}</span>
     @elseif ($approvedUpload && $upload && ! $upload->isApproved())
         <span class="flex items-center gap-xs text-[0.875rem] text-on-surface-variant">
             <span class="material-symbols-outlined text-[1.125rem]" aria-hidden="true">visibility</span>
@@ -28,9 +28,7 @@
         </span>
     @endif
     @if ($me->isSecretariat())
-    <a href="{{ route('downloads.blank-form') }}" class="ml-auto inline-flex items-center gap-xs text-[0.875rem] text-primary underline">
-        <span class="material-symbols-outlined text-[1.125rem]" aria-hidden="true">download</span> Download the blank OHA form
-    </a>
+    <x-button variant="link" icon="download" :href="route('downloads.blank-form')" class="ml-auto text-[0.875rem]">Download the blank OHA form</x-button>
     @endif
 </div>
 
@@ -38,56 +36,49 @@
     @include('assessments.tabs._current-or-working', [
         'tab' => 'form',
         'working' => $upload?->id === $workingUpload->id,
-        'approvedLabel' => 'approved '.$approvedUpload?->approved_at?->format('j M Y'),
-        'workingLabel' => 'uploaded '.$workingUpload->uploaded_at->format('j M Y'),
+        'approvedLabel' => 'approved '.$approvedUpload?->approved_at?->asDay(),
+        'workingLabel' => 'uploaded '.$workingUpload->uploaded_at->asDay(),
     ])
 @endif
 
 @if ($frozen && ($me->oversees() || $me->canAssess($assessment->movement)))
-    <div class="flex items-start gap-sm p-md rounded-lg bg-good-wash text-good-ink text-[0.875rem]">
-        <span class="material-symbols-outlined" aria-hidden="true">lock</span>
+    <x-callout tone="good" icon="lock">
         <p><span class="font-semibold">Frozen.</span> The Board Chairperson has signed the ODP, which rests on this form and the report, so none of them can be changed. Stage 2 follows the ODP’s implementation.</p>
-    </div>
+    </x-callout>
 @endif
 
 @can('upload', $form)
-    <x-card :title="$upload ? 'Upload a corrected OHA form' : 'Upload the completed OHA form'"
-            subtitle="The .xlsx the movement returned. It is stored unchanged; the answers read from it become the record.">
-        <form method="POST" action="{{ route('artefacts.upload', $form) }}" enctype="multipart/form-data"
-              class="flex flex-col gap-sm">
-            @csrf
-            @if ($form->isApproved())
-                <p class="p-sm rounded bg-surface-container text-[0.875rem]">This form is approved. A corrected form goes back to the Administrators, who are told; until they approve it, everyone keeps seeing the approved form and its score.</p>
-            @endif
-            <x-file-drop name="form" accept=".xlsx" label="OHA form" prompt="Drop the .xlsx here, or click to choose the file" />
-            @include('assessments.tabs._replace-guard', ['artefact' => $form])
-            <x-button class="self-start">Upload and check</x-button>
-        </form>
-    </x-card>
+    @include('assessments.tabs._upload-version', [
+        'artefact' => $form,
+        'action' => route('artefacts.upload', $form),
+        'title' => $upload ? 'Upload a corrected OHA form' : 'Upload the completed OHA form',
+        'subtitle' => 'The .xlsx the movement returned. It is stored unchanged; the answers read from it become the record.',
+        'file' => 'form',
+        'accept' => '.xlsx',
+        'fileLabel' => 'OHA form',
+        'prompt' => 'Drop the .xlsx here, or click to choose the file',
+        'approvedNote' => 'This form is approved. A corrected form goes back to the Administrators, who are told; until they approve it, everyone keeps seeing the approved form and its score.',
+        'askDriveLink' => false,
+        'askNote' => false,
+        'button' => 'Upload and check',
+        'buttonIcon' => null,
+    ])
 @endcan
 
 @if ($upload)
-    <x-card title="Score check" :subtitle="'From '.$upload->original_name.', uploaded '.$upload->uploaded_at->format('j M Y').' by '.$upload->uploader->name.'.'">
+    <x-card title="Score check" :subtitle="'From '.$upload->original_name.', uploaded '.$upload->uploaded_at->asDay().' by '.$upload->uploader->name.'.'">
         <x-slot:actions>
             <div class="flex flex-wrap items-center gap-sm text-[0.875rem]">
-                <a href="#form-preview" class="inline-flex items-center gap-xs text-primary underline">
-                    <span class="material-symbols-outlined text-[1.125rem]" aria-hidden="true">table_view</span> Preview
-                </a>
-                <a href="{{ route('downloads.form', $upload) }}" class="inline-flex items-center gap-xs text-primary underline">
-                    <span class="material-symbols-outlined text-[1.125rem]" aria-hidden="true">download</span> {{ $upload->hasEdits() ? 'Download, with the typed answers' : 'Download this file' }}
-                </a>
+                <x-button variant="link" icon="table_view" href="#form-preview">Preview</x-button>
+                <x-button variant="link" icon="download" :href="route('downloads.form', $upload)">{{ $upload->hasEdits() ? 'Download, with the typed answers' : 'Download this file' }}</x-button>
                 @if ($upload->hasEdits())
                     <a href="{{ route('downloads.form', ['formUpload' => $upload, 'original' => 1]) }}" class="text-primary underline">The file as uploaded</a>
                 @endif
                 @can('delete', $upload)
-                    <form method="POST" action="{{ route('form-uploads.destroy', $upload) }}"
-                          x-data x-on:submit="if (! confirm(@js('Delete '.$upload->original_name.'? Use this for a file uploaded by mistake. It cannot be undone.'))) $event.preventDefault()">
-                        @csrf
-                        @method('DELETE')
-                        <button class="inline-flex items-center gap-xs text-error underline">
-                            <span class="material-symbols-outlined text-[1.125rem]" aria-hidden="true">delete</span> Delete this upload
-                        </button>
-                    </form>
+                    <x-confirm-form :action="route('form-uploads.destroy', $upload)" method="DELETE"
+                                    :confirm="'Delete '.$upload->original_name.'? Use this for a file uploaded by mistake. It cannot be undone.'">
+                        <x-button variant="link-danger" icon="delete">Delete this upload</x-button>
+                    </x-confirm-form>
                 @endcan
             </div>
         </x-slot:actions>
@@ -110,13 +101,11 @@
     {{-- The documents behind the form's "Yes" answers, from the movement's evidence library. --}}
     <x-card title="Evidence for the form’s answers" subtitle="Each “Yes” that a document can prove, with what the evidence library holds for it.">
         <x-slot:actions>
-            <a href="{{ route('evidence.index', ['movement' => $assessment->movement, 'assessment' => $assessment->id]) }}" class="inline-flex items-center gap-xs text-[0.875rem] text-primary underline">
-                <span class="material-symbols-outlined text-[1.125rem]" aria-hidden="true">folder_open</span> Open the evidence library
-            </a>
+            <x-button variant="link" icon="folder_open" :href="route('evidence.index', ['movement' => $assessment->movement, 'assessment' => $assessment->id])" class="text-[0.875rem]">Open the evidence library</x-button>
         </x-slot:actions>
         @include('evidence._checklist', [
             'checklist' => app(\App\Queries\EvidenceLibrary::class)->checklist($upload->answers, $evidence()),
-            'categoryNames' => \App\Models\Category::query()->pluck('name', 'code')->all(),
+            'categoryNames' => \App\Models\Category::names(),
         ])
     </x-card>
 
@@ -146,7 +135,7 @@
                         $what = match ($kind) {
                             'q' => str_replace('#2', ' (2nd)', $key).' — '.\Illuminate\Support\Str::limit($labels[$key] ?? '', 70),
                             'g' => $key === 'income' ? 'Q214–Q222 Income by source' : 'Q229–Q237 Expenditure by type',
-                            'c' => 'Areas of improvement, '.(\App\Models\Category::query()->where('code', $key)->value('name') ?? $key),
+                            'c' => 'Areas of improvement, '.(\App\Models\Category::nameOf($key)),
                             's' => 'Submission — '.$key,
                             default => $ref,
                         };
@@ -158,14 +147,14 @@
                         <span class="flex-1 min-w-[min(15rem,100%)]">
                             <span class="block font-semibold">{{ $what }}</span>
                             <span class="block whitespace-pre-line">{{ $kind === 'q' && in_array(Interpreter::question($key)?->type, ['pct'], true) ? $shown.'%' : $shown }}</span>
-                            <span class="block text-[0.8125rem] text-on-surface-variant">Typed by {{ $entry['by_name'] ?? 'someone' }}, {{ \Illuminate\Support\Carbon::parse($entry['at'])->format('j M Y, H:i') }}</span>
+                            <span class="block text-[0.8125rem] text-on-surface-variant">Typed by {{ $entry['by_name'] ?? 'someone' }}, {{ \Illuminate\Support\Carbon::parse($entry['at'])->asStamp() }}</span>
                         </span>
                         @can('supply', $upload)
                             <form method="POST" action="{{ route('form-uploads.withdraw', $upload) }}">
                                 @csrf
                                 @method('DELETE')
                                 <input type="hidden" name="ref" value="{{ $ref }}">
-                                <button class="text-[0.875rem] text-primary underline">Take back</button>
+                                <x-button variant="link" class="text-[0.875rem]">Take back</x-button>
                             </form>
                         @endcan
                     </li>
@@ -179,11 +168,10 @@
     </x-card>
 
     <x-card id="findings" title="What the check found">
-        @forelse ($upload->findings->sortBy(fn ($f) => [['error' => 0, 'missing' => 1, 'warning' => 2][$f->severity->value], $f->id]) as $finding)
+        @forelse ($upload->findings->sortBy(fn ($f) => [$f->severity->rank(), $f->id]) as $finding)
             <div class="flex flex-wrap items-start gap-sm p-sm rounded border-[1.5px] {{ $finding->resolved_at ? 'border-surface-container bg-surface-container-low' : 'border-outline-variant' }}"
                  x-data="{ open: {{ $errors->any() && old('finding') == $finding->id ? 'true' : 'false' }}, note: false }">
-                <x-chip :tone="['error' => 'critical', 'missing' => 'serious', 'warning' => 'warning'][$finding->severity->value]"
-                        :icon="['error' => 'block', 'missing' => 'playlist_remove', 'warning' => 'visibility'][$finding->severity->value]">{{ __('oha.severity.'.$finding->severity->value) }}</x-chip>
+                <x-chip :tone="$finding->severity->tone()" :icon="$finding->severity->icon()">{{ $finding->severity->label() }}</x-chip>
                 <div class="flex-1 min-w-[min(15rem,100%)] text-[0.875rem]">
                     <p class="font-semibold">{{ $finding->message }}</p>
                     <p class="text-[0.8125rem] text-on-surface-variant">{{ $finding->location }}{{ $finding->hint ? ' · '.$finding->hint : '' }}</p>
@@ -191,14 +179,12 @@
                         <p class="text-[0.8125rem] mt-xs flex items-start gap-xs"><span class="material-symbols-outlined text-[1rem] text-primary" aria-hidden="true">lightbulb</span><span><span class="font-semibold">Why it matters:</span> {{ $why }}</span></p>
                     @endif
                     @if ($finding->resolved_at)
-                        <p class="text-[0.8125rem] mt-xs"><span class="font-semibold">{{ $finding->severity->value === 'missing' ? 'Resolved' : 'Reviewed' }}</span> by {{ $finding->resolver->name }}, {{ $finding->resolved_at->format('j M Y') }}: “{{ $finding->resolved_note }}”</p>
+                        <p class="text-[0.8125rem] mt-xs"><span class="font-semibold">{{ $finding->severity->value === 'missing' ? 'Resolved' : 'Reviewed' }}</span> by {{ $finding->resolver->name }}, {{ $finding->resolved_at->asDay() }}: “{{ $finding->resolved_note }}”</p>
                     @endif
                 </div>
                 <div class="flex flex-wrap items-center gap-sm text-[0.875rem]">
                     @can('answer', $finding)
-                        <button type="button" x-show="! open" x-on:click="open = true; note = false" class="inline-flex items-center gap-xs px-sm py-1 rounded border-[1.5px] border-primary text-primary font-semibold hover:bg-surface-container-low">
-                            <span class="material-symbols-outlined text-[1.125rem]" aria-hidden="true">edit</span> {{ $finding->severity->value === 'missing' ? 'Type the answer' : 'Correct the answer' }}
-                        </button>
+                        <x-button type="button" variant="outline" size="sm" icon="edit" x-show="! open" x-on:click="open = true; note = false">{{ $finding->severity->value === 'missing' ? 'Type the answer' : 'Correct the answer' }}</x-button>
                     @endcan
                     @can('resolve', $finding)
                         @if ($finding->resolved_at)
@@ -207,7 +193,7 @@
                                 <x-button variant="secondary">Reopen</x-button>
                             </form>
                         @else
-                            <button type="button" x-show="! note" x-on:click="note = true; open = false" class="text-primary underline">{{ $finding->severity->value === 'missing' ? 'Resolve with a note' : 'Mark as reviewed' }}</button>
+                            <x-button type="button" variant="link" x-show="! note" x-on:click="note = true; open = false">{{ $finding->severity->value === 'missing' ? 'Resolve with a note' : 'Mark as reviewed' }}</x-button>
                         @endif
                     @endcan
                 </div>
@@ -216,14 +202,14 @@
                     @unless ($finding->resolved_at)
                         <form method="POST" action="{{ route('findings.resolve', $finding) }}" x-show="note" x-cloak class="basis-full flex flex-wrap items-end gap-xs">
                             @csrf
-                            <label class="flex flex-col gap-xs text-[0.875rem] flex-1 min-w-[min(15rem,100%)]">
-                                <span class="font-semibold">{{ $finding->severity->value === 'missing' ? 'How was it resolved?' : 'What did you check?' }}</span>
-                                <input name="note" required class="px-sm py-1.5 rounded border-[1.5px] border-outline-variant"
+                            {{-- One note box per finding, all named note, so not x-input (its old value and error would show in every one). --}}
+                            <x-field :label="$finding->severity->value === 'missing' ? 'How was it resolved?' : 'What did you check?'" class="flex-1 min-w-[min(15rem,100%)]"
+                                     hint="A note records how it was settled; it does not change the answers or the score. To change the score, type the answer instead.">
+                                <input name="note" required @class(\App\Support\Ui::control(size: 'sm'))
                                        placeholder="{{ $finding->severity->value === 'missing' ? 'For example: the NGS confirmed by email that…' : 'For example: checked with the finance lead; the figures are right.' }}">
-                                <span class="text-[0.8125rem] text-on-surface-variant">A note records how it was settled; it does not change the answers or the score. To change the score, type the answer instead.</span>
-                            </label>
+                            </x-field>
                             <x-button>Save the note</x-button>
-                            <button type="button" x-on:click="note = false" class="text-[0.875rem] text-primary underline py-2">Cancel</button>
+                            <x-button type="button" variant="link" x-on:click="note = false" class="text-[0.875rem] py-2">Cancel</x-button>
                         </form>
                     @endunless
                 @endcan
@@ -253,10 +239,7 @@
                     <input type="checkbox" name="acknowledge_gaps" value="1" x-model="ack" class="mt-1">
                     <span>I acknowledge {{ $openGaps }} open {{ $openGaps === 1 ? 'gap' : 'gaps' }} and want to proceed. They stay flagged until resolved.</span>
                 </label>
-                <label class="flex flex-col gap-xs text-[0.875rem]">
-                    <span class="font-semibold">Reason (optional)</span>
-                    <input name="reason" class="px-sm py-2 rounded border-[1.5px] border-outline-variant" value="{{ old('reason') }}">
-                </label>
+                <x-input name="reason" label="Reason (optional)" />
             @endif
             <x-button class="self-start" x-bind:disabled="{{ $openGaps > 0 ? '! ack' : 'false' }}">Submit for approval</x-button>
         </form>
@@ -271,12 +254,10 @@
         $workbook = \App\Support\SpreadsheetPreview::of($previewing);
     @endphp
     <x-card id="form-preview" :title="'Preview · '.$previewing->original_name"
-            :subtitle="'Uploaded '.$previewing->uploaded_at->format('j M Y, H:i').' by '.$previewing->uploader->name.($previewing->id !== $upload?->id ? '. An earlier upload.' : '.')
+            :subtitle="'Uploaded '.$previewing->uploaded_at->asStamp().' by '.$previewing->uploader->name.($previewing->id !== $upload?->id ? '. An earlier upload.' : '.')
                 .($previewing->hasEdits() ? ' Shown with the answers typed in the platform written in.' : '')">
         <x-slot:actions>
-            <a href="{{ route('downloads.form', $previewing) }}" class="inline-flex items-center gap-xs text-[0.875rem] text-primary underline">
-                <span class="material-symbols-outlined text-[1.125rem]" aria-hidden="true">download</span> Download
-            </a>
+            <x-button variant="link" icon="download" :href="route('downloads.form', $previewing)" class="text-[0.875rem]">Download</x-button>
         </x-slot:actions>
         @if ($workbook === null || $workbook === [])
             <p class="text-[0.875rem]">This file could not be shown here. Download it to read it.</p>
@@ -294,22 +275,19 @@
                             'border-primary' => $u->id === $previewing?->id, 'border-outline-variant' => $u->id !== $previewing?->id])>
                     <span class="flex-1 min-w-[min(12rem,100%)]">
                         {{ $u->original_name }}
-                        <span class="block text-[0.8125rem] text-on-surface-variant">{{ $u->uploaded_at->format('j M Y, H:i') }} · {{ $u->uploader->name }}{{ $u->id === $upload?->id ? ' · latest' : '' }}</span>
+                        <span class="block text-[0.8125rem] text-on-surface-variant">{{ $u->uploaded_at->asStamp() }} · {{ $u->uploader->name }}{{ $u->id === $upload?->id ? ' · latest' : '' }}</span>
                     </span>
                     @if ($u->isApproved())
-                        <x-chip tone="good" icon="check_circle">Approved{{ $u->approved_at ? ' · '.$u->approved_at->format('j M Y') : '' }}</x-chip>
+                        <x-chip tone="good" icon="check_circle">Approved{{ $u->approved_at ? ' · '.$u->approved_at->asDay() : '' }}</x-chip>
                     @endif
                     @if ($u->id !== $previewing?->id)
                         <a href="{{ route('assessments.show', ['assessment' => $assessment, 'tab' => 'form', 'upload' => $u->id]) }}#form-preview" class="text-primary underline">Preview</a>
                     @endif
                     <a href="{{ route('downloads.form', $u) }}" class="text-primary underline">Download</a>
                     @can('delete', $u)
-                        <form method="POST" action="{{ route('form-uploads.destroy', $u) }}"
-                              x-data x-on:submit="if (! confirm(@js('Delete '.$u->original_name.'? It cannot be undone.'))) $event.preventDefault()">
-                            @csrf
-                            @method('DELETE')
-                            <button class="text-error underline">Delete</button>
-                        </form>
+                        <x-confirm-form :action="route('form-uploads.destroy', $u)" method="DELETE" :confirm="'Delete '.$u->original_name.'? It cannot be undone.'">
+                            <x-button variant="link-danger">Delete</x-button>
+                        </x-confirm-form>
                     @endcan
                 </li>
             @endforeach

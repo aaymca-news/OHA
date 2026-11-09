@@ -2,6 +2,8 @@
 
 namespace App\Actions\Oha\Concerns;
 
+use App\Actions\Concerns\EnforcesPolicy;
+use App\Enums\ArtefactKind;
 use App\Enums\ArtefactState;
 use App\Enums\DocumentFormat;
 use App\Enums\DocumentPurpose;
@@ -100,7 +102,7 @@ trait StoresVersions
 
             // A colleague's new version is what the others work from now: they are told, in the app.
             if ($actor !== null && ! $version->fromDrive()) {
-                $noun = $artefact->kind->value === 'odp' ? 'ODP' : 'report';
+                $noun = $artefact->kind === ArtefactKind::Odp ? 'ODP' : 'report';
                 Notify::colleagues($assessment, $actor, "New {$noun} version: {$assessment->movement->name}",
                     "{$actor->name} saved version {$version->versionNumber()} of the {$noun} ({$originalName}), which is now the newest.".(isset($payload['replaced']) ? " It replaced {$payload['replaced']}." : ''));
             }
@@ -115,7 +117,7 @@ trait StoresVersions
      */
     private function versionFormat(Artefact $artefact, string $sourcePath, string $originalName): DocumentFormat
     {
-        $odp = $artefact->kind->value === 'odp';
+        $odp = $artefact->kind === ArtefactKind::Odp;
         $allowed = $odp ? [DocumentFormat::Docx, DocumentFormat::Xlsx, DocumentFormat::Pdf] : [DocumentFormat::Docx, DocumentFormat::Pdf];
         $format = DocumentFormat::tryFrom(strtolower(pathinfo($originalName, PATHINFO_EXTENSION)));
         if (! in_array($format, $allowed, true)) {

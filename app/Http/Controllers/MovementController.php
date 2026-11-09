@@ -3,17 +3,17 @@
 namespace App\Http\Controllers;
 
 use App\Actions\Oha\AssignAssessors;
+use App\Enums\Stage;
 use App\Models\Assessment;
 use App\Models\AuditEvent;
-use App\Models\FormUpload;
 use App\Models\HealthBand;
 use App\Models\MembershipStatus;
 use App\Models\Movement;
 use App\Models\MovementStatus;
 use App\Models\Zone;
 use App\Oha\CategoryRows;
-use App\Oha\Profile;
 use App\Queries\AllianceInsights;
+use App\Queries\MovementSnapshot;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
@@ -24,7 +24,7 @@ class MovementController extends Controller
     /** Every movement, filterable by zone, membership status and band. */
     public function index(Request $request, AllianceInsights $insights): View
     {
-        abort_unless($request->user()->isSecretariat(), 403);
+        Gate::authorize('viewAny', Movement::class);
 
         $statuses = MovementStatus::query()
             ->with(['band', 'movement.zone', 'movement.membershipStatus'])
@@ -36,25 +36,15 @@ class MovementController extends Controller
 
         // Per movement: its latest assessment (and what it is waiting on), its assessors,
         // and each category's percentage from the latest approved form.
-        $latest = Assessment::query()->with('workItem')
-            ->whereIn('id', Assessment::query()->selectRaw('max(id)')->groupBy('movement_id'))
-            ->get()->keyBy('movement_id');
+        $latest = Assessment::query()->with('workItem')->latestPerMovement()->get()->keyBy('movement_id');
         $heat = $insights->heatmap();
         $cells = collect($heat['rows'])->mapWithKeys(fn ($row) => [$row['movement']->id => $row['cells']]);
         $assessors = Movement::query()->with(['assessors' => fn ($q) => $q->where('active', true)->orderBy('name')])->get()
             ->mapWithKeys(fn (Movement $m) => [$m->id => $m->assessors]);
 
-        $stage = function (MovementStatus $status) use ($latest): string {
-            $assessment = $latest[$status->movement_id] ?? null;
-            if ($assessment === null) {
-                return 'not_assessed';
-            }
-            $work = $assessment->workItem;
-
-            return $work === null ? 'complete' : ($work->holder_role->value === 'board' ? 'sign' : $work->artefact_kind->value);
-        };
+        $stage = fn (MovementStatus $status): Stage => Stage::of($latest[$status->movement_id] ?? null);
         if ($request->query('stage')) {
-            $statuses = $statuses->filter(fn (MovementStatus $s) => $stage($s) === $request->query('stage'))->values();
+            $statuses = $statuses->filter(fn (MovementStatus $s) => $stage($s)->value === $request->query('stage'))->values();
         }
         if ($q = trim((string) $request->query('q'))) {
             $statuses = $statuses->filter(fn (MovementStatus $s) => str_contains(mb_strtolower($s->name.' '.$s->movement->city.' '.$s->movement->country), mb_strtolower($q)))->values();
@@ -95,11 +85,7 @@ class MovementController extends Controller
                 $assignedSince[$id] = $event->occurred_at;
             }
         }
-        $latest = $status->latest_assessment_id !== null ? Assessment::query()->with('score.band')->find($status->latest_assessment_id) : null;
-
-        // What the latest approved form says about the movement, beyond its score.
-        $frozen = $latest !== null ? FormUpload::query()->whereKey($latest->categoryScores()->value('form_upload_id'))->first() : null;
-        $profile = $frozen !== null ? (new Profile($frozen->answers ?? [], $frozen->form_meta ?? []))->toArray() : null;
+        $snapshot = MovementSnapshot::of($status);
 
         $assessments = $movement->assessments()->with(['score.band', 'artefacts.status', 'workItem'])->latest('assessed_on')->latest('id')->get()
             ->filter(fn (Assessment $a) => Gate::forUser($user)->allows('view', $a));
@@ -107,17 +93,17 @@ class MovementController extends Controller
         return view('movements.show', [
             'movement' => $movement->load('zone', 'membershipStatus'),
             'status' => $status,
-            'latest' => $latest,
-            'rows' => $latest !== null ? CategoryRows::for($latest) : [],
+            'latest' => $snapshot->latest,
+            'rows' => $snapshot->rows,
             'assessments' => $assessments,
             // Each scored assessment's category scores, oldest first (the last five), to compare.
             'history' => $assessments->filter(fn (Assessment $a) => $a->score !== null)->take(5)->reverse()->values()
                 ->map(fn (Assessment $a) => ['assessment' => $a, 'rows' => collect(CategoryRows::for($a))->keyBy('code')]),
-            'assessors' => $user->isSecretariat() ? $movement->assessors()->where('active', true)->orderBy('name')->get() : collect(),
+            'assessors' => $user->isSecretariat() ? $movement->activeAssessors()->get() : collect(),
             'chair' => $movement->chair()->first(),
             'generalSecretary' => $movement->generalSecretary()->first(),
             'evidenceCount' => $movement->evidence()->count(),
-            'profile' => $profile,
+            'profile' => $snapshot->profile,
             'assignmentHistory' => $assignmentHistory,
             'assignedSince' => $assignedSince,
             'underWay' => $movement->assessmentUnderWay(),

@@ -90,11 +90,17 @@ class EvidencePolicy
 
     public function share(User $user, Evidence $evidence): Response
     {
+        return $this->shareFor($user, $evidence->assessment->movement);
+    }
+
+    /** Sharing a document with other movements as it is added (the "share" box on the add form). */
+    public function shareFor(User $user, Movement $movement): Response
+    {
         if (! $user->active) {
             return Response::deny('Your account is not active.');
         }
 
-        return $user->isAdmin() || $user->isGeneralSecretaryOf($evidence->assessment->movement)
+        return $user->isAdmin() || $user->isGeneralSecretaryOf($movement)
             ? Response::allow()
             : Response::deny('Sharing with other movements is decided by the movement’s National General Secretary or an Administrator.');
     }

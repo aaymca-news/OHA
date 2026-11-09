@@ -2,6 +2,7 @@
 
 namespace App\Actions\Evidence;
 
+use App\Actions\Concerns\EnforcesPolicy;
 use App\Exceptions\WorkflowRuleBroken;
 use App\Models\Assessment;
 use App\Models\Category;
@@ -13,7 +14,6 @@ use App\Support\Audit;
 use App\Support\FileVault;
 use App\Support\Notify;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Gate;
 
 /**
  * Adds evidence to an assessment's evidence library: a file (stored once, never
@@ -24,6 +24,8 @@ use Illuminate\Support\Facades\Gate;
  */
 final class UploadEvidence
 {
+    use EnforcesPolicy;
+
     /**
      * Give either a file ($sourcePath and $originalName) or a $url.
      *
@@ -42,10 +44,7 @@ final class UploadEvidence
         bool $share = false,
         ?string $url = null,
     ): Evidence {
-        $allowed = Gate::forUser($by)->inspect('upload', [Evidence::class, $assessment]);
-        if ($allowed->denied()) {
-            throw new WorkflowRuleBroken((string) $allowed->message());
-        }
+        $this->ensure($by, 'upload', [Evidence::class, $assessment]);
 
         $url = $url !== null && trim($url) !== '' ? trim($url) : null;
         $isFile = $sourcePath !== null && $originalName !== null;
@@ -102,8 +101,8 @@ final class UploadEvidence
             throw new WorkflowRuleBroken(($isFile ? 'This file' : 'This link')." is already in the library, as “{$existing->title}”.");
         }
 
-        if ($share && ! $by->isGeneralSecretaryOf($assessment->movement) && ! $by->isAdmin()) {
-            throw new WorkflowRuleBroken('Sharing with other movements is decided by the movement’s National General Secretary or an Administrator.');
+        if ($share) {
+            $this->ensure($by, 'shareFor', [Evidence::class, $assessment->movement]);
         }
 
         $title = $title !== null && trim($title) !== ''

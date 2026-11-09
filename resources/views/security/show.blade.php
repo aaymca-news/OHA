@@ -1,8 +1,7 @@
 <x-layouts.app :title="__('oha.nav.security')">
     <div class="grid grid-cols-1 lg:grid-cols-2 gap-md items-start">
         {{-- Password --}}
-        <section class="min-w-0 bg-surface-container-lowest border-[1.5px] border-outline-variant rounded-lg p-md sm:p-lg flex flex-col gap-md">
-            <h2 class="text-[1.125rem] font-bold text-primary">Change password</h2>
+        <x-card title="Change password" padding="lg" class="min-w-0">
             <form method="POST" action="{{ route('user-password.update') }}" class="flex flex-col gap-sm">
                 @csrf
                 @method('PUT')
@@ -12,7 +11,7 @@
                 <x-input name="password_confirmation" label="Repeat the new password" type="password" autocomplete="new-password" required />
                 <x-button class="self-start">Change password</x-button>
             </form>
-        </section>
+        </x-card>
 
         {{-- Sessions --}}
         @include('security._devices', ['class' => 'lg:col-span-2'])

@@ -2,6 +2,7 @@
 
 namespace App\Support;
 
+use App\Enums\ArtefactKind;
 use App\Models\Assessment;
 use App\Models\Category;
 use App\Models\CategoryScore;
@@ -55,7 +56,7 @@ final class ScoresCsv
 
             foreach ($theirs as $i => $assessment) {
                 $own = $scores->get($assessment->id, collect());
-                $odp = $assessment->artefacts->first(fn ($a) => $a->kind->value === 'odp');
+                $odp = $assessment->artefacts->first(fn ($a) => $a->kind === ArtefactKind::Odp);
                 $rows[] = [
                     ...$start,
                     $assessment->period_label,

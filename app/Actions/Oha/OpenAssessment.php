@@ -2,7 +2,7 @@
 
 namespace App\Actions\Oha;
 
-use App\Actions\Oha\Concerns\EnforcesPolicy;
+use App\Actions\Concerns\EnforcesPolicy;
 use App\Enums\ArtefactKind;
 use App\Enums\ArtefactState;
 use App\Models\Assessment;

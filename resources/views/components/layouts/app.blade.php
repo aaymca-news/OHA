@@ -148,33 +148,25 @@
 
             <main id="main" class="flex-1 px-md py-md sm:px-lg sm:py-lg w-full max-w-[1280px] flex flex-col gap-md">
                 @if (! $health['ok'] && \App\Support\SystemHealth::shouldWarn(auth()->user()))
-                    <div role="alert" @class([
-                        'flex flex-wrap items-center gap-sm p-md rounded-lg border-[1.5px]',
-                        'border-band-critical bg-critical-wash text-critical-ink' => $health['severity'] === 'critical',
-                        'border-band-atrisk bg-serious-wash text-serious-ink' => $health['severity'] !== 'critical',
-                    ])>
-                        <span class="material-symbols-outlined" aria-hidden="true">warning</span>
-                        <div class="flex-1 min-w-[min(15rem,100%)]">
-                            <p class="text-[0.9375rem] font-semibold">Roles still to be appointed</p>
-                            <p class="text-[0.875rem]">{{ implode(' ', $health['problems']) }}</p>
-                            @if ($health['movements_without_chair'] !== [])
-                                <details class="text-[0.875rem] mt-xs">
-                                    <summary class="cursor-pointer underline">Movements without a Board Chairperson ({{ count($health['movements_without_chair']) }})</summary>
-                                    <p class="mt-xs">{{ implode(', ', $health['movements_without_chair']) }}</p>
-                                </details>
-                            @endif
-                            @if ($health['movements_without_gs'] !== [])
-                                <details class="text-[0.875rem] mt-xs">
-                                    <summary class="cursor-pointer underline">Movements without a National General Secretary ({{ count($health['movements_without_gs']) }})</summary>
-                                    <p class="mt-xs">{{ implode(', ', $health['movements_without_gs']) }}</p>
-                                </details>
-                            @endif
-                            <p class="text-[0.8125rem] mt-xs">You will be reminded daily until these are appointed.</p>
-                        </div>
+                    <x-callout :tone="$health['severity'] === 'critical' ? 'critical' : 'serious'" icon="warning" title="Roles still to be appointed" alert>
+                        <p>{{ implode(' ', $health['problems']) }}</p>
+                        @if ($health['movements_without_chair'] !== [])
+                            <details>
+                                <summary class="cursor-pointer underline">Movements without a Board Chairperson ({{ count($health['movements_without_chair']) }})</summary>
+                                <p class="mt-xs">{{ implode(', ', $health['movements_without_chair']) }}</p>
+                            </details>
+                        @endif
+                        @if ($health['movements_without_gs'] !== [])
+                            <details>
+                                <summary class="cursor-pointer underline">Movements without a National General Secretary ({{ count($health['movements_without_gs']) }})</summary>
+                                <p class="mt-xs">{{ implode(', ', $health['movements_without_gs']) }}</p>
+                            </details>
+                        @endif
+                        <p class="text-[0.8125rem]">You will be reminded daily until these are appointed.</p>
                         @can('manage', \App\Models\User::class)
-                            <a href="{{ route('admin.users.index') }}" class="px-md py-1.5 rounded bg-primary text-on-primary text-[0.875rem] font-semibold">Appoint in Users &amp; Roles</a>
+                            <x-button :href="route('admin.users.index')" size="sm" class="self-start">Appoint in Users &amp; Roles</x-button>
                         @endcan
-                    </div>
+                    </x-callout>
                 @endif
 
                 <div class="flex flex-wrap items-start gap-md">

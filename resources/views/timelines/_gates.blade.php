@@ -2,10 +2,10 @@
 <div class="flex flex-wrap items-center gap-sm">
     <x-chip tone="critical" icon="alarm">Missed {{ $missed }}</x-chip>
     <x-chip tone="warning" icon="schedule">Due within 7 days {{ $dueSoon }}</x-chip>
-    <nav class="flex gap-xs ml-auto" aria-label="View">
-        <a href="{{ route('timelines', ['tab' => 'gates']) }}" @class(['px-sm py-1 rounded border-[1.5px] text-[0.8125rem]', 'border-primary bg-primary text-on-primary' => $view === 'chart', 'border-outline-variant' => $view !== 'chart'])>Chart</a>
-        <a href="{{ route('timelines', ['tab' => 'gates', 'view' => 'table']) }}" @class(['px-sm py-1 rounded border-[1.5px] text-[0.8125rem]', 'border-primary bg-primary text-on-primary' => $view === 'table', 'border-outline-variant' => $view !== 'table'])>Table</a>
-    </nav>
+    <x-segmented label="View" variant="joined" class="ml-auto">
+        <x-segmented.link :href="route('timelines', ['tab' => 'gates'])" :active="$view === 'chart'">Chart</x-segmented.link>
+        <x-segmented.link :href="route('timelines', ['tab' => 'gates', 'view' => 'table'])" :active="$view === 'table'">Table</x-segmented.link>
+    </x-segmented>
 </div>
 
 @if ($assessments->isEmpty())
@@ -22,7 +22,7 @@
                 <span></span>
                 <div class="relative h-5">
                     @foreach ($months as $month)
-                        <span class="absolute whitespace-nowrap {{ $loop->last && $at($month) > 90 ? '-translate-x-full' : ($loop->first ? '' : '-translate-x-1/2') }}" style="left: {{ $at($month) }}%">{{ $month->format('M Y') }}</span>
+                        <span class="absolute whitespace-nowrap {{ $loop->last && $at($month) > 90 ? '-translate-x-full' : ($loop->first ? '' : '-translate-x-1/2') }}" style="left: {{ $at($month) }}%">{{ $month->asMonth() }}</span>
                     @endforeach
                 </div>
             </div>
@@ -53,39 +53,35 @@
         </div>
     </div>
 @else
-    <div class="bg-surface-container-lowest border-[1.5px] border-outline-variant rounded-lg relative overflow-x-auto">
-        <table class="w-full text-[0.875rem]">
-            <thead class="text-left text-[0.8125rem] uppercase tracking-wider text-on-surface-variant">
-                <tr class="border-b-[1.5px] border-outline-variant">
-                    <th class="px-md py-sm">Assessment</th>
-                    @foreach (($milestones->first() ?? collect()) as $m)
-                        <th class="px-md py-sm">{{ $m->milestone_label }}</th>
-                    @endforeach
-                    <th class="px-md py-sm">Other steps</th>
-                </tr>
-            </thead>
-            <tbody>
-                @foreach ($assessments as $assessment)
-                    <tr class="border-b border-surface-container last:border-0">
-                        <td class="px-md py-sm"><a href="{{ route('assessments.show', ['assessment' => $assessment, 'tab' => 'timeline']) }}" class="font-semibold text-primary underline">{{ $assessment->movement->name }}</a>
-                            <span class="block text-[0.8125rem] text-on-surface-variant">{{ $assessment->period_label }}</span></td>
-                        @foreach ($milestones[$assessment->id] ?? [] as $m)
-                            <td class="px-md py-sm whitespace-nowrap">
-                                @if ($m->done_at)
-                                    <x-chip tone="good" icon="check_circle">{{ $m->done_at->format('j M') }}</x-chip>
-                                @elseif ($m->overdue)
-                                    <x-chip tone="critical" icon="alarm">{{ $m->due_on->format('j M') }}</x-chip>
-                                @else
-                                    {{ $m->due_on->format('j M Y') }}
-                                @endif
-                            </td>
-                        @endforeach
-                        <td class="px-md py-sm text-[0.8125rem]">
-                            {{ ($steps[$assessment->id] ?? collect())->map(fn ($s) => $s->label.($s->due_on ? ' ('.$s->due_on->format('j M').')' : '').($s->done_on ? ' ✓' : ''))->join('; ') ?: '—' }}
-                        </td>
-                    </tr>
+    <x-table>
+        <x-slot:head>
+            <tr>
+                <th>Assessment</th>
+                @foreach (($milestones->first() ?? collect()) as $m)
+                    <th>{{ $m->milestone_label }}</th>
                 @endforeach
-            </tbody>
-        </table>
-    </div>
+                <th>Other steps</th>
+            </tr>
+        </x-slot:head>
+        @foreach ($assessments as $assessment)
+            <tr class="border-b border-surface-container last:border-0">
+                <td><a href="{{ route('assessments.show', ['assessment' => $assessment, 'tab' => 'timeline']) }}" class="font-semibold text-primary underline">{{ $assessment->movement->name }}</a>
+                    <span class="block text-[0.8125rem] text-on-surface-variant">{{ $assessment->period_label }}</span></td>
+                @foreach ($milestones[$assessment->id] ?? [] as $m)
+                    <td class="whitespace-nowrap">
+                        @if ($m->done_at)
+                            <x-chip tone="good" icon="check_circle">{{ $m->done_at->format('j M') }}</x-chip>
+                        @elseif ($m->overdue)
+                            <x-chip tone="critical" icon="alarm">{{ $m->due_on->format('j M') }}</x-chip>
+                        @else
+                            {{ $m->due_on->asDay() }}
+                        @endif
+                    </td>
+                @endforeach
+                <td class="text-[0.8125rem]">
+                    {{ ($steps[$assessment->id] ?? collect())->map(fn ($s) => $s->label.($s->due_on ? ' ('.$s->due_on->format('j M').')' : '').($s->done_on ? ' ✓' : ''))->join('; ') ?: '—' }}
+                </td>
+            </tr>
+        @endforeach
+    </x-table>
 @endif

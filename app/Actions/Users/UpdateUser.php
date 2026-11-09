@@ -24,7 +24,7 @@ final class UpdateUser
      */
     public function handle(User $admin, User $user, string $name, string $email, ?string $title, ?array $movementIds = null): User
     {
-        $this->ensureAllowed($admin, 'administer', $user);
+        $this->ensure($admin, 'administer', $user);
 
         if ($movementIds !== null && $movementIds !== [] && ! $user->isAssessor()) {
             throw new WorkflowRuleBroken('Only AAYMCA users are assigned movements to assess.');

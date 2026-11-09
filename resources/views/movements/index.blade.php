@@ -1,8 +1,7 @@
 <x-layouts.app :title="__('oha.nav.movements')" :subtitle="'All '.$pipeline['total'].' National Movements. A movement is rated once one of its OHA forms is approved.'">
     @php
-        $stageLabels = ['not_assessed' => ['Not yet assessed', 'radio_button_unchecked', 'neutral'], 'form' => ['OHA form under way', 'table_view', 'info'],
-            'report' => ['Report under way', 'description', 'info'], 'odp' => ['ODP under way', 'checklist', 'info'],
-            'sign' => ['Awaiting signature', 'draw', 'warning'], 'complete' => ['Stage 1 done · follow-ups ongoing', 'verified', 'good']];
+        // $stage($status) gives an App\Enums\Stage: its label, icon and tone.
+        $started = fn ($status) => ! in_array($stage($status), [\App\Enums\Stage::NotAssessed, \App\Enums\Stage::Complete], true);
         $short = ['financial' => 'Financial', 'governance' => 'Governance', 'constitution' => 'Constitution', 'me' => 'M&E', 'strategy' => 'Strategy',
             'diversity' => 'Diversity & youth', 'comms' => 'Comms', 'staff' => 'Staff & volunteers'];
         $query = fn (array $change) => route('movements.index', array_filter(array_merge($filters, $change), fn ($v) => $v !== null && $v !== ''));
@@ -10,16 +9,10 @@
 
     <div class="flex flex-wrap items-center gap-sm text-[0.875rem]">
         <span class="font-semibold">Scores for reporting (CSV):</span>
-        <a href="{{ route('downloads.scores') }}" class="inline-flex items-center gap-xs text-primary underline">
-            <span class="material-symbols-outlined text-[1.125rem]" aria-hidden="true">download</span> Latest, per movement
-        </a>
-        <a href="{{ route('downloads.scores', ['all' => 1]) }}" class="inline-flex items-center gap-xs text-primary underline">
-            <span class="material-symbols-outlined text-[1.125rem]" aria-hidden="true">download</span> Every approved assessment
-        </a>
+        <x-button variant="link" icon="download" :href="route('downloads.scores')">Latest, per movement</x-button>
+        <x-button variant="link" icon="download" :href="route('downloads.scores', ['all' => 1])">Every approved assessment</x-button>
         @can('create', \App\Models\Movement::class)
-            <a href="{{ route('admin.movements.create') }}" class="ml-auto inline-flex items-center gap-xs px-md py-1.5 rounded bg-primary text-on-primary font-semibold">
-                <span class="material-symbols-outlined text-[1.125rem]" aria-hidden="true">add</span> Add a National Movement
-            </a>
+            <x-button :href="route('admin.movements.create')" size="sm" icon="add" class="ml-auto">Add a National Movement</x-button>
         @endcan
     </div>
 
@@ -28,44 +21,24 @@
     </x-card>
 
     <form method="GET" class="flex flex-wrap items-end gap-sm" aria-label="Filter movements">
-        <label class="flex flex-col gap-xs text-[0.8125rem] grow sm:grow-0">
-            <span class="font-semibold">Search</span>
-            <input type="search" name="q" value="{{ $filters['q'] ?? '' }}" placeholder="Name, city or country"
-                   class="px-sm py-1.5 rounded border-[1.5px] border-outline-variant bg-surface-container-lowest text-[0.875rem] sm:w-48">
-        </label>
+        <x-input type="search" name="q" label="Search" size="sm" :value="$filters['q'] ?? ''" placeholder="Name, city or country"
+                 wrap="grow sm:grow-0" class="sm:w-48" />
         @foreach ([['zone', 'Zone', $zones, 'code', 'name'], ['membership', 'Membership', $memberships, 'code', 'label'], ['band', 'Band', $bands, 'code', 'label']] as [$name, $label, $options, $value, $text])
-            <label class="flex flex-col gap-xs text-[0.8125rem]">
-                <span class="font-semibold">{{ $label }}</span>
-                <select name="{{ $name }}" class="px-sm py-1.5 rounded border-[1.5px] border-outline-variant bg-surface-container-lowest text-[0.875rem]">
-                    <option value="">All</option>
-                    @foreach ($options as $option)
-                        <option value="{{ $option->{$value} }}" @selected(($filters[$name] ?? null) === $option->{$value})>{{ $option->{$text} }}</option>
-                    @endforeach
-                </select>
-            </label>
+            <x-select :name="$name" :label="$label" size="sm" placeholder="All" :value="$filters[$name] ?? ''"
+                      :options="collect($options)->mapWithKeys(fn ($option) => [$option->{$value} => $option->{$text}])->all()" />
         @endforeach
-        <label class="flex flex-col gap-xs text-[0.8125rem]">
-            <span class="font-semibold">Stage</span>
-            <select name="stage" class="px-sm py-1.5 rounded border-[1.5px] border-outline-variant bg-surface-container-lowest text-[0.875rem]">
-                <option value="">All</option>
-                @foreach ($stageLabels as $key => [$label])
-                    <option value="{{ $key }}" @selected(($filters['stage'] ?? null) === $key)>{{ $label }}</option>
-                @endforeach
-            </select>
-        </label>
+        <x-select name="stage" label="Stage" size="sm" placeholder="All" :value="$filters['stage'] ?? ''"
+                  :options="collect(\App\Enums\Stage::cases())->mapWithKeys(fn ($s) => [$s->value => $s->label()])->all()" />
         <input type="hidden" name="view" value="{{ $view }}">
         <x-button variant="secondary">Filter</x-button>
         @if (array_filter(\Illuminate\Support\Arr::except($filters, 'view')))
             <a href="{{ route('movements.index', ['view' => $view]) }}" class="text-[0.875rem] text-primary underline pb-2">Clear</a>
         @endif
-        <nav class="ml-auto flex rounded border-[1.5px] border-outline-variant overflow-hidden text-[0.8125rem]" aria-label="View">
+        <x-segmented label="View" variant="joined" class="ml-auto">
             @foreach (['cards' => ['Cards', 'grid_view'], 'table' => ['Table', 'table_rows']] as $key => [$label, $icon])
-                <a href="{{ $query(['view' => $key]) }}" @if ($view === $key) aria-current="page" @endif
-                   @class(['px-sm py-1.5 flex items-center gap-xs', 'bg-primary text-on-primary' => $view === $key, 'hover:bg-surface-container' => $view !== $key])>
-                    <span class="material-symbols-outlined text-[1.125rem]" aria-hidden="true">{{ $icon }}</span>{{ $label }}
-                </a>
+                <x-segmented.link :href="$query(['view' => $key])" :active="$view === $key" :icon="$icon">{{ $label }}</x-segmented.link>
             @endforeach
-        </nav>
+        </x-segmented>
     </form>
 
     @if ($statuses->isEmpty())
@@ -80,7 +53,8 @@
                     @foreach ($group as $status)
                         @php
                             $m = $status->movement;
-                            [$stageLabel, $stageIcon, $stageTone] = $stageLabels[$stage($status)];
+                            $at = $stage($status);
+                            [$stageLabel, $stageIcon, $stageTone] = [$at->label(), $at->icon(), $at->tone()];
                             $who = $assessors[$m->id] ?? collect();
                             $mine = $cells[$m->id] ?? null;
                         @endphp
@@ -91,7 +65,7 @@
                                     <p class="text-[0.8125rem] text-on-surface-variant">{{ $m->city }} · {{ $m->country }}</p>
                                     <div class="flex flex-wrap gap-xs mt-xs">
                                         <x-chip :icon="$m->membershipStatus->icon">{{ $m->membershipStatus->label }}</x-chip>
-                                        <x-band-chip :band="$status->band" :under-way="! in_array($stage($status), ['not_assessed', 'complete'], true)" />
+                                        <x-band-chip :band="$status->band" :under-way="$started($status)" />
                                     </div>
                                 </div>
                                 <x-viz.ring :pct="$status->pct" :band="$status->band" :size="60" />
@@ -104,7 +78,7 @@
                                         <span class="h-3 rounded-sm {{ $h['fill'] }}" title="{{ $c->name }}: {{ isset($mine[$c->code]) ? round($mine[$c->code]).'% · '.$h['band'] : 'not rated' }}"></span>
                                     @endforeach
                                 </div>
-                                <p class="text-[0.8125rem] text-on-surface-variant -mt-xs">{{ rtrim(rtrim(number_format((float) $status->points_achieved, 2), '0'), '.') }} of {{ $status->points_available }} points · assessed {{ $status->last_assessed_on?->format('M Y') }}</p>
+                                <p class="text-[0.8125rem] text-on-surface-variant -mt-xs">{{ \App\Support\Viz::figure((float) $status->points_achieved) }} of {{ $status->points_available }} points · assessed {{ $status->last_assessed_on?->asMonth() }}</p>
                             @else
                                 <p class="text-[0.8125rem] text-on-surface-variant">No approved OHA form yet{{ $m->planned_assessment_label ? ' · planned '.$m->planned_assessment_label : '' }}.</p>
                             @endif
@@ -128,7 +102,7 @@
                                     @endif
                                 @endif
                                 <span class="ml-auto {{ $status->reassessment_overdue ? 'font-semibold text-critical-ink' : 'text-on-surface-variant' }}">
-                                    {{ $status->next_assessment_on ? 'Next '.$status->next_assessment_on->format('M Y').($status->reassessment_overdue ? ' · overdue' : '') : 'Not scheduled' }}
+                                    {{ $status->next_assessment_on ? 'Next '.$status->next_assessment_on->asMonth().($status->reassessment_overdue ? ' · overdue' : '') : 'Not scheduled' }}
                                 </span>
                             </div>
                         </li>
@@ -137,48 +111,44 @@
             </section>
         @endforeach
     @else
-        <div class="bg-surface-container-lowest border-[1.5px] border-outline-variant rounded-lg relative overflow-x-auto">
-            <table class="w-full text-[0.875rem]">
-                <thead class="text-left text-[0.8125rem] uppercase tracking-wider text-on-surface-variant">
-                    <tr class="border-b-[1.5px] border-outline-variant">
-                        <th class="px-md py-sm">Movement</th>
-                        <th class="px-md py-sm">Zone</th>
-                        <th class="px-md py-sm">Membership</th>
-                        <th class="px-md py-sm">Stage</th>
-                        <th class="px-md py-sm w-56">Score</th>
-                        <th class="px-md py-sm">Band</th>
-                        <th class="px-md py-sm">Next assessment</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    @foreach ($statuses as $status)
-                        @php([$stageLabel, $stageIcon, $stageTone] = $stageLabels[$stage($status)])
-                        <tr class="border-b border-surface-container last:border-0">
-                            <td class="px-md py-sm"><a href="{{ route('movements.show', $status->movement) }}" class="font-semibold text-primary underline">{{ $status->name }}</a>
-                                <span class="block text-[0.8125rem] text-on-surface-variant">{{ $status->movement->city }}</span></td>
-                            <td class="px-md py-sm">{{ $status->movement->zone->name }}</td>
-                            <td class="px-md py-sm">{{ $status->movement->membershipStatus->label }}</td>
-                            <td class="px-md py-sm"><x-chip :tone="$stageTone" :icon="$stageIcon">{{ $stageLabel }}</x-chip></td>
-                            <td class="px-md py-sm">
-                                @if ($status->pct !== null)
-                                    <x-bar :value="(float) $status->pct" :label="rtrim(rtrim(number_format((float) $status->points_achieved, 2), '0'), '.').'/'.$status->points_available.' · '.number_format((float) $status->pct, 1).'%'"
-                                           :tone="['excellent' => 'good', 'strong' => 'good', 'developing' => 'warning', 'atrisk' => 'serious', 'critical' => 'critical'][$status->band_code] ?? 'neutral'" wide />
-                                @else
-                                    <span class="text-on-surface-variant">Not rated</span>
-                                @endif
-                            </td>
-                            <td class="px-md py-sm"><x-band-chip :band="$status->band" :under-way="! in_array($stage($status), ['not_assessed', 'complete'], true)" /></td>
-                            <td class="px-md py-sm">
-                                @if ($status->next_assessment_on)
-                                    <span class="{{ $status->reassessment_overdue ? 'font-semibold text-critical-ink' : '' }}">{{ $status->next_assessment_on->format('M Y') }}{{ $status->reassessment_overdue ? ' · overdue' : '' }}</span>
-                                @else
-                                    <span class="text-on-surface-variant">Not scheduled</span>
-                                @endif
-                            </td>
-                        </tr>
-                    @endforeach
-                </tbody>
-            </table>
-        </div>
+        <x-table>
+            <x-slot:head>
+                <tr>
+                    <th>Movement</th>
+                    <th>Zone</th>
+                    <th>Membership</th>
+                    <th>Stage</th>
+                    <th class="w-56">Score</th>
+                    <th>Band</th>
+                    <th>Next assessment</th>
+                </tr>
+            </x-slot:head>
+            @foreach ($statuses as $status)
+                @php([$stageLabel, $stageIcon, $stageTone] = [$stage($status)->label(), $stage($status)->icon(), $stage($status)->tone()])
+                <tr class="border-b border-surface-container last:border-0">
+                    <td><a href="{{ route('movements.show', $status->movement) }}" class="font-semibold text-primary underline">{{ $status->name }}</a>
+                        <span class="block text-[0.8125rem] text-on-surface-variant">{{ $status->movement->city }}</span></td>
+                    <td>{{ $status->movement->zone->name }}</td>
+                    <td>{{ $status->movement->membershipStatus->label }}</td>
+                    <td><x-chip :tone="$stageTone" :icon="$stageIcon">{{ $stageLabel }}</x-chip></td>
+                    <td>
+                        @if ($status->pct !== null)
+                            <x-bar :value="(float) $status->pct" :label="\App\Support\Viz::points($status->points_achieved, $status->points_available, '/').' · '.\App\Support\Viz::pct($status->pct)"
+                                   :tone="\App\Enums\BandCode::toneOf($status->band_code)" wide />
+                        @else
+                            <span class="text-on-surface-variant">Not rated</span>
+                        @endif
+                    </td>
+                    <td><x-band-chip :band="$status->band" :under-way="$started($status)" /></td>
+                    <td>
+                        @if ($status->next_assessment_on)
+                            <span class="{{ $status->reassessment_overdue ? 'font-semibold text-critical-ink' : '' }}">{{ $status->next_assessment_on->asMonth() }}{{ $status->reassessment_overdue ? ' · overdue' : '' }}</span>
+                        @else
+                            <span class="text-on-surface-variant">Not scheduled</span>
+                        @endif
+                    </td>
+                </tr>
+            @endforeach
+        </x-table>
     @endif
 </x-layouts.app>

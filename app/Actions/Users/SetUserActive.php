@@ -18,7 +18,7 @@ final class SetUserActive
 
     public function handle(User $admin, User $user, bool $active): User
     {
-        $this->ensureAllowed($admin, 'administer', $user);
+        $this->ensure($admin, 'administer', $user);
 
         if ($admin->id === $user->id) {
             throw new WorkflowRuleBroken('You cannot deactivate your own account.');

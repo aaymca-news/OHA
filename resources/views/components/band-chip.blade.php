@@ -5,7 +5,7 @@
 @props(['band' => null, 'code' => null, 'label' => null, 'icon' => null, 'underWay' => false])
 @php
     $code = $band?->code ?? $code ?? 'notstarted';
-    $tone = ['excellent' => 'good', 'strong' => 'good', 'developing' => 'warning', 'atrisk' => 'serious', 'critical' => 'critical'][$code] ?? 'neutral';
+    $tone = \App\Enums\BandCode::toneOf($code);
 @endphp
 @if ($code === 'notstarted' && $underWay)
     <x-chip tone="info" icon="play_circle" {{ $attributes }}>Assessment started</x-chip>

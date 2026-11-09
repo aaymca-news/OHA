@@ -2,8 +2,9 @@
 
 namespace App\Actions\Oha;
 
-use App\Actions\Oha\Concerns\EnforcesPolicy;
+use App\Actions\Concerns\EnforcesPolicy;
 use App\Actions\Oha\Concerns\LocksArtefact;
+use App\Enums\ArtefactKind;
 use App\Enums\ArtefactState;
 use App\Enums\DocumentPurpose;
 use App\Models\Document;
@@ -50,7 +51,7 @@ final class WithdrawVersion
             Audit::record($user, $artefact->kind->value.'.version_withdrawn', $artefact, $assessment, $from, $artefact->state,
                 payload: array_filter(['version' => $number, 'file' => $name, 'now_current' => $now]));
 
-            $noun = $artefact->kind->value === 'odp' ? 'ODP' : 'report';
+            $noun = $artefact->kind === ArtefactKind::Odp ? 'ODP' : 'report';
             Notify::colleagues($assessment, $user,
                 "Withdrawn: {$noun} version {$number}, {$assessment->movement->name}",
                 "{$user->name} withdrew version {$number} of the {$noun} ({$name}).".($now !== null ? ' '.ucfirst($now).' is current again.' : ' No version is left.'));

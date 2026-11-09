@@ -2,7 +2,7 @@
 
 namespace App\Actions\Evidence;
 
-use App\Actions\Oha\Concerns\EnforcesPolicy;
+use App\Actions\Concerns\EnforcesPolicy;
 use App\Models\Evidence;
 use App\Models\User;
 use App\Support\Audit;

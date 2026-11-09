@@ -7,6 +7,7 @@ use App\Enums\Role;
 use Database\Factories\UserFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Hidden;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
@@ -92,6 +93,27 @@ class User extends Authenticatable
     public function oversees(): bool
     {
         return $this->active && $this->isAdmin();
+    }
+
+    /**
+     * The movements whose work this person follows: null for the Administrators (every
+     * movement), otherwise the ones they are assigned to assess.
+     *
+     * @return list<int>|null
+     */
+    public function visibleMovementIds(): ?array
+    {
+        return $this->oversees() ? null : $this->assignedMovements()->pluck('movements.id')->map(fn ($id): int => (int) $id)->values()->all();
+    }
+
+    /**
+     * The active Administrators and Super Administrators: who approve, and who are told.
+     *
+     * @param  Builder<self>  $query
+     */
+    public function scopeAdministrators(Builder $query): void
+    {
+        $query->whereIn('role', [Role::Admin, Role::SuperAdmin])->where('active', true);
     }
 
     /** Only the Administrators assign staff to assess a movement. */

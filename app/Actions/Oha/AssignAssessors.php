@@ -2,7 +2,7 @@
 
 namespace App\Actions\Oha;
 
-use App\Actions\Oha\Concerns\EnforcesPolicy;
+use App\Actions\Concerns\EnforcesPolicy;
 use App\Exceptions\WorkflowRuleBroken;
 use App\Models\Assessment;
 use App\Models\Movement;
@@ -56,6 +56,6 @@ final class AssignAssessors
      */
     public static function inProgress(Movement $movement)
     {
-        return $movement->assessments()->whereHas('workItem')->get();
+        return $movement->assessments()->underWay()->get();
     }
 }

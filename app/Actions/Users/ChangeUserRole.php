@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Actions;
+namespace App\Actions\Users;
 
 use App\Actions\Users\ManagesUsers;
 use App\Enums\Role;
@@ -24,8 +24,8 @@ final class ChangeUserRole
 
     public function handle(User $actor, User $target, Role $role, ?Movement $chairOf = null, bool $confirmReplace = false): User
     {
-        $this->ensureAllowed($actor, 'changeRole', $target);
-        $this->ensureAllowed($actor, 'grantRole', [User::class, $role]);
+        $this->ensure($actor, 'changeRole', $target);
+        $this->ensure($actor, 'grantRole', [User::class, $role]);
 
         if ($role->isMovementRole() && $chairOf === null) {
             throw new WorkflowRuleBroken("A {$role->label()} belongs to a movement: choose which one.");

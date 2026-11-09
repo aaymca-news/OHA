@@ -2,7 +2,7 @@
 
 namespace App\Actions\Oha;
 
-use App\Actions\Oha\Concerns\EnforcesPolicy;
+use App\Actions\Concerns\EnforcesPolicy;
 use App\Exceptions\WorkflowRuleBroken;
 use App\Models\Assessment;
 use App\Models\BoardSignature;
@@ -73,8 +73,8 @@ final class DeleteAssessment
 
         $this->removeUnreferencedFiles($files);
 
-        $admins = User::query()->whereIn('role', ['admin', 'super_admin'])->where('active', true)->get();
-        Notify::send($admins->merge($movement->assessors()->where('active', true)->get()), new WorkflowNotice(
+        $admins = User::query()->administrators()->get();
+        Notify::send($admins->merge($movement->activeAssessors()->get()), new WorkflowNotice(
             "Assessment deleted: {$movement->name}",
             "{$superAdmin->name} deleted the {$movement->name} assessment ({$assessment->period_label}): ".trim($reason),
             '/movements/'.$movement->slug, 'serious',

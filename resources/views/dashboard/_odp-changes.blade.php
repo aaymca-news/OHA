@@ -17,7 +17,7 @@
     </x-slot:actions>
 
     @if ($odpSync['connected'] && $last?->error)
-        <p class="text-[0.875rem] p-sm rounded bg-critical-wash text-critical-ink">{{ $last->error }}</p>
+        <x-callout tone="critical" icon="sync_problem">{{ $last->error }}</x-callout>
     @endif
 
     @if ($odpChanges->isEmpty())

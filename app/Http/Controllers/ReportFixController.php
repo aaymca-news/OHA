@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Actions\Oha\FixReport;
 use App\Actions\Oha\ReviewReportFinding;
+use App\Http\Controllers\Concerns\BacksToAssessment;
 use App\Models\Artefact;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -14,6 +15,8 @@ use Illuminate\Http\Request;
  */
 class ReportFixController extends Controller
 {
+    use BacksToAssessment;
+
     public function fix(Request $request, Artefact $artefact, FixReport $fix): RedirectResponse
     {
         $data = $request->validate([
@@ -55,7 +58,6 @@ class ReportFixController extends Controller
 
     private function back(Artefact $artefact, string $status): RedirectResponse
     {
-        return redirect()->route('assessments.show', ['assessment' => $artefact->assessment_id, 'tab' => 'report'])->withFragment('report-check')
-            ->with('status', $status);
+        return $this->toTab($artefact, $status, 'report', fragment: 'report-check');
     }
 }

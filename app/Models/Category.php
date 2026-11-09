@@ -30,6 +30,22 @@ class Category extends Model
     }
 
     /**
+     * Each category's name by its code, read once per request (for labels in lists).
+     *
+     * @return array<string, string>
+     */
+    public static function names(): array
+    {
+        return once(fn () => self::query()->pluck('name', 'code')->all());
+    }
+
+    /** One category's name by its code, or the code when it is unknown. */
+    public static function nameOf(string $code): string
+    {
+        return self::names()[$code] ?? $code;
+    }
+
+    /**
      * @param  Builder<self>  $query
      */
     public function scopeWeighted(Builder $query): void

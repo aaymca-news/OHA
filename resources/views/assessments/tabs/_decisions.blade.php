@@ -5,7 +5,7 @@
         // An Administrator's own work: approved straight away, without being submitted.
         $own = $artefact->state->value !== 'pending_approval';
         $gaps = $own && $artefact->kind->value === 'form'
-            ? (int) $artefact->currentUpload?->findings()->where('severity', 'missing')->whereNull('resolved_at')->count() : 0;
+            ? (int) $artefact->currentUpload?->findings()->where('severity', \App\Enums\FindingSeverity::Missing)->whereNull('resolved_at')->count() : 0;
         $visibleTo = 'all AAYMCA staff'.($artefact->kind->value !== 'form' ? ' and the Board Chairperson' : '');
     @endphp
     <x-card :title="($own ? 'Approve your work' : 'Your approval').($version ? ' · version '.$version : '')"
@@ -13,9 +13,9 @@
                 ? 'This is your own assessment, so it needs nobody else’s approval. Approving makes it visible to '.$visibleTo.($artefact->kind->value === 'odp' ? ', and sends it to the Board Chairperson to sign.' : ', and moves it on.')
                 : 'Submitted by '.$artefact->submitter?->name.'. Approving lets the assessor go on to the next step, and makes it visible to '.$visibleTo.'.'">
         @if ($artefact->gap_ack && ! $own)
-            <div class="p-sm rounded bg-serious-wash text-serious-ink text-[0.875rem]">
-                Submitted with missing information acknowledged{{ $artefact->gap_ack_reason ? ': “'.$artefact->gap_ack_reason.'”' : '.' }}
-            </div>
+            <x-callout tone="serious">
+                <p>Submitted with missing information acknowledged{{ $artefact->gap_ack_reason ? ': “'.$artefact->gap_ack_reason.'”' : '.' }}</p>
+            </x-callout>
         @endif
         <div @class(['grid gap-md', 'md:grid-cols-2' => ! $own])>
             <form method="POST" action="{{ route('artefacts.approve', $artefact) }}" class="flex flex-col gap-sm" x-data="{ ack: {{ $gaps > 0 ? 'false' : 'true' }} }">
@@ -29,10 +29,7 @@
                         <span>I approve it with {{ $gaps }} open {{ $gaps === 1 ? 'gap' : 'gaps' }}. They stay flagged until resolved.</span>
                     </label>
                 @endif
-                <label class="flex flex-col gap-xs text-[0.875rem]">
-                    <span class="font-semibold">Note (optional)</span>
-                    <textarea name="note" rows="3" class="px-sm py-2 rounded border-[1.5px] border-outline-variant">{{ old('note') }}</textarea>
-                </label>
+                <x-textarea name="note" label="Note (optional)" rows="3" />
                 <x-button class="self-start" x-bind:disabled="! ack">Approve</x-button>
             </form>
             @unless ($own)
@@ -60,7 +57,7 @@
             @foreach ($history as $comment)
                 <li class="border-l-4 pl-sm {{ $comment->kind->value === 'send_back' ? 'border-band-atrisk' : 'border-outline-variant' }}">
                     <p>{{ $comment->body }}</p>
-                    <p class="text-[0.8125rem] text-on-surface-variant">{{ $comment->author->name }} · {{ ['comment' => 'Comment', 'send_back' => 'Sent back', 'approval_note' => 'Approval note', 'board_note' => 'Board'][$comment->kind->value] }} · {{ $comment->created_at->format('j M Y, H:i') }}</p>
+                    <p class="text-[0.8125rem] text-on-surface-variant">{{ $comment->author->name }} · {{ ['comment' => 'Comment', 'send_back' => 'Sent back', 'approval_note' => 'Approval note', 'board_note' => 'Board'][$comment->kind->value] }} · {{ $comment->created_at->asStamp() }}</p>
                 </li>
             @endforeach
         </ul>

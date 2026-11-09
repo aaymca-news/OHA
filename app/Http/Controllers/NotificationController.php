@@ -11,7 +11,8 @@ class NotificationController extends Controller
     public function index(Request $request): View
     {
         return view('notifications', [
-            'notifications' => $request->user()->notifications()->latest()->limit(100)->get(),
+            'notifications' => $request->user()->notifications()->latest()->paginate(config('oha.per_page')),
+            'hasUnread' => $request->user()->unreadNotifications()->exists(),
         ]);
     }
 

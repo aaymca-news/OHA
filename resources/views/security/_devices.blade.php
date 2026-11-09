@@ -3,14 +3,8 @@
     signed out on its own, or all of them at once. Their password is asked first, so
     someone who finds a signed-in device cannot shut its owner out. Expects $sessions.
 --}}
-<section class="min-w-0 bg-surface-container-lowest border-[1.5px] border-outline-variant rounded-lg p-md sm:p-lg flex flex-col gap-md {{ $class ?? '' }}">
-    <div>
-        <h2 class="text-[1.125rem] font-bold text-primary">Where you are signed in</h2>
-        <p class="text-[0.875rem] text-on-surface-variant">
-            Sign out any device you do not recognise, or no longer use. It can sign in again with your password.
-            You are signed out automatically after {{ config('session.lifetime') }} minutes without activity.
-        </p>
-    </div>
+<x-card title="Where you are signed in" padding="lg" class="min-w-0 {{ $class ?? '' }}"
+        :subtitle="'Sign out any device you do not recognise, or no longer use. It can sign in again with your password. You are signed out automatically after '.config('session.lifetime').' minutes without activity.'">
     @error('password')
         <p class="text-[0.875rem] text-error" role="alert">{{ $message }}</p>
     @enderror
@@ -56,4 +50,4 @@
     @elseif ($sessions->count() === 1)
         <p class="text-[0.8125rem] text-on-surface-variant">You are signed in on this device only.</p>
     @endif
-</section>
+</x-card>

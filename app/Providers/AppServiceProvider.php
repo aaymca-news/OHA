@@ -4,13 +4,16 @@ namespace App\Providers;
 
 use App\Models\User;
 use App\Support\Audit;
+use App\Support\DateFormats;
 use App\Support\Navigation;
 use App\Support\SystemHealth;
+use Carbon\Carbon;
 use Illuminate\Auth\Events\Failed;
 use Illuminate\Auth\Events\Lockout;
 use Illuminate\Auth\Events\Login;
 use Illuminate\Auth\Events\Logout;
 use Illuminate\Auth\Events\PasswordReset;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\View;
@@ -35,7 +38,20 @@ class AppServiceProvider extends ServiceProvider
         // Alliance-wide statistics: every AAYMCA user, not the Board Chairpersons.
         Gate::define('viewAllianceStats', fn (User $user) => $user->active && $user->isSecretariat());
 
+        // Timelines (ODP tasks and assessment deadlines): AAYMCA staff, who assess.
+        Gate::define('viewTimelines', fn (User $user) => $user->active && $user->isAssessor());
+
         Password::defaults(fn () => Password::min(12)->letters()->mixedCase()->numbers());
+
+        // $date->asDay(), ->asStamp(), ->asMonth(): the platform's date formats, in one place.
+        Carbon::mixin(new DateFormats);
+
+        // On a developer's machine: a relation loaded row by row (a query per row) is
+        // logged, so it is found and loaded up front. Never on the live site.
+        if ($this->app->isLocal()) {
+            Model::preventLazyLoading();
+            Model::handleLazyLoadingViolationUsing(fn (Model $model, string $relation) => logger()->warning('Lazy loading '.$model::class.'::'.$relation.' (load it up front).'));
+        }
 
         $this->recordSignInEvents();
 

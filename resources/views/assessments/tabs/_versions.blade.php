@@ -12,23 +12,16 @@
 @if ($shown)
     @php([$label, $icon, $tone] = VersionLabel::of($shown, $artefact, $latestId))
     <x-card :title="'Version '.$shown->number.' · '.$shown->original_name"
-            :subtitle="($shown->fromDrive() ? 'Taken from Google Drive' : ($shown->fromPlatform() ? 'Fixed in the platform by '.$shown->creator->name : 'Uploaded by '.$shown->creator->name)).', '.$shown->created_at->format('j M Y, H:i').' · '.number_format($shown->size_bytes / 1024).' KB'">
+            :subtitle="($shown->fromDrive() ? 'Taken from Google Drive' : ($shown->fromPlatform() ? 'Fixed in the platform by '.$shown->creator->name : 'Uploaded by '.$shown->creator->name)).', '.$shown->created_at->asStamp().' · '.number_format($shown->size_bytes / 1024).' KB'">
         <x-slot:actions>
             <div class="flex flex-wrap items-center gap-sm">
                 <x-chip :tone="$tone" :icon="$icon">{{ $label }}</x-chip>
-                <a href="{{ route('downloads.document', $shown) }}" class="inline-flex items-center gap-xs text-[0.875rem] text-primary underline">
-                    <span class="material-symbols-outlined text-[1.125rem]" aria-hidden="true">download</span> Download
-                </a>
+                <x-button variant="link" icon="download" :href="route('downloads.document', $shown)" class="text-[0.875rem]">Download</x-button>
                 @if ($shown->canPreview())
-                    <a href="{{ route('downloads.preview', $shown) }}" target="_blank" rel="noopener" class="inline-flex items-center gap-xs text-[0.875rem] text-primary underline">
-                        <span class="material-symbols-outlined text-[1.125rem]" aria-hidden="true">open_in_new</span> Open in a new tab
-                    </a>
+                    <x-button variant="link" icon="open_in_new" :href="route('downloads.preview', $shown)" target="_blank" rel="noopener" class="text-[0.875rem]">Open in a new tab</x-button>
                 @endif
                 @if ($driveLink)
-                    <a href="{{ $driveLink }}" target="_blank" rel="noopener noreferrer"
-                       class="inline-flex items-center gap-xs px-sm py-1.5 rounded border-[1.5px] border-primary text-[0.875rem] font-semibold text-primary hover:bg-surface-container-low">
-                        <span class="material-symbols-outlined text-[1.125rem]" aria-hidden="true">edit_document</span> Continue in Google Drive
-                    </a>
+                    <x-button variant="outline" size="sm" icon="edit_document" :href="$driveLink" target="_blank" rel="noopener noreferrer">Continue in Google Drive</x-button>
                 @endif
             </div>
         </x-slot:actions>
@@ -83,7 +76,7 @@
                         {{ $v->original_name }}
                         <span class="block text-[0.8125rem] text-on-surface-variant">
                             {{ $v->fromDrive() ? 'From Google Drive'.($v->edited_by_email ? ', changed by '.$v->edited_by_email : '') : $v->creator->name }}
-                            · {{ $v->created_at->format('j M Y, H:i') }}{{ $v->note ? ' · '.$v->note : '' }}
+                            · {{ $v->created_at->asStamp() }}{{ $v->note ? ' · '.$v->note : '' }}
                         </span>
                     </span>
                     @if ($v->fromDrive())
@@ -98,14 +91,10 @@
                     <a href="{{ route('downloads.document', $v) }}" class="text-primary underline">Download</a>
                     @can('withdraw', $v)
                         @php($before = $versions->first(fn ($o) => $o->id < $v->id))
-                        <form method="POST" action="{{ route('versions.withdraw', $v) }}"
-                              x-data x-on:submit="if (! confirm(@js('Withdraw version '.$v->number.'? Use this for a version saved by mistake. '.($before ? 'Version '.$before->number.' becomes current again.' : 'No version will be left.')))) $event.preventDefault()">
-                            @csrf
-                            @method('DELETE')
-                            <button class="inline-flex items-center gap-xs text-error underline">
-                                <span class="material-symbols-outlined text-[1.125rem]" aria-hidden="true">undo</span> Withdraw
-                            </button>
-                        </form>
+                        <x-confirm-form :action="route('versions.withdraw', $v)" method="DELETE"
+                                        :confirm="'Withdraw version '.$v->number.'? Use this for a version saved by mistake. '.($before ? 'Version '.$before->number.' becomes current again.' : 'No version will be left.')">
+                            <x-button variant="link-danger" icon="undo">Withdraw</x-button>
+                        </x-confirm-form>
                     @endcan
                 </li>
             @endforeach

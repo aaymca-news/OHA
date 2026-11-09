@@ -1,11 +1,7 @@
 <x-layouts.app :title="__('oha.nav.profile')" subtitle="Your photo and details, the text size, and the devices you are signed in on. Your password is under Security.">
     <div class="grid lg:grid-cols-2 gap-md items-start">
         {{-- Profile photo: shown wherever the person's name appears. --}}
-        <section class="min-w-0 bg-surface-container-lowest border-[1.5px] border-outline-variant rounded-lg p-md sm:p-lg flex flex-col gap-md">
-            <div>
-                <h2 class="text-[1.125rem] font-bold text-primary">Profile photo</h2>
-                <p class="text-[0.875rem] text-on-surface-variant">Shown beside your name across the platform: the top bar, Users &amp; Roles, and the movements you assess or represent.</p>
-            </div>
+        <x-card title="Profile photo" subtitle="Shown beside your name across the platform: the top bar, Users & Roles, and the movements you assess or represent." padding="lg" class="min-w-0">
             <div class="flex flex-wrap items-center gap-md">
                 <x-avatar :user="$user" size="lg" />
                 <div class="flex flex-col gap-xs text-[0.875rem]">
@@ -17,12 +13,11 @@
             <form method="POST" action="{{ route('profile.photo') }}" enctype="multipart/form-data" class="flex flex-col gap-sm"
                   x-data="photoCropper" x-on:submit="save($event)">
                 @csrf
-                <label class="flex flex-col gap-xs text-[0.875rem]">
-                    <span class="font-semibold">{{ $user->avatar_path ? 'Replace the photo' : 'Add a photo' }}</span>
+                {{-- A plain file input (not x-file-drop): the cropper reads it through x-ref="file" and choose(). --}}
+                <x-field :label="$user->avatar_path ? 'Replace the photo' : 'Add a photo'" name="photo" :hint="'A JPG or PNG, up to '.\App\Support\Viz::figure(min((int) config('oha.max_photo_kb'), \App\Support\UploadLimit::kb()) / 1024, 1).' MB. You can position it before saving.'">
                     <input type="file" name="photo" accept="image/jpeg,image/png,image/webp" required x-ref="file" x-on:change="choose($event)"
                            class="text-[0.875rem] max-w-full file:mr-sm file:px-md file:py-1.5 file:rounded file:border-[1.5px] file:border-outline-variant file:bg-surface-container-lowest file:text-primary file:font-semibold hover:file:border-primary">
-                    <span class="text-[0.8125rem] text-on-surface-variant">A JPG or PNG, up to 5 MB. You can position it before saving.</span>
-                </label>
+                </x-field>
                 <p x-show="problem" x-cloak x-text="problem" class="text-[0.875rem] text-error" role="alert"></p>
 
                 <div x-show="image" x-cloak class="flex flex-col gap-sm">
@@ -46,14 +41,13 @@
                 <form method="POST" action="{{ route('profile.photo.remove') }}">
                     @csrf
                     @method('DELETE')
-                    <button class="text-[0.875rem] text-primary underline">Remove the photo</button>
+                    <x-button variant="link" class="text-[0.875rem]">Remove the photo</x-button>
                 </form>
             @endif
-        </section>
+        </x-card>
 
         {{-- Details: the name and title are theirs to correct; the rest is set by the Administrators. --}}
-        <section class="min-w-0 bg-surface-container-lowest border-[1.5px] border-outline-variant rounded-lg p-md sm:p-lg flex flex-col gap-md">
-            <h2 class="text-[1.125rem] font-bold text-primary">Your details</h2>
+        <x-card title="Your details" padding="lg" class="min-w-0">
             <form method="POST" action="{{ route('profile.update') }}" class="flex flex-col gap-sm">
                 @csrf
                 @method('PUT')
@@ -85,16 +79,12 @@
             <p class="text-[0.8125rem] text-on-surface-variant">
                 Your email, {{ $user->isSecretariat() ? 'role and the movements you assess' : 'job title and role' }} are set by the Administrators. Ask one of them if something here is wrong.
             </p>
-        </section>
+        </x-card>
 
         {{-- How the platform looks on this device. --}}
-        <section class="min-w-0 bg-surface-container-lowest border-[1.5px] border-outline-variant rounded-lg p-md sm:p-lg flex flex-col gap-md">
-            <div>
-                <h2 class="text-[1.125rem] font-bold text-primary">Display</h2>
-                <p class="text-[0.875rem] text-on-surface-variant">Make the text larger or smaller everywhere in the platform. It is remembered on this device; the same slider is in the menu under your name.</p>
-            </div>
+        <x-card title="Display" subtitle="Make the text larger or smaller everywhere in the platform. It is remembered on this device; the same slider is in the menu under your name." padding="lg" class="min-w-0">
             @include('partials.text-size', ['id' => 'text-scale-profile'])
-        </section>
+        </x-card>
 
         @include('security._devices')
     </div>

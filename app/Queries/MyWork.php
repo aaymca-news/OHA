@@ -137,7 +137,7 @@ final class MyWork
     private function idle(User $user): Collection
     {
         return $user->assignedMovements()
-            ->whereDoesntHave('assessments', fn (Builder $a) => $a->whereHas('workItem'))
+            ->whereDoesntHave('assessments', fn (Builder $a) => $a->underWay())
             ->with('status')->orderBy('name')->get();
     }
 
@@ -231,7 +231,7 @@ final class MyWork
         return $this->work(null)
             ->when($movementIds !== null, fn (Builder $q) => $q->whereIn('movement_id', $movementIds))
             ->whereIn('assessment_id', Artefact::query()->select('assessment_id')
-                ->where('kind', 'form')
+                ->where('kind', ArtefactKind::Form)
                 ->whereNotIn('state', [ArtefactState::NotStarted->value, ArtefactState::RulesFailed->value])
                 ->whereHas('currentUpload.findings', fn (Builder $f) => $f->where('severity', FindingSeverity::Missing->value)->whereNull('resolved_at')))
             ->get();

@@ -27,6 +27,9 @@ final class Audit
         ?User $routedTo = null,
         array $payload = [],
     ): AuditEvent {
+        // Work changed: the sidebar badges are counted afresh.
+        Navigation::forget();
+
         return AuditEvent::query()->create([
             'occurred_at' => now(),
             'actor_id' => $actor?->id,

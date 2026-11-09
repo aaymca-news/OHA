@@ -8,6 +8,14 @@ use Illuminate\Auth\Access\Response;
 
 class MovementPolicy
 {
+    /** The list of every National Movement: AAYMCA staff. */
+    public function viewAny(User $user): Response
+    {
+        return $user->active && $user->isSecretariat()
+            ? Response::allow()
+            : Response::deny('Only AAYMCA staff see the list of National Movements.');
+    }
+
     /** Secretariat users see every movement; a movement's own users see only theirs. */
     public function view(User $user, Movement $movement): Response
     {

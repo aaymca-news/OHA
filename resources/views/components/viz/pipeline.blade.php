@@ -6,14 +6,8 @@
 --}}
 @props(['pipeline'])
 @php
-    $steps = [
-        'not_assessed' => ['Not yet assessed', 'bg-surface-container-high'],
-        'form' => ['OHA form', 'bg-heat-1'],
-        'report' => ['Report', 'bg-heat-2'],
-        'odp' => ['ODP', 'bg-heat-3'],
-        'sign' => ['Awaiting signature', 'bg-heat-4'],
-        'complete' => ['Stage 1 done', 'bg-heat-5'],
-    ];
+    // Each stage's short label and fill come from App\Enums\Stage.
+    $steps = collect(\App\Enums\Stage::cases())->mapWithKeys(fn ($s) => [$s->value => [$s->short(), $s->fill()]])->all();
     $total = max(1, $pipeline['total']);
 @endphp
 <div class="flex flex-col gap-sm">

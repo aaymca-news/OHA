@@ -22,9 +22,8 @@ final class CategoryRows
     {
         /** @var Collection<int, CategoryScore> $scores */
         $scores = $assessment->categoryScores()->get()->keyBy('category_id');
-        $bands = HealthBand::query()->orderByDesc('min_pct')->get();
 
-        return Category::query()->orderBy('form_order')->get()->map(function (Category $category) use ($scores, $bands) {
+        return Category::query()->orderBy('form_order')->get()->map(function (Category $category) use ($scores) {
             $score = $scores->get($category->id);
 
             // Property Management (not weighted) has no score row.
@@ -35,7 +34,7 @@ final class CategoryRows
             $points = (float) $score->points;
             $max = $score->max_points_at_scoring;
             $pct = round($points * 100 / $max, 1);
-            $band = $bands->first(fn (HealthBand $b) => (float) $b->min_pct <= $pct);
+            $band = HealthBand::forPercentage($pct);
 
             return [
                 'code' => $category->code,
@@ -44,9 +43,9 @@ final class CategoryRows
                 'max' => $max,
                 'pct' => $pct,
                 'lost' => $max - $points,
-                'band' => $band?->label,
-                'band_code' => $band?->code,
-                'band_icon' => $band?->icon,
+                'band' => $band->label,
+                'band_code' => $band->code,
+                'band_icon' => $band->icon,
             ];
         })->values()->all();
     }

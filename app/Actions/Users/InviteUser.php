@@ -39,7 +39,7 @@ final class InviteUser
         bool $confirmReplace = false,
     ): User {
         $this->ensureAdmin($admin);
-        $this->ensureAllowed($admin, 'grantRole', [User::class, $role]);
+        $this->ensure($admin, 'grantRole', [User::class, $role]);
 
         if ($role->isMovementRole() && $chairOf === null) {
             throw new WorkflowRuleBroken("A {$role->label()} belongs to a movement: choose which one.");
@@ -76,7 +76,22 @@ final class InviteUser
         });
     }
 
-    public function sendInvitation(User $user, User $admin): void
+    /**
+     * Sends a pending invitation again (a new link; the old one stops working). Refused
+     * once the person has accepted. Recorded on the person.
+     */
+    public function resend(User $user, User $admin): void
+    {
+        $this->ensure($admin, 'administer', $user);
+        if (! $user->isInvitationPending()) {
+            throw new WorkflowRuleBroken("{$user->name} has already accepted their invitation.");
+        }
+
+        $this->sendInvitation($user, $admin);
+        Audit::record($admin, 'user.invitation_resent', $user);
+    }
+
+    private function sendInvitation(User $user, User $admin): void
     {
         /** @var PasswordBroker $broker */
         $broker = Password::broker('invites');

@@ -2,6 +2,7 @@
 
 namespace App\Queries;
 
+use App\Enums\BandCode;
 use App\Models\Category;
 use App\Models\HealthBand;
 use App\Models\Movement;
@@ -27,7 +28,7 @@ final class AllianceStats
             'total' => $statuses->count(),
             'assessed' => $assessed->count(),
             'mean' => $assessed->isEmpty() ? null : round($assessed->avg(fn (MovementStatus $s) => (float) $s->pct), 1),
-            'at_risk' => $statuses->whereIn('band_code', ['atrisk', 'critical'])->count(),
+            'at_risk' => $statuses->whereIn('band_code', BandCode::NEEDING_SUPPORT)->count(),
             'with_odp' => $statuses->where('has_odp', true)->count(),
             'overdue' => $statuses->where('reassessment_overdue', true)->count(),
         ];

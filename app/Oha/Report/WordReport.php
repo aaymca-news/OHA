@@ -2,6 +2,7 @@
 
 namespace App\Oha\Report;
 
+use App\Support\Viz;
 use DOMDocument;
 use DOMElement;
 use DOMNode;
@@ -370,6 +371,6 @@ final class WordReport
 
     private function number(float $value): string
     {
-        return rtrim(rtrim(number_format($value, 2, '.', ''), '0'), '.');
+        return Viz::figure($value, thousands: '');
     }
 }

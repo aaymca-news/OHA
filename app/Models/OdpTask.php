@@ -37,14 +37,14 @@ class OdpTask extends Model
         return $this->belongsTo(User::class, 'edited_by');
     }
 
-    /** done, overdue, soon (within 30 days), upcoming, or undated (no date could be read or was given). */
+    /** done, overdue, soon (within config oha.due_soon_days.odp_tasks, 30 days), upcoming, or undated (no date could be read or was given). */
     public function state(): string
     {
         return match (true) {
             $this->done => 'done',
             $this->due_on === null => 'undated',
             $this->due_on->lt(today()) => 'overdue',
-            $this->due_on->lte(today()->addDays(30)) => 'soon',
+            $this->due_on->lte(today()->addDays(config('oha.due_soon_days.odp_tasks'))) => 'soon',
             default => 'upcoming',
         };
     }

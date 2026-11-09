@@ -10,6 +10,7 @@ use App\Models\Movement;
 use App\Oha\Finding;
 use App\Oha\FindingRule;
 use App\Oha\Scorer;
+use App\Support\Viz;
 
 /**
  * Checks an uploaded report against the structure of an OHA analysis report (as in
@@ -370,7 +371,7 @@ final class ReportChecker
 
     private function points(float $value): string
     {
-        return rtrim(rtrim(number_format($value, 2, '.', ''), '0'), '.');
+        return Viz::figure($value, thousands: '');
     }
 
     private function add(FindingSeverity $severity, FindingRule $rule, string $message, string $location = '', string $hint = '', ?string $ref = null, ?string $category = null): void

@@ -33,9 +33,10 @@ final class OdpTimeline
     {
         return Assessment::query()->with(['movement', 'odpReadDocument'])
             ->when($movementIds !== null, fn ($q) => $q->whereIn('movement_id', $movementIds))
-            ->where(fn ($q) => $q->whereHas('odp.documents', fn ($d) => $d->where('purpose', DocumentPurpose::Uploaded))->orWhereHas('odpTasks'))
-            ->orderByDesc('id')->get()
-            ->unique('movement_id')->sortBy(fn (Assessment $a) => $a->movement->name)->values();
+            ->latestPerMovement(fn ($q) => $q->where(fn ($q) => $q
+                ->whereHas('odp.documents', fn ($d) => $d->where('purpose', DocumentPurpose::Uploaded))->orWhereHas('odpTasks')))
+            ->get()
+            ->sortBy(fn (Assessment $a) => $a->movement->name)->values();
     }
 
     /** The ODP version the tasks come from: the newest one uploaded. */

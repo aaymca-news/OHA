@@ -79,13 +79,11 @@
         </summary>
         <div class="flex flex-col gap-md px-md pb-md">
         <p class="flex flex-wrap items-center gap-x-md gap-y-xs text-[0.8125rem] text-on-surface-variant border-t border-surface-container pt-sm">
-            <span>{{ $read ? 'Read from the ODP saved '.$read->created_at->format('j M Y') : 'Typed in' }}</span>
+            <span>{{ $read ? 'Read from the ODP saved '.$read->created_at->asDay() : 'Typed in' }}</span>
             <a href="{{ route('assessments.show', ['assessment' => $assessment, 'tab' => 'odp']) }}" class="text-primary underline">Open the ODP</a>
         </p>
         @if ($assessment->odp_read_problem)
-            <p class="flex items-start gap-xs text-[0.875rem] p-sm rounded bg-serious-wash text-serious-ink" role="status">
-                <span class="material-symbols-outlined text-[1.125rem]" aria-hidden="true">info</span>{{ $assessment->odp_read_problem }}
-            </p>
+            <x-callout tone="serious" icon="info" role="status">{{ $assessment->odp_read_problem }}</x-callout>
         @endif
 
         @if ($list->isEmpty())
@@ -103,25 +101,25 @@
                 <summary class="cursor-pointer font-semibold text-primary">Add a task</summary>
                 <form method="POST" action="{{ route('timeline.tasks.store', $assessment) }}" class="flex flex-col gap-sm mt-sm">
                     @csrf
+                    {{--
+                        x-field around plain boxes, not x-input: every movement has this form, and each
+                        task has a form with the same names, so old() values and errors would land in all of them.
+                    --}}
                     <div class="grid sm:grid-cols-[6rem_1fr] gap-sm">
-                        <label class="flex flex-col gap-xs">
-                            <span class="font-semibold">Number</span>
-                            <input name="ref" maxlength="16" placeholder="1.1" class="px-sm py-1.5 rounded border-[1.5px] border-outline-variant bg-surface-container-lowest">
-                        </label>
-                        <label class="flex flex-col gap-xs">
-                            <span class="font-semibold">Task</span>
-                            <input name="task" required maxlength="4000" placeholder="Develop a fundraising strategy" class="px-sm py-1.5 rounded border-[1.5px] border-outline-variant bg-surface-container-lowest">
-                        </label>
+                        <x-field label="Number">
+                            <input name="ref" maxlength="16" placeholder="1.1" @class(\App\Support\Ui::control(false, 'sm'))>
+                        </x-field>
+                        <x-field label="Task">
+                            <input name="task" required maxlength="4000" placeholder="Develop a fundraising strategy" @class(\App\Support\Ui::control(false, 'sm'))>
+                        </x-field>
                     </div>
                     <div class="grid sm:grid-cols-[1fr_auto] gap-sm">
-                        <label class="flex flex-col gap-xs">
-                            <span class="font-semibold">Responsible</span>
-                            <input name="responsible" maxlength="500" placeholder="Finance Committee" class="px-sm py-1.5 rounded border-[1.5px] border-outline-variant bg-surface-container-lowest">
-                        </label>
-                        <label class="flex flex-col gap-xs">
-                            <span class="font-semibold">Deadline</span>
-                            <input type="date" name="due_on" class="px-sm py-1.5 rounded border-[1.5px] border-outline-variant bg-surface-container-lowest">
-                        </label>
+                        <x-field label="Responsible">
+                            <input name="responsible" maxlength="500" placeholder="Finance Committee" @class(\App\Support\Ui::control(false, 'sm'))>
+                        </x-field>
+                        <x-field label="Deadline">
+                            <input type="date" name="due_on" @class(\App\Support\Ui::control(false, 'sm'))>
+                        </x-field>
                     </div>
                     <x-button class="self-start">Add the task</x-button>
                 </form>

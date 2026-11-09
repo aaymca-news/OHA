@@ -2,8 +2,8 @@
 
 namespace App\Support;
 
+use App\Enums\BandCode;
 use App\Models\HealthBand;
-use Illuminate\Support\Collection;
 
 /**
  * Chart colours by the job they do, written out in full so Tailwind finds each class.
@@ -24,9 +24,6 @@ final class Viz
         'critical' => ['bg-heat-1', 'text-on-surface'],
     ];
 
-    /** @var Collection<int, HealthBand>|null */
-    private static ?Collection $bands = null;
-
     /**
      * The heat step for a percentage score: fill, text colour, and the band it stands
      * for. The band limits come from the health_bands table, read once per request.
@@ -39,8 +36,8 @@ final class Viz
             return ['fill' => 'bg-surface-container', 'text' => 'text-on-surface-variant', 'band' => 'Not rated'];
         }
 
-        self::$bands ??= HealthBand::query()->orderByDesc('min_pct')->get();
-        $band = self::$bands->first(fn (HealthBand $b) => $pct >= (float) $b->min_pct);
+        $bands = HealthBand::ordered();
+        $band = $bands->first(fn (HealthBand $b) => $pct >= (float) $b->min_pct);
         [$fill, $text] = self::STEPS[$band?->code] ?? ['bg-surface-container-high', 'text-on-surface'];
 
         return ['fill' => $fill, 'text' => $text, 'band' => $band->label ?? 'Not started'];
@@ -53,10 +50,10 @@ final class Viz
      */
     public static function legend(): array
     {
-        self::$bands ??= HealthBand::query()->orderByDesc('min_pct')->get();
+        $bands = HealthBand::ordered();
         $upper = 100.0;
         $legend = [];
-        foreach (self::$bands as $band) {
+        foreach ($bands as $band) {
             $min = (float) $band->min_pct;
             // Shown as whole percentages, the way the form writes them ("1–19%").
             $legend[] = ['sample' => $min, 'label' => $band->label.($min > 0 ? ' '.max(1, (int) round($min)).'–'.(int) round($upper).'%' : '')];
@@ -69,13 +66,34 @@ final class Viz
     /** The stroke colour for a band, for the score ring. Status colours: always shown with the band's label. */
     public static function bandStroke(?string $code): string
     {
-        return match ($code) {
-            'excellent', 'strong' => 'text-band-strong',
-            'developing' => 'text-band-developing',
-            'atrisk' => 'text-band-atrisk',
-            'critical' => 'text-band-critical',
-            default => 'text-band-notstarted',
-        };
+        return (BandCode::tryFrom((string) $code) ?? BandCode::NotStarted)->stroke();
+    }
+
+    /**
+     * A figure as people write it: up to $decimals places, with trailing zeros dropped
+     * (12.50 → 12.5, 12.00 → 12). $thousands is '' where the figure is compared with or
+     * written into a document (the report check, the Word report).
+     */
+    public static function figure(int|float|null $value, int $decimals = 2, string $thousands = ','): string
+    {
+        if ($value === null) {
+            return '';
+        }
+        $text = number_format((float) $value, $decimals, '.', $thousands);
+
+        return $decimals > 0 ? rtrim(rtrim($text, '0'), '.') : $text;
+    }
+
+    /** Points out of the points available: "58 / 84" (or "58/84" with $separator '/'). */
+    public static function points(int|float|null $achieved, int|float|null $available, string $separator = ' / '): string
+    {
+        return $achieved === null ? '—' : self::figure($achieved).$separator.self::figure($available);
+    }
+
+    /** A percentage to one decimal place: "69.0%". */
+    public static function pct(int|float|null $value, int $decimals = 1): string
+    {
+        return $value === null ? '—' : number_format((float) $value, $decimals).'%';
     }
 
     /** A whole number, with thousands separated; decimals only when they matter. */

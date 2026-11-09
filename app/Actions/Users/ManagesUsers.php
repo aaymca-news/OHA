@@ -2,6 +2,7 @@
 
 namespace App\Actions\Users;
 
+use App\Actions\Concerns\EnforcesPolicy;
 use App\Enums\Role;
 use App\Exceptions\WorkflowRuleBroken;
 use App\Models\Movement;
@@ -9,7 +10,6 @@ use App\Models\User;
 use App\Notifications\ChairRoleEnded;
 use App\Support\Audit;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Gate;
 
 /**
  * Only an active Administrator manages users, and only a Super Administrator
@@ -18,21 +18,11 @@ use Illuminate\Support\Facades\Gate;
  */
 trait ManagesUsers
 {
+    use EnforcesPolicy;
+
     private function ensureAdmin(User $actor): void
     {
-        $this->ensureAllowed($actor, 'manage', User::class);
-    }
-
-    /**
-     * @param  mixed  $arguments
-     */
-    private function ensureAllowed(User $actor, string $ability, $arguments): void
-    {
-        $response = Gate::forUser($actor)->inspect($ability, $arguments);
-
-        if ($response->denied()) {
-            throw new WorkflowRuleBroken((string) $response->message());
-        }
+        $this->ensure($actor, 'manage', User::class);
     }
 
     /**

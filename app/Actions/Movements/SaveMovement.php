@@ -2,13 +2,13 @@
 
 namespace App\Actions\Movements;
 
+use App\Actions\Concerns\EnforcesPolicy;
 use App\Exceptions\WorkflowRuleBroken;
 use App\Models\Movement;
 use App\Models\User;
 use App\Support\Audit;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Str;
 
 /**
@@ -19,17 +19,14 @@ use Illuminate\Support\Str;
  */
 final class SaveMovement
 {
+    use EnforcesPolicy;
+
     /**
      * @param  array{name: string, country: string, city: string, zone_id: int, membership_status_id: int, planned_on?: string|null}  $details
      */
     public function handle(User $by, array $details, ?Movement $movement = null): Movement
     {
-        $response = $movement === null
-            ? Gate::forUser($by)->inspect('create', Movement::class)
-            : Gate::forUser($by)->inspect('update', $movement);
-        if ($response->denied()) {
-            throw new WorkflowRuleBroken((string) $response->message());
-        }
+        $movement === null ? $this->ensure($by, 'create', Movement::class) : $this->ensure($by, 'update', $movement);
 
         // A planned first assessment, as a month: "2027-03" is March 2027.
         $planned = ! empty($details['planned_on']) ? Carbon::createFromFormat('!Y-m', $details['planned_on']) : null;

@@ -10,6 +10,7 @@ use App\Oha\Answer;
 use App\Oha\EvidenceQuestions;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Gate;
 
 /**
  * An assessment's evidence library, read for showing: each document with the form
@@ -55,7 +56,7 @@ final class EvidenceLibrary
         if ($form === null) {
             return null;
         }
-        $seesDrafts = $user->oversees() || $user->canAssess($assessment->movement);
+        $seesDrafts = Gate::forUser($user)->allows('viewDrafts', $assessment);
         $upload = $form->uploads()->latest('id')->get()->first(fn (FormUpload $u) => $seesDrafts || $u->isApproved());
 
         return $upload?->answers;

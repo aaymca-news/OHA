@@ -3,8 +3,10 @@
 namespace App\Models;
 
 use App\Enums\ArtefactKind;
+use Closure;
 use Database\Factories\AssessmentFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -16,6 +18,55 @@ class Assessment extends Model
 {
     /** @use HasFactory<AssessmentFactory> */
     use HasFactory;
+
+    /**
+     * Under way: opened and not yet finished (it has a work item until its ODP is signed).
+     *
+     * @param  Builder<self>  $query
+     */
+    public function scopeUnderWay(Builder $query): void
+    {
+        $query->whereHas('workItem');
+    }
+
+    /**
+     * Done: Stage 1 finished, its ODP signed by the board; its follow-ups are under way.
+     *
+     * @param  Builder<self>  $query
+     */
+    public function scopeDone(Builder $query): void
+    {
+        $query->whereDoesntHave('workItem')->whereHas('odp', fn (Builder $odp) => $odp->whereHas('signature'));
+    }
+
+    /**
+     * Only each movement's latest assessment (the newest opened), or its latest among
+     * those $among selects (for example, the ones with an ODP). One query, in the database.
+     *
+     * @param  Builder<self>  $query
+     * @param  (Closure(Builder<self>): mixed)|null  $among
+     */
+    public function scopeLatestPerMovement(Builder $query, ?Closure $among = null): void
+    {
+        $query->whereIn('id', self::query()->selectRaw('max(id)')->when($among, fn (Builder $q) => $among($q))->groupBy('movement_id'));
+    }
+
+    /**
+     * The address of an assessment's tab (form, report, odp, timeline, audit). Relative
+     * when $absolute is false, as stored in notifications.
+     */
+    public static function tabUrl(self|int $assessment, ?string $tab = null, bool $absolute = true): string
+    {
+        $id = $assessment instanceof self ? $assessment->id : $assessment;
+
+        return route('assessments.show', array_filter(['assessment' => $id, 'tab' => $tab]), $absolute);
+    }
+
+    /** Whether it is under way (see scopeUnderWay), from the loaded work item if there is one. */
+    public function isUnderWay(): bool
+    {
+        return $this->relationLoaded('workItem') ? $this->workItem !== null : $this->workItem()->exists();
+    }
 
     /**
      * @return BelongsTo<Movement, $this>

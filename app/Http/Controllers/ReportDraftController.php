@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Actions\Oha\EditReportDraft;
 use App\Actions\Oha\MakeReportFromDraft;
+use App\Http\Controllers\Concerns\BacksToAssessment;
 use App\Models\Artefact;
 use App\Models\ReportDraft;
 use App\Oha\Report\ReadReport;
@@ -21,6 +22,8 @@ use Illuminate\View\View;
  */
 class ReportDraftController extends Controller
 {
+    use BacksToAssessment;
+
     public function show(Request $request, Artefact $artefact, EditReportDraft $edit): View|RedirectResponse
     {
         Gate::authorize('upload', $artefact);
@@ -139,6 +142,6 @@ class ReportDraftController extends Controller
 
     private function toReportTab(Artefact $artefact, string $status): RedirectResponse
     {
-        return redirect()->route('assessments.show', ['assessment' => $artefact->assessment_id, 'tab' => 'report'])->with('status', $status);
+        return $this->toTab($artefact, $status, 'report');
     }
 }

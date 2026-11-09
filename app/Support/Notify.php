@@ -35,7 +35,7 @@ final class Notify
      */
     public static function assessorsOf(Assessment $assessment): Collection
     {
-        return $assessment->movement->assessors()->where('active', true)->get();
+        return $assessment->movement->activeAssessors()->get();
     }
 
     /**
@@ -47,8 +47,8 @@ final class Notify
         self::send(self::assessorsOf($assessment), new WorkflowNotice($subject, $body, self::link($assessment), 'info', byEmail: false), except: $actor);
     }
 
-    public static function link(Assessment $assessment): string
+    public static function link(Assessment $assessment, ?string $tab = null): string
     {
-        return '/assessments/'.$assessment->id;
+        return Assessment::tabUrl($assessment, $tab, absolute: false);
     }
 }

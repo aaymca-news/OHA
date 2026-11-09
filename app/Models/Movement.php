@@ -51,7 +51,7 @@ class Movement extends Model
      */
     public function assessmentUnderWay(): ?Assessment
     {
-        return $this->assessments()->whereHas('workItem')->latest('id')->first();
+        return $this->assessments()->underWay()->latest('id')->first();
     }
 
     /**
@@ -59,9 +59,7 @@ class Movement extends Model
      */
     public function lastAssessmentDone(): ?Assessment
     {
-        return $this->assessments()->whereDoesntHave('workItem')
-            ->whereHas('odp', fn ($odp) => $odp->whereHas('signature'))
-            ->latest('assessed_on')->latest('id')->first();
+        return $this->assessments()->done()->latest('assessed_on')->latest('id')->first();
     }
 
     /**
@@ -71,7 +69,7 @@ class Movement extends Model
      */
     public static function withAssessmentUnderWay(): array
     {
-        $ids = Assessment::query()->whereHas('workItem')->distinct()->pluck('movement_id')->map(fn ($id): int => (int) $id)->all();
+        $ids = Assessment::query()->underWay()->distinct()->pluck('movement_id')->map(fn ($id): int => (int) $id)->all();
 
         return array_fill_keys($ids, true);
     }
@@ -84,6 +82,16 @@ class Movement extends Model
     public function assessors(): BelongsToMany
     {
         return $this->belongsToMany(User::class);
+    }
+
+    /**
+     * The assessors still active, by name: the ones who are told, shown and asked.
+     *
+     * @return BelongsToMany<User, $this>
+     */
+    public function activeAssessors(): BelongsToMany
+    {
+        return $this->assessors()->where('users.active', true)->orderBy('users.name');
     }
 
     /**

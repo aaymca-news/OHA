@@ -8,12 +8,15 @@ use Illuminate\Support\Facades\DB;
 
 /**
  * A person corrects their own name and job title. Their email (the sign-in), role and
- * movements are not theirs to change: the Administrators set those.
+ * movements are not theirs to change: the Administrators set those. The Board
+ * Chairperson and General Secretary keep the title the Administrators gave them.
  */
 final class UpdateOwnProfile
 {
     public function handle(User $user, string $name, ?string $title): User
     {
+        $title = $user->isSecretariat() ? $title : $user->title;
+
         return DB::transaction(function () use ($user, $name, $title): User {
             $user->fill([
                 'name' => trim($name),

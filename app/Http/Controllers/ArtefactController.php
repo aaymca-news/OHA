@@ -14,18 +14,17 @@ use App\Actions\Oha\UploadReportVersion;
 use App\Actions\Oha\WithdrawVersion;
 use App\Enums\ArtefactKind;
 use App\Enums\FindingSeverity;
-use App\Exceptions\WorkflowRuleBroken;
+use App\Http\Controllers\Concerns\BacksToAssessment;
 use App\Models\Artefact;
 use App\Models\Document;
 use App\Oha\Report\ReadReport;
 use App\Oha\Report\ReportChecker;
-use App\Support\Google\DriveLink;
+use App\Rules\GoogleDriveLink;
 use App\Support\ReplaceGuard;
 use App\Support\UploadLimit;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
-use Illuminate\Validation\ValidationException;
 
 /**
  * Every workflow step on a form, report or ODP. Each hands straight to its action,
@@ -35,9 +34,11 @@ use Illuminate\Validation\ValidationException;
  */
 class ArtefactController extends Controller
 {
+    use BacksToAssessment;
+
     public function upload(Request $request, Artefact $artefact, UploadForm $upload): RedirectResponse
     {
-        $request->validate(['form' => ['required', 'file', 'max:'.UploadLimit::kb()]], ['form.required' => 'Choose the OHA form to upload.'] + UploadLimit::messages('form'));
+        $request->validate(['form' => UploadLimit::rule()], ['form.required' => 'Choose the OHA form to upload.'] + UploadLimit::messages('form'));
         $replacing = $this->replacing($request, $artefact);
         $file = $request->file('form');
 
@@ -59,7 +60,7 @@ class ArtefactController extends Controller
         }
 
         $request->validate([
-            'report' => ['required', 'file', 'max:'.UploadLimit::kb()],
+            'report' => UploadLimit::rule(),
             'note' => ['nullable', 'string', 'max:2000'],
         ], ['report.required' => 'Choose the report file to save.'] + UploadLimit::messages('report'));
         $replacing = $this->replacing($request, $artefact);
@@ -77,14 +78,13 @@ class ArtefactController extends Controller
     private function uploadOdpVersion(Request $request, Artefact $odp, UploadOdpVersion $upload): RedirectResponse
     {
         $request->validate([
-            'odp' => ['required', 'file', 'max:'.UploadLimit::kb()],
-            'drive_url' => [$odp->drive_file_id === null ? 'required' : 'nullable', 'string', 'max:2000'],
+            'odp' => UploadLimit::rule(),
+            'drive_url' => [$odp->drive_file_id === null ? 'required' : 'nullable', 'string', 'max:2000', new GoogleDriveLink],
             'note' => ['nullable', 'string', 'max:2000'],
         ], [
             'odp.required' => 'Choose the ODP file to save.',
             'drive_url.required' => 'Add the link to the ODP in Google Drive, so everyone works on the same document.',
         ] + UploadLimit::messages('odp'));
-        $this->checkDriveLink($request->input('drive_url'));
         $replacing = $this->replacing($request, $odp);
         $file = $request->file('odp');
 
@@ -123,27 +123,10 @@ class ArtefactController extends Controller
         return $this->back($artefact, "Version {$number} withdrawn.".($current instanceof Document ? ' Version '.$current->versionNumber().' is current again.' : ''));
     }
 
-    /**
-     * A Google Drive link that cannot be used (a folder, Slides, not Google Drive at all) is
-     * reported against the link box itself, before anything is saved.
-     */
-    private function checkDriveLink(?string $url): void
-    {
-        if ($url === null || trim($url) === '') {
-            return;
-        }
-        try {
-            DriveLink::fileId($url);
-        } catch (WorkflowRuleBroken $e) {
-            throw ValidationException::withMessages(['drive_url' => $e->getMessage()]);
-        }
-    }
-
     /** Links (or re-links) the Google Drive document the ODP is written in. */
     public function linkDrive(Request $request, Artefact $artefact, LinkOdpToDrive $link): RedirectResponse
     {
-        $data = $request->validate(['drive_url' => ['required', 'string', 'max:2000']], ['drive_url.required' => 'Paste the link to the ODP in Google Drive.']);
-        $this->checkDriveLink($data['drive_url']);
+        $data = $request->validate(['drive_url' => ['required', 'string', 'max:2000', new GoogleDriveLink]], ['drive_url.required' => 'Paste the link to the ODP in Google Drive.']);
         $odp = $link->handle($artefact, $data['drive_url'], $request->user());
 
         return $this->back($odp, $odp->drive_problem ?? 'Linked to the ODP in Google Drive.');
@@ -206,7 +189,6 @@ class ArtefactController extends Controller
 
     private function back(Artefact $artefact, string $status): RedirectResponse
     {
-        return redirect()->route('assessments.show', ['assessment' => $artefact->assessment_id, 'tab' => $artefact->kind->value])
-            ->with('status', $status);
+        return $this->toTab($artefact, $status);
     }
 }

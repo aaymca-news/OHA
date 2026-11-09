@@ -2,7 +2,7 @@
 
 namespace App\Http\Controllers\Admin;
 
-use App\Actions\ChangeUserRole;
+use App\Actions\Users\ChangeUserRole;
 use App\Actions\Users\InviteUser;
 use App\Actions\Users\SetUserActive;
 use App\Actions\Users\UpdateUser;
@@ -36,7 +36,7 @@ class UserController extends Controller
             // "boards": each National Movement's own users, its Board Chairperson and National General Secretary.
             ->when($filter === 'boards', fn ($q) => $q->whereIn('role', [Role::Board, Role::Ngs]), fn ($q) => $q->whereNotIn('role', [Role::Board, Role::Ngs]))
             ->orderByDesc('active')->orderBy('name')->orderBy('id')
-            ->get();
+            ->paginate(config('oha.per_page'))->withQueryString();
 
         return view('admin.users.index', [
             'users' => $users,
@@ -119,13 +119,7 @@ class UserController extends Controller
 
     public function resendInvitation(Request $request, User $user, InviteUser $invite): RedirectResponse
     {
-        abort_unless($request->user()->can('administer', $user), 403);
-
-        if (! $user->isInvitationPending()) {
-            return back()->withErrors(['action' => "{$user->name} has already accepted their invitation."]);
-        }
-
-        $invite->sendInvitation($user, $request->user());
+        $invite->resend($user, $request->user());
 
         return back()->with('status', "A new invitation has been sent to {$user->email}.");
     }

@@ -10,7 +10,7 @@
     $latestId = $artefact->latestVersion?->id;
     $signature = $artefact->signature;
     $me = auth()->user();
-    $seesDrafts = $me->oversees() || $me->canAssess($assessment->movement);
+    $seesDrafts = $me->can('viewDrafts', $assessment);
     // The last approved version is current for everyone; those working on it can open the newer one.
     $approvedShown = $versions->first(fn ($v) => $v->isApproved());
     $workingVersion = $seesDrafts && $approvedShown && $versions->first()?->id !== $approvedShown->id ? $versions->first() : null;
@@ -34,9 +34,7 @@
         </span>
     @endif
     @if ($me->isSecretariat())
-    <a href="{{ route('downloads.odp-template') }}" class="ml-auto inline-flex items-center gap-xs text-primary underline">
-        <span class="material-symbols-outlined text-[1.125rem]" aria-hidden="true">download</span> Download the ODP template
-    </a>
+    <x-button variant="link" icon="download" :href="route('downloads.odp-template')" class="ml-auto">Download the ODP template</x-button>
     @endif
 </div>
 
@@ -55,37 +53,29 @@
 
 {{-- The link to Google Drive no longer works: said at the top, with what to do. --}}
 @if ($artefact->drive_problem && $me->isSecretariat())
-    <div role="alert" class="flex flex-wrap items-start gap-sm p-md rounded-lg border-[1.5px] border-band-atrisk bg-serious-wash text-serious-ink text-[0.875rem]">
-        <span class="material-symbols-outlined" aria-hidden="true">link_off</span>
-        <div class="flex-1 min-w-[min(15rem,100%)]">
-            <p class="font-semibold">The ODP’s Google Drive link is not working</p>
-            <p>{{ $artefact->drive_problem }}</p>
-            <p class="text-[0.8125rem] mt-xs">If the document was moved to another folder, the link still works once it is shared again. If the staff now work in a new copy, change the link below so the platform reads that copy.</p>
-        </div>
-    </div>
+    <x-callout tone="serious" icon="link_off" alert title="The ODP’s Google Drive link is not working">
+        <p>{{ $artefact->drive_problem }}</p>
+        <p class="text-[0.8125rem]">If the document was moved to another folder, the link still works once it is shared again. If the staff now work in a new copy, change the link below so the platform reads that copy.</p>
+    </x-callout>
 @endif
 
 @if ($signature)
-    <div class="flex items-start gap-sm p-md rounded-lg bg-good-wash text-good-ink text-[0.875rem]">
-        <span class="material-symbols-outlined" aria-hidden="true">verified</span>
+    <x-callout tone="good" icon="verified">
         <p><span class="font-semibold">Signed by the Board Chairperson, so this ODP is frozen.</span>
             Version {{ $signature->document?->versionNumber() }} is the plan of record. Its implementation is followed in Stage 2.</p>
-    </div>
+    </x-callout>
 @endif
 
 {{-- The Google Drive document the ODP is written in: for AAYMCA staff only. --}}
 @if ($artefact->drive_url && $me->isSecretariat() && $effective !== 'locked')
     <x-card title="Google Drive file" subtitle="Where the staff write the ODP together. Every saved version here is a copy of it at one moment.">
         <x-slot:actions>
-            <a href="{{ $artefact->drive_url }}" target="_blank" rel="noopener noreferrer"
-               class="inline-flex items-center gap-xs px-md py-2 rounded bg-primary text-on-primary text-[0.875rem] font-semibold hover:opacity-90">
-                <span class="material-symbols-outlined text-[1.125rem]" aria-hidden="true">edit_document</span> Open in Google Drive
-            </a>
+            <x-button icon="edit_document" :href="$artefact->drive_url" target="_blank" rel="noopener noreferrer">Open in Google Drive</x-button>
         </x-slot:actions>
 
         <dl class="grid grid-cols-[auto_1fr] gap-x-md gap-y-xs text-[0.875rem]">
             <dt class="text-on-surface-variant">Linked by</dt>
-            <dd>{{ $artefact->driveLinker?->name ?? '—' }}{{ $artefact->drive_linked_at ? ', '.$artefact->drive_linked_at->format('j M Y') : '' }}</dd>
+            <dd>{{ $artefact->driveLinker?->name ?? '—' }}{{ $artefact->drive_linked_at ? ', '.$artefact->drive_linked_at->asDay() : '' }}</dd>
             <dt class="text-on-surface-variant">Updates</dt>
             <dd>
                 @if ($signature && $connected)
@@ -103,10 +93,9 @@
         </dl>
 
         @if ($artefact->drive_problem)
-            <p class="flex items-start gap-xs p-sm rounded bg-warning-wash text-warning-ink text-[0.875rem]">
-                <span class="material-symbols-outlined text-[1.125rem]" aria-hidden="true">warning</span>
-                <span>{{ $artefact->drive_problem }}</span>
-            </p>
+            <x-callout tone="warning">
+                <p>{{ $artefact->drive_problem }}</p>
+            </x-callout>
         @elseif ($connected && $seesDrafts)
             <p class="text-[0.8125rem] text-on-surface-variant">
                 The platform reads the document as {{ $drive->serviceAccountEmail() }}. Keep it in the OHA shared drive, or share it with that address (Viewer is enough).
@@ -119,9 +108,7 @@
                     @can('syncDrive', $artefact)
                         <form method="POST" action="{{ route('artefacts.drive.sync', $artefact) }}">
                             @csrf
-                            <x-button variant="secondary">
-                                <span class="inline-flex items-center gap-xs"><span class="material-symbols-outlined text-[1.125rem]" aria-hidden="true">sync</span> Check Google Drive now</span>
-                            </x-button>
+                            <x-button variant="secondary" icon="sync">Check Google Drive now</x-button>
                         </form>
                     @endcan
                 @endif
@@ -132,11 +119,11 @@
                             @csrf
                             @method('PUT')
                             <div x-data="driveLink(@js(old('drive_url', $artefact->drive_url)))" class="flex flex-col gap-xs">
-                            <x-input name="drive_url" label="Link to the ODP in Google Drive" type="url" :value="$artefact->drive_url" required x-on:input="link = $event.target.value"
-                                     hint="The ODP file itself, not its folder. In Google Drive, open the ODP and use Share → Copy link." />
-                <p x-show="problem" x-cloak role="alert" class="flex items-start gap-xs text-[0.875rem] text-error">
-                    <span class="material-symbols-outlined text-[1.125rem]" aria-hidden="true">error</span><span x-text="problem"></span>
-                </p>
+                                <x-input name="drive_url" label="Link to the ODP in Google Drive" type="url" :value="$artefact->drive_url" required x-on:input="link = $event.target.value"
+                                         hint="The ODP file itself, not its folder. In Google Drive, open the ODP and use Share → Copy link." />
+                                <p x-show="problem" x-cloak role="alert" class="flex items-start gap-xs text-[0.875rem] text-error">
+                                    <span class="material-symbols-outlined text-[1.125rem]" aria-hidden="true">error</span><span x-text="problem"></span>
+                                </p>
                             </div>
                             <x-button variant="secondary" class="self-start">Save the link</x-button>
                         </form>
@@ -148,50 +135,26 @@
 @endif
 
 @can('upload', $artefact)
-    <x-card :title="$versions->isEmpty() ? 'Upload the ODP' : 'Upload a new version'"
-            :subtitle="$artefact->drive_file_id && $connected
-                ? 'Changes made in Google Drive are saved as versions by themselves. Upload here only to add a version by hand, as an Excel (.xlsx), Word (.docx) or PDF file.'
-                : 'The ODP as an Excel (.xlsx), Word (.docx) or PDF file, as in AAYMCA’s ODP template. The newest is what you submit for approval; the approved version is kept until a newer one is approved.'">
-        <form method="POST" action="{{ route('artefacts.versions', $artefact) }}" enctype="multipart/form-data"
-              class="flex flex-col gap-sm">
-            @csrf
-            @if ($artefact->isApproved())
-                <p class="p-sm rounded bg-surface-container text-[0.875rem]">This ODP is approved. A new version goes back to the Administrators for approval; until then, staff and the movement’s Board Chairperson and National General Secretary keep seeing the approved version.</p>
-            @endif
-            <x-file-drop name="odp" accept=".xlsx,.docx,.pdf" label="ODP file" prompt="Drop the ODP here, or click to choose the file (.xlsx, .docx or .pdf)" />
-            @unless ($artefact->drive_file_id)
-                <div x-data="driveLink(@js(old('drive_url', '')))" class="flex flex-col gap-xs">
-                <x-input name="drive_url" label="Link to the ODP in Google Drive" type="url" required x-on:input="link = $event.target.value"
-                         placeholder="https://docs.google.com/spreadsheets/d/…"
-                         hint="The ODP file itself, not its folder: the Google Sheet (or Doc) the staff write the ODP in. In Google Drive, open it and use Share → Copy link." />
-                <p x-show="problem" x-cloak role="alert" class="flex items-start gap-xs text-[0.875rem] text-error">
-                    <span class="material-symbols-outlined text-[1.125rem]" aria-hidden="true">error</span><span x-text="problem"></span>
-                </p>
-                </div>
-            @endunless
-            @if ($versions->isNotEmpty())
-                <label class="flex flex-col gap-xs text-[0.875rem]">
-                    <span class="font-semibold">What changed in this version? (optional)</span>
-                    <textarea name="note" rows="2" class="px-sm py-2 rounded border-[1.5px] border-outline-variant">{{ old('note') }}</textarea>
-                </label>
-            @endif
-            @include('assessments.tabs._replace-guard')
-            <x-button class="self-start">
-                <span class="inline-flex items-center gap-xs"><span class="material-symbols-outlined text-[1.125rem]" aria-hidden="true">save</span> Save</span>
-            </x-button>
-        </form>
-    </x-card>
+    @include('assessments.tabs._upload-version', [
+        'artefact' => $artefact,
+        'action' => route('artefacts.versions', $artefact),
+        'title' => $versions->isEmpty() ? 'Upload the ODP' : 'Upload a new version',
+        'subtitle' => $artefact->drive_file_id && $connected
+            ? 'Changes made in Google Drive are saved as versions by themselves. Upload here only to add a version by hand, as an Excel (.xlsx), Word (.docx) or PDF file.'
+            : 'The ODP as an Excel (.xlsx), Word (.docx) or PDF file, as in AAYMCA’s ODP template. The newest is what you submit for approval; the approved version is kept until a newer one is approved.',
+        'file' => 'odp',
+        'accept' => '.xlsx,.docx,.pdf',
+        'fileLabel' => 'ODP file',
+        'prompt' => 'Drop the ODP here, or click to choose the file (.xlsx, .docx or .pdf)',
+        'approvedNote' => 'This ODP is approved. A new version goes back to the Administrators for approval; until then, staff and the movement’s Board Chairperson and National General Secretary keep seeing the approved version.',
+        'askDriveLink' => ! $artefact->drive_file_id,
+        'askNote' => $versions->isNotEmpty(),
+        'button' => 'Save',
+        'buttonIcon' => 'save',
+    ])
 @endcan
 
-{{-- An Administrator approves their own work directly (below), so is not asked to submit it. --}}
-@if (Gate::allows('submit', $artefact) && Gate::denies('approve', $artefact))
-    <form method="POST" action="{{ route('artefacts.submit', $artefact) }}" class="flex flex-wrap items-center gap-sm">
-        @csrf
-        <input type="hidden" name="seen" value="{{ \App\Support\ReplaceGuard::current($artefact)?->id ?? 0 }}">
-        <x-button>Submit version {{ $versions->firstWhere('id', $latestId)?->number }} for approval</x-button>
-        <span class="text-[0.8125rem] text-on-surface-variant">It goes to the Administrators to approve.</span>
-    </form>
-@endif
+@include('assessments.tabs._submit', ['artefact' => $artefact, 'number' => $versions->firstWhere('id', $latestId)?->number])
 
 @include('assessments.tabs._decisions')
 
@@ -209,7 +172,7 @@
             <dl class="text-[0.875rem] grid grid-cols-[auto_1fr] gap-x-md gap-y-xs">
                 <dt class="text-on-surface-variant">Signed by</dt><dd class="font-semibold">{{ $signature->signed_name }}</dd>
                 <dt class="text-on-surface-variant">Role</dt><dd>{{ $signature->signer->title ?? 'Board Chairperson' }}</dd>
-                <dt class="text-on-surface-variant">Date</dt><dd>{{ $signature->signed_at->format('j M Y, H:i') }}</dd>
+                <dt class="text-on-surface-variant">Date</dt><dd>{{ $signature->signed_at->asStamp() }}</dd>
                 <dt class="text-on-surface-variant">Version signed</dt><dd>{{ $signature->document ? 'Version '.$signature->document->versionNumber().' · '.$signature->document->original_name : '—' }}</dd>
                 <dt class="text-on-surface-variant">File fingerprint</dt><dd class="font-mono text-[0.8125rem]">{{ substr($signature->document_sha256, 0, 16) }}…</dd>
             </dl>
@@ -229,10 +192,7 @@
                    aria-hidden="true" x-text="mark" x-show="mark.trim() !== ''" x-cloak></p>
                 <p class="text-[0.8125rem] text-on-surface-variant">Signing as {{ auth()->user()->name }}{{ auth()->user()->title ? ', '.auth()->user()->title : '' }}.</p>
             </div>
-            <label class="flex flex-col gap-xs text-[0.875rem]">
-                <span class="font-semibold">Comment (optional)</span>
-                <textarea name="comment" rows="2" class="px-sm py-2 rounded border-[1.5px] border-outline-variant max-w-[35rem]"></textarea>
-            </label>
+            <x-textarea name="comment" label="Comment (optional)" rows="2" class="max-w-[35rem]" />
             <label class="flex items-start gap-sm text-[0.875rem]">
                 <input type="checkbox" name="confirm" value="1" required class="mt-1">
                 <span>I have read this Organisational Development Plan and validate it on behalf of the {{ $assessment->movement->name }} Board.</span>
@@ -278,15 +238,13 @@
                         <div class="flex flex-wrap items-center gap-sm">
                             <span class="material-symbols-outlined text-primary" aria-hidden="true">history_edu</span>
                             <span class="flex-1 min-w-[min(12rem,100%)]">
-                                <span class="font-semibold">{{ $change->created_at->format('j M Y, H:i') }}</span> · {{ $what }}
+                                <span class="font-semibold">{{ $change->created_at->asStamp() }}</span> · {{ $what }}
                                 <span class="block text-[0.8125rem] text-on-surface-variant">Changed in Google Drive{{ $change->edited_by_email ? ' by '.$change->edited_by_email : '' }}</span>
                             </span>
                             @if (in_array($c['kind'] ?? 'file', ['cells', 'lines'], true) && $c['count'] > 0)
-                                <button type="button" x-on:click="open = ! open" :aria-expanded="open" class="text-primary underline">What changed</button>
+                                <x-button type="button" variant="link" x-on:click="open = ! open" ::aria-expanded="open">What changed</x-button>
                             @endif
-                            <a href="{{ route('downloads.document', $change) }}" class="inline-flex items-center gap-xs text-primary">
-                                <span class="material-symbols-outlined text-[1.125rem]" aria-hidden="true">download</span><span class="underline">Download this copy</span>
-                            </a>
+                            <x-button variant="link" icon="download" :href="route('downloads.document', $change)">Download this copy</x-button>
                         </div>
                         @if (($c['kind'] ?? '') === 'cells')
                             <div x-show="open" x-cloak class="relative overflow-x-auto">
@@ -329,9 +287,7 @@
 @php($byTask = app(\App\Queries\EvidenceLibrary::class)->byOdpTask($evidence()))
 <x-card title="Evidence for the ODP tasks" subtitle="Supporting documents linked to the ODP’s tasks (1.1 to 9.3), from the movement’s evidence library.">
     <x-slot:actions>
-        <a href="{{ route('evidence.index', ['movement' => $assessment->movement, 'assessment' => $assessment->id]) }}" class="inline-flex items-center gap-xs text-[0.875rem] text-primary underline">
-            <span class="material-symbols-outlined text-[1.125rem]" aria-hidden="true">folder_open</span> Open the evidence library
-        </a>
+        <x-button variant="link" icon="folder_open" :href="route('evidence.index', ['movement' => $assessment->movement, 'assessment' => $assessment->id])" class="text-[0.875rem]">Open the evidence library</x-button>
     </x-slot:actions>
     @forelse ($byTask as $task => $documents)
         <div class="flex flex-wrap items-baseline gap-x-sm gap-y-xs text-[0.875rem]">

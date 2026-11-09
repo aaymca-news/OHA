@@ -15,14 +15,14 @@
         <div class="flex-1 min-w-[min(14rem,100%)]">
             <a href="{{ $url }}" class="text-[0.875rem] font-semibold text-primary underline">{{ $entry['movement']->name }} · {{ $assessment->period_label }}</a>
             <p class="text-[0.8125rem] text-on-surface-variant">
-                Assigned to you · opened {{ $assessment->opened_at?->format('j M Y') }} · the OHA form is not uploaded yet
+                Assigned to you · opened {{ $assessment->opened_at?->asDay() }} · the OHA form is not uploaded yet
             </p>
         </div>
         <x-chip icon="radio_button_unchecked">Not started</x-chip>
         @if ($entry['days_left'] !== null)
             <x-due-chip :days="$entry['days_left']" />
         @endif
-        <a href="{{ $url }}" class="px-md py-1.5 rounded bg-primary text-on-primary text-[0.8125rem] font-semibold">Upload the OHA form</a>
+        <x-button :href="$url" size="sm">Upload the OHA form</x-button>
     </li>
 @elseif (isset($entry['started']))
     @php
@@ -34,7 +34,7 @@
         <div class="flex-1 min-w-[min(14rem,100%)]">
             <a href="{{ $url }}" class="text-[0.875rem] font-semibold text-primary underline">{{ $entry['movement']->name }} · {{ $assessment->period_label }}</a>
             <p class="text-[0.8125rem] text-on-surface-variant">
-                Started {{ $assessment->opened_at?->format('j M Y') }} · now: {{ $entry['artefact']->kind->label() }} · {{ $entry['holder'] }}
+                Started {{ $assessment->opened_at?->asDay() }} · now: {{ $entry['artefact']->kind->label() }} · {{ $entry['holder'] }}
             </p>
         </div>
         @if ($entry['actionable'])
@@ -46,8 +46,7 @@
         @if ($entry['days_left'] !== null)
             <x-due-chip :days="$entry['days_left']" />
         @endif
-        <a href="{{ $url }}" @class(['px-md py-1.5 rounded text-[0.8125rem] font-semibold border-[1.5px] border-primary',
-            'bg-primary text-on-primary' => $entry['actionable'], 'text-primary' => ! $entry['actionable']])>Open</a>
+        <x-button :href="$url" :variant="$entry['actionable'] ? 'primary' : 'outline'" size="sm">Open</x-button>
     </li>
 @elseif (isset($entry['done']))
     @php
@@ -61,12 +60,12 @@
         <div class="flex-1 min-w-[min(14rem,100%)]">
             <a href="{{ $url }}" class="text-[0.875rem] font-semibold text-primary underline">{{ $m->name }} · {{ $done->period_label }}</a>
             <p class="text-[0.8125rem] text-on-surface-variant">
-                ODP signed by the board · follow-ups ongoing{{ $next ? ' · next assessment due '.$next->format('M Y') : '' }}
+                ODP signed by the board · follow-ups ongoing{{ $next ? ' · next assessment due '.$next->asMonth() : '' }}
             </p>
         </div>
         <x-chip tone="good" icon="verified">Stage 1 done</x-chip>
         <x-chip tone="info" icon="autorenew">Follow-ups ongoing</x-chip>
-        <a href="{{ $url }}" class="px-md py-1.5 rounded border-[1.5px] border-primary text-primary text-[0.8125rem] font-semibold">Open</a>
+        <x-button :href="$url" variant="outline" size="sm">Open</x-button>
     </li>
 @elseif (isset($entry['movement']))
     @php
@@ -79,7 +78,7 @@
         <div class="flex-1 min-w-[min(14rem,100%)]">
             <a href="{{ $url }}" class="text-[0.875rem] font-semibold text-primary underline">{{ $m->name }}</a>
             <p class="text-[0.8125rem] text-on-surface-variant">
-                Assigned to you · {{ $last ? 'last assessed '.$last->format('M Y').' · no assessment under way' : 'not assessed yet' }}
+                Assigned to you · {{ $last ? 'last assessed '.$last->asMonth().' · no assessment under way' : 'not assessed yet' }}
             </p>
             @if ($entry['blocked'])
                 <p class="text-[0.8125rem] flex items-center gap-xs mt-0.5"><span class="material-symbols-outlined text-[1rem]" aria-hidden="true">lock</span>{{ $entry['blocked'] }}</p>
@@ -92,7 +91,7 @@
             <x-chip icon="radio_button_unchecked">Not started</x-chip>
         @endif
         @if ($entry['actionable'])
-            <a href="{{ $url }}" class="px-md py-1.5 rounded bg-primary text-on-primary text-[0.8125rem] font-semibold">Start the assessment</a>
+            <x-button :href="$url" size="sm">Start the assessment</x-button>
         @endif
     </li>
 @else
@@ -121,7 +120,7 @@
         <x-due-chip :days="$entry['days_left']" />
     @endif
     @if ($entry['actionable'])
-        <a href="{{ $url }}" class="px-md py-1.5 rounded bg-primary text-on-primary text-[0.8125rem] font-semibold">{{ $verb }}</a>
+        <x-button :href="$url" size="sm">{{ $verb }}</x-button>
     @endif
 </li>
 @endif

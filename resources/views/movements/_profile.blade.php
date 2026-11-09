@@ -7,7 +7,7 @@
     $p = $profile['people'];
     $id = $profile['identity'];
     $labelled = fn (array $labels, ?array $values) => $values === null ? [] : collect($labels)->mapWithKeys(fn ($label, $code) => [$label => $values[$code] ?? null])->all();
-    $categoryNames = \App\Models\Category::query()->pluck('name', 'code');
+    $categoryNames = \App\Models\Category::names();
 @endphp
 
 <section class="flex flex-col gap-md" aria-labelledby="glance">
@@ -108,7 +108,7 @@
                     <p class="text-on-surface-variant whitespace-pre-line">{{ \Illuminate\Support\Str::limit($text, 400) }}</p>
                 </div>
             @empty
-                <p class="text-[0.8125rem] text-on-surface-variant">No areas of improvement were written on the form.</p>
+                <x-empty-state icon="edit_note">No areas of improvement were written on the form.</x-empty-state>
             @endforelse
         </x-card>
     </div>

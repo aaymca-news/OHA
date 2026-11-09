@@ -130,3 +130,17 @@ it('lets only the Super Administrator invite an Administrator', function () {
     inviteThroughScreen($this->admin, ['role' => 'admin']);
     expect(User::query()->where('email', 'aminata.diallo@aaymca.test')->value('role'))->toBe(Role::Admin);
 });
+
+it('sends a pending invitation again, recorded on the person, and refuses once it is accepted', function () {
+    $token = inviteThroughScreen($this->admin);
+    $invitee = User::query()->where('email', 'aminata.diallo@aaymca.test')->firstOrFail();
+
+    $this->actingAs($this->admin)->post(route('admin.users.invitation', $invitee))->assertSessionHasNoErrors();
+    expect(AuditEvent::query()->where('action', 'user.invitation_resent')->where('subject_id', $invitee->id)->where('actor_id', $this->admin->id)->exists())->toBeTrue();
+    Notification::assertSentToTimes($invitee, InvitationNotice::class, 2);
+
+    $invitee->forceFill(['email_verified_at' => now(), 'password' => bcrypt('Str0ng-Passphrase!')])->save();
+    $this->actingAs($this->admin)->post(route('admin.users.invitation', $invitee))
+        ->assertSessionHasErrors(['action' => 'Aminata Diallo has already accepted their invitation.']);
+    Notification::assertSentToTimes($invitee, InvitationNotice::class, 2);
+});

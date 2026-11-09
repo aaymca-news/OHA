@@ -1,9 +1,9 @@
 <x-layouts.app :title="$assessment->movement->name.' — OHA '.$assessment->period_label"
-               :subtitle="'Opened '.$assessment->opened_at->format('j M Y').' by '.$assessment->opener->name">
+               :subtitle="'Opened '.$assessment->opened_at->asDay().' by '.$assessment->opener->name">
     <x-slot:actions>
         <div class="flex flex-wrap items-center gap-sm">
             @if ($assessment->score)
-                <x-chip tone="info" icon="scoreboard">{{ rtrim(rtrim(number_format((float) $assessment->score->points_achieved, 2), '0'), '.') }} / {{ $assessment->score->points_available }} · {{ number_format((float) $assessment->score->pct, 1) }}%</x-chip>
+                <x-chip tone="info" icon="scoreboard">{{ \App\Support\Viz::figure((float) $assessment->score->points_achieved) }} / {{ $assessment->score->points_available }} · {{ number_format((float) $assessment->score->pct, 1) }}%</x-chip>
                 <x-band-chip :band="$assessment->score->band" />
             @endif
             @if ($openGaps > 0 && Gate::allows('viewGaps', $assessment))
@@ -45,7 +45,7 @@
             <span class="material-symbols-outlined text-[1.125rem]" aria-hidden="true">history</span>
             Last change: <strong class="text-on-surface">{{ $change->actor?->name ?? 'The platform' }}</strong>
             {{ str_replace(['.', '_'], [': ', ' '], $change->action) }},
-            <span title="{{ $change->occurred_at->format('j M Y, H:i') }}">{{ $change->occurred_at->diffForHumans() }}</span>
+            <span title="{{ $change->occurred_at->asStamp() }}">{{ $change->occurred_at->diffForHumans() }}</span>
             @if ($canAudit)
                 · <a href="{{ route('assessments.show', ['assessment' => $assessment, 'tab' => 'audit']) }}" class="text-primary underline">Audit trail</a>
             @endif
@@ -80,10 +80,10 @@
                         @csrf
                         <input type="hidden" name="_action" value="hand-back">
                         <p class="text-[0.875rem] text-on-surface-variant">You will be taken off {{ $assessment->movement->name }}. The assessment stays as it is, and the Administrators are asked to assign someone to carry on.</p>
-                        <label class="flex flex-col gap-xs text-[0.875rem]">
-                            <span class="font-semibold">Why are you stopping? (required)</span>
-                            <textarea name="reason" rows="2" required class="px-sm py-2 rounded border-[1.5px] border-outline-variant">{{ old('_action') === 'hand-back' ? old('reason') : '' }}</textarea>
-                        </label>
+                        {{-- Not x-textarea: "reason" is also the delete form's box, so its old text and error belong to one form only. --}}
+                        <x-field label="Why are you stopping? (required)">
+                            <textarea name="reason" rows="2" required @class(\App\Support\Ui::control())>{{ old('_action') === 'hand-back' ? old('reason') : '' }}</textarea>
+                        </x-field>
                         <x-button variant="secondary" class="self-start">Stop and hand it back</x-button>
                     </form>
                 </details>
@@ -97,10 +97,9 @@
                         <input type="hidden" name="_action" value="delete">
                         <p class="text-[0.875rem] text-on-surface-variant">Deletes the form, report, ODP, scores, signature, timeline and files. If this is the movement’s only assessment, it shows as not yet assessed. This cannot be undone; the audit trail keeps a record.</p>
                         <x-input name="confirm_name" :label="'Type '.$assessment->movement->name.' to confirm'" required />
-                        <label class="flex flex-col gap-xs text-[0.875rem]">
-                            <span class="font-semibold">Why is it being deleted? (required)</span>
-                            <textarea name="reason" rows="2" required class="px-sm py-2 rounded border-[1.5px] border-outline-variant">{{ old('_action') === 'delete' ? old('reason') : '' }}</textarea>
-                        </label>
+                        <x-field label="Why is it being deleted? (required)">
+                            <textarea name="reason" rows="2" required @class(\App\Support\Ui::control())>{{ old('_action') === 'delete' ? old('reason') : '' }}</textarea>
+                        </x-field>
                         <x-button variant="danger" class="self-start">Delete the assessment</x-button>
                     </form>
                 </details>

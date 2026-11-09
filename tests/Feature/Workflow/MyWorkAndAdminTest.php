@@ -1,8 +1,8 @@
 <?php
 
-use App\Actions\ChangeUserRole;
 use App\Actions\Oha\SubmitForApproval;
 use App\Actions\Oha\UploadForm;
+use App\Actions\Users\ChangeUserRole;
 use App\Enums\Role;
 use App\Exceptions\WorkflowRuleBroken;
 use App\Models\User;

@@ -11,7 +11,6 @@
     $upload = $finding->formUpload;
     $currency = Interpreter::currencyCode($upload->answers['Q208'] ?? null);
     $now = $upload->answers;
-    $input = 'px-sm py-2 rounded border-[1.5px] border-outline-variant bg-surface-container-lowest focus:border-primary outline-none';
     $several = $fields['kind'] === 'answers' && count($fields['codes']) > 1;
     $shown = fn ($v) => $v === null || $v === '' ? 'blank' : (is_bool($v) ? ($v ? 'TRUE' : 'FALSE') : '“'.\Illuminate\Support\Str::limit((string) $v, 60).'”');
 @endphp
@@ -51,7 +50,7 @@
                         @if ($q->type === 'money' && $currency)
                             <span class="text-on-surface-variant">{{ $currency }}</span>
                         @endif
-                        <input id="{{ $id }}" name="{{ $name }}" @if (! $several) required @endif inputmode="decimal" autocomplete="off" class="{{ $input }} w-40 max-w-full">
+                        <input id="{{ $id }}" name="{{ $name }}" @if (! $several) required @endif inputmode="decimal" autocomplete="off" @class([...\App\Support\Ui::control(), 'w-40 max-w-full' => true])>
                         @if ($q->type === 'pct')
                             <span class="text-on-surface-variant">%</span>
                         @elseif (str_contains($guide['type'], 'months'))
@@ -62,7 +61,7 @@
                     </span>
                 @else
                     <label for="{{ $id }}" class="font-semibold">{{ $label }}</label>
-                    <textarea id="{{ $id }}" name="{{ $name }}" rows="2" @if (! $several) required @endif maxlength="2000" class="{{ $input }}"></textarea>
+                    <textarea id="{{ $id }}" name="{{ $name }}" rows="2" @if (! $several) required @endif maxlength="2000" @class(\App\Support\Ui::control())></textarea>
                 @endif
                 <p class="flex flex-wrap items-baseline gap-x-sm gap-y-0.5 text-[0.8125rem]">
                     <span class="inline-flex items-center gap-xs font-semibold text-primary">
@@ -88,7 +87,7 @@
                     <span class="w-14 font-semibold">{{ $code }}</span>
                     <span class="flex-1 min-w-[min(12rem,100%)]">{{ ltrim($labels[$code] ?? '', '- ') ?: $code }}</span>
                     <span class="inline-flex items-center gap-xs">
-                        <input name="shares[{{ $code }}]" inputmode="decimal" autocomplete="off" class="{{ $input }} w-24 py-1"
+                        <input name="shares[{{ $code }}]" inputmode="decimal" autocomplete="off" @class([...\App\Support\Ui::control(size: 'sm'), 'w-24' => true])
                                value="{{ is_numeric($now[$code] ?? null) ? $now[$code] : '' }}"
                                x-init="shares['{{ $code }}'] = parseFloat($el.value) || 0" x-on:input="shares['{{ $code }}'] = parseFloat($event.target.value) || 0" aria-label="{{ $code }} percentage">
                         <span class="text-on-surface-variant">%</span>
@@ -102,7 +101,7 @@
     @elseif ($fields['kind'] === 'comment')
         <label class="flex flex-col gap-xs text-[0.875rem]" for="answer-{{ $finding->id }}">
             <span class="font-semibold">Which areas of improvement would the movement like to work towards?</span>
-            <textarea id="answer-{{ $finding->id }}" name="value" rows="3" required minlength="10" maxlength="2000" class="{{ $input }}"
+            <textarea id="answer-{{ $finding->id }}" name="value" rows="3" required minlength="10" maxlength="2000" @class(\App\Support\Ui::control())
                       placeholder="As the movement gave them, for example in an email from the NGS."></textarea>
             <span class="text-[0.8125rem]"><span class="font-semibold text-primary">Answer: text,</span> <span class="text-on-surface-variant">a sentence or more. It feeds the report and the ODP.</span></span>
         </label>
@@ -120,6 +119,6 @@
     <p class="text-[0.8125rem] text-on-surface-variant">Saved with your name, checked and scored with the form, and written into a corrected copy of the workbook. The file as uploaded is kept unchanged.</p>
     <div class="flex flex-wrap items-center gap-sm">
         <x-button>Save the answer</x-button>
-        <button type="button" x-on:click="open = false" class="text-[0.875rem] text-primary underline">Cancel</button>
+        <x-button type="button" variant="link" x-on:click="open = false" class="text-[0.875rem]">Cancel</x-button>
     </div>
 </form>
