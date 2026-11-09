@@ -77,11 +77,25 @@ final class Journey
         return $j;
     }
 
+    /**
+     * Opens an assessment as the platform does, checks included. A test that sets up a
+     * second assessment beside one still under way (which the platform refuses: one at a
+     * time) gets the records without the check.
+     */
+    public static function open(User $by, Movement $movement, string $period, Carbon $start): Assessment
+    {
+        $open = app(OpenAssessment::class);
+
+        return $movement->assessmentUnderWay() === null
+            ? $open->handle($by, $movement, $period, $start)
+            : $open->create($by, $movement, $period, $start);
+    }
+
     /** An assessment for Zambia, taken through every step up to and including $stage. */
     public function assessmentAt(string $stage): Assessment
     {
         $target = array_search($stage, self::STAGES, true);
-        $assessment = app(OpenAssessment::class)->handle($this->assessor, $this->zambia, 'Feb 2026', Carbon::parse('2026-02-01'));
+        $assessment = self::open($this->assessor, $this->zambia, 'Feb 2026', Carbon::parse('2026-02-01'));
 
         $steps = [
             'form_uploaded' => fn () => app(UploadForm::class)->handle($this->form($assessment), zambiaFormPath(), 'ZAM26 OHA Form.xlsx', $this->assessor),

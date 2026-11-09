@@ -24,6 +24,15 @@ final class OpenAssessment
     {
         $this->ensure($opener, 'openAssessment', $movement);
 
+        return $this->create($opener, $movement, $periodLabel, $periodStart);
+    }
+
+    /**
+     * The records alone, without the checks in handle() (an assigned assessor, one
+     * assessment at a time). Only for setting up tests; the platform opens through handle().
+     */
+    public function create(User $opener, Movement $movement, string $periodLabel, Carbon $periodStart): Assessment
+    {
         return DB::transaction(function () use ($opener, $movement, $periodLabel, $periodStart): Assessment {
             $assessment = Assessment::query()->create([
                 'movement_id' => $movement->id,

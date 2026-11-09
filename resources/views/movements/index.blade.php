@@ -91,7 +91,7 @@
                                     <p class="text-[0.8125rem] text-on-surface-variant">{{ $m->city }} · {{ $m->country }}</p>
                                     <div class="flex flex-wrap gap-xs mt-xs">
                                         <x-chip :icon="$m->membershipStatus->icon">{{ $m->membershipStatus->label }}</x-chip>
-                                        <x-band-chip :band="$status->band" />
+                                        <x-band-chip :band="$status->band" :under-way="! in_array($stage($status), ['not_assessed', 'complete'], true)" />
                                     </div>
                                 </div>
                                 <x-viz.ring :pct="$status->pct" :band="$status->band" :size="60" />
@@ -167,7 +167,7 @@
                                     <span class="text-on-surface-variant">Not rated</span>
                                 @endif
                             </td>
-                            <td class="px-md py-sm"><x-band-chip :band="$status->band" /></td>
+                            <td class="px-md py-sm"><x-band-chip :band="$status->band" :under-way="! in_array($stage($status), ['not_assessed', 'complete'], true)" /></td>
                             <td class="px-md py-sm">
                                 @if ($status->next_assessment_on)
                                     <span class="{{ $status->reassessment_overdue ? 'font-semibold text-critical-ink' : '' }}">{{ $status->next_assessment_on->format('M Y') }}{{ $status->reassessment_overdue ? ' · overdue' : '' }}</span>

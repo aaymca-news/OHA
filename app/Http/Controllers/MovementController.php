@@ -120,6 +120,7 @@ class MovementController extends Controller
             'profile' => $profile,
             'assignmentHistory' => $assignmentHistory,
             'assignedSince' => $assignedSince,
+            'underWay' => $movement->assessmentUnderWay(),
             'canOpen' => Gate::forUser($user)->allows('openAssessment', $movement),
             'canAssign' => Gate::forUser($user)->allows('assignAssessors', $movement),
         ]);

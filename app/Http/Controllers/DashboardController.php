@@ -47,6 +47,7 @@ class DashboardController extends Controller
             'bands' => $stats->bandDistribution(),
             'weakest' => $stats->weakestCategories(),
             'due' => $stats->reassessmentDue(),
+            'underWay' => Movement::withAssessmentUnderWay(),
             'work' => $work,
             'insights' => $insights,
             'pipeline' => $insights->pipeline(),

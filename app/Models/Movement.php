@@ -46,6 +46,27 @@ class Movement extends Model
     }
 
     /**
+     * The assessment under way, if any: opened and not yet finished (its ODP not yet
+     * signed by the board). A movement has at most one at a time.
+     */
+    public function assessmentUnderWay(): ?Assessment
+    {
+        return $this->assessments()->whereHas('workItem')->latest('id')->first();
+    }
+
+    /**
+     * The movements with an assessment under way, for marking them on a list.
+     *
+     * @return array<int, true> keyed by movement id
+     */
+    public static function withAssessmentUnderWay(): array
+    {
+        $ids = Assessment::query()->whereHas('workItem')->distinct()->pluck('movement_id')->map(fn ($id): int => (int) $id)->all();
+
+        return array_fill_keys($ids, true);
+    }
+
+    /**
      * Staff assigned to assess this movement.
      *
      * @return BelongsToMany<User, $this>

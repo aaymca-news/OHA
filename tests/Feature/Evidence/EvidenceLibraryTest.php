@@ -1,7 +1,6 @@
 <?php
 
 use App\Actions\Evidence\UploadEvidence;
-use App\Actions\Oha\OpenAssessment;
 use App\Actions\Users\InviteUser;
 use App\Enums\Role;
 use App\Exceptions\WorkflowRuleBroken;
@@ -207,7 +206,7 @@ it('lets the National General Secretary remove what they added, and AAYMCA staff
 it('keeps evidence with its assessment: a new assessment starts with an empty library', function () {
     app(UploadEvidence::class)->handle($this->ngs, $this->assessment, evidenceFile('old'), 'Strategic Plan 2024.pdf');
     $this->travelTo(now()->addYear());
-    $next = app(OpenAssessment::class)->handle($this->j->assessor, $this->j->zambia, 'Feb 2027', now()->startOfMonth());
+    $next = Journey::open($this->j->assessor, $this->j->zambia, 'Feb 2027', now()->startOfMonth());
 
     $this->actingAs($this->ngs)->get(route('evidence.index', ['movement' => $this->j->zambia, 'assessment' => $next->id]))
         ->assertOk()->assertDontSee('Strategic Plan 2024');

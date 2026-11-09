@@ -38,9 +38,16 @@ class MovementPolicy
 
     public function openAssessment(User $user, Movement $movement): Response
     {
-        return $user->canAssess($movement)
+        if (! $user->canAssess($movement)) {
+            return Response::deny("You are not assigned to assess {$movement->name}. The Administrators assign assessors.");
+        }
+
+        // One assessment at a time: the next one starts once this one is finished.
+        $underWay = $movement->assessmentUnderWay();
+
+        return $underWay === null
             ? Response::allow()
-            : Response::deny("You are not assigned to assess {$movement->name}. The Administrators assign assessors.");
+            : Response::deny("{$movement->name}’s {$underWay->period_label} assessment has already started. A new one can start once it is finished (its ODP signed by the board).");
     }
 
     /** Staff cannot give themselves work: the Administrators assign it. */

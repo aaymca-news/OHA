@@ -6,7 +6,7 @@
     @endcan
     <div class="grid sm:grid-cols-3 gap-md">
         <x-stat-tile label="Latest health score" :value="$status->pct !== null ? number_format((float) $status->pct, 1) : '—'" :unit="$status->pct !== null ? '%' : null">
-            <x-slot:sub><x-band-chip :band="$status->band" /></x-slot:sub>
+            <x-slot:sub><x-band-chip :band="$status->band" :under-way="$underWay !== null" /></x-slot:sub>
         </x-stat-tile>
         <x-stat-tile label="Points" :value="$status->points_achieved !== null ? rtrim(rtrim(number_format((float) $status->points_achieved, 2), '0'), '.') : '—'" :unit="$status->points_available ? ' / '.$status->points_available : null">
             <x-slot:sub>{{ $status->last_assessed_on ? 'Assessed '.$status->last_assessed_on->format('M Y') : 'No approved form yet' }}</x-slot:sub>
@@ -74,7 +74,19 @@
     @endif
 
     <x-card title="Assessments">
-        @if ($canOpen)
+        @if ($underWay)
+            {{-- One assessment at a time: no "Start new assessment" while this one runs. --}}
+            <x-slot:actions>
+                <span class="inline-flex flex-wrap items-center gap-sm text-[0.875rem]">
+                    <x-chip tone="info" icon="play_circle">Assessment started</x-chip>
+                    @can('view', $underWay)
+                        <a href="{{ route('assessments.show', $underWay) }}" class="font-semibold text-primary underline">{{ $underWay->period_label }}</a>
+                    @else
+                        <span class="font-semibold">{{ $underWay->period_label }}</span>
+                    @endcan
+                </span>
+            </x-slot:actions>
+        @elseif ($canOpen)
             <x-slot:actions>
                 <form method="POST" action="{{ route('assessments.store', $movement) }}" class="flex flex-wrap items-end gap-sm">
                     @csrf

@@ -17,6 +17,7 @@ use App\Oha\DqaSummary;
 use Database\Seeders\MovementsSeeder;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Storage;
+use Tests\Support\Journey;
 
 beforeEach(function () {
     Storage::fake('oha');
@@ -29,7 +30,7 @@ beforeEach(function () {
     $this->secondAdmin = User::factory()->admin()->create();
 
     $this->openForm = function (?User $by = null): Artefact {
-        $assessment = app(OpenAssessment::class)->handle($by ?? $this->assessor, $this->zambia, 'Feb 2026', Carbon::parse('2026-02-01'));
+        $assessment = Journey::open($by ?? $this->assessor, $this->zambia, 'Feb 2026', Carbon::parse('2026-02-01'));
 
         return $assessment->form()->firstOrFail();
     };

@@ -4,6 +4,7 @@ namespace App\Queries;
 
 use App\Models\Category;
 use App\Models\HealthBand;
+use App\Models\Movement;
 use App\Models\MovementStatus;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
@@ -33,16 +34,28 @@ final class AllianceStats
     }
 
     /**
-     * How many movements sit in each band, best band first.
+     * How many movements sit in each band, best band first. The movements not yet rated
+     * are split: those whose assessment has started, then those not started.
      *
-     * @return Collection<int, array{band: HealthBand, count: int}>
+     * @return Collection<int, array{band: HealthBand, count: int, underWay: bool}>
      */
     public function bandDistribution(): Collection
     {
         $counts = MovementStatus::query()->select('band_code', DB::raw('count(*) as n'))->groupBy('band_code')->pluck('n', 'band_code');
+        $started = MovementStatus::query()->where('band_code', 'notstarted')
+            ->whereIn('movement_id', array_keys(Movement::withAssessmentUnderWay()))->count();
 
-        return HealthBand::query()->orderBy('sort_order')->get()
-            ->map(fn (HealthBand $band) => ['band' => $band, 'count' => (int) ($counts[$band->code] ?? 0)]);
+        $rows = [];
+        foreach (HealthBand::query()->orderBy('sort_order')->get() as $band) {
+            $count = (int) ($counts[$band->code] ?? 0);
+            if ($band->code === 'notstarted') {
+                $rows[] = ['band' => $band, 'count' => $started, 'underWay' => true];
+                $count -= $started;
+            }
+            $rows[] = ['band' => $band, 'count' => $count, 'underWay' => false];
+        }
+
+        return collect($rows);
     }
 
     /**

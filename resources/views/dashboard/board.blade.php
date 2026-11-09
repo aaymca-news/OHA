@@ -12,7 +12,7 @@
 
     <div class="grid grid-cols-2 lg:grid-cols-4 gap-md">
         <x-stat-tile label="Health score" :value="$status->pct !== null ? number_format((float) $status->pct, 1) : '—'" :unit="$status->pct !== null ? '%' : null">
-            <x-slot:sub><x-band-chip :band="$status->band" /></x-slot:sub>
+            <x-slot:sub><x-band-chip :band="$status->band" :under-way="$holder !== null" /></x-slot:sub>
         </x-stat-tile>
         <x-stat-tile label="Next assessment" :value="$status->next_assessment_on?->format('M Y') ?? 'Not scheduled'">
             <x-slot:sub>{{ $status->reassessment_overdue ? 'Past its date' : ($latest ? 'Last: '.$latest->period_label : 'Not yet assessed') }}</x-slot:sub>

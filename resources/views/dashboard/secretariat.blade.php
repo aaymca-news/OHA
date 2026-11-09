@@ -65,9 +65,9 @@
                     @foreach ($bands as $row)
                         {{-- Side by side from 22rem; on the narrowest phones the band sits above its bar. --}}
                         <li class="grid min-[22rem]:grid-cols-[8rem_minmax(0,1fr)] items-center gap-x-sm gap-y-xs">
-                            <x-band-chip :band="$row['band']" />
+                            <x-band-chip :band="$row['band']" :under-way="$row['underWay']" />
                             <x-bar wide :value="$row['count']" :max="$bandTotal" :label="$row['count'].' '.($row['count'] === 1 ? 'movement' : 'movements')"
-                                   :tone="$tones[$row['band']->code] ?? 'neutral'" />
+                                   :tone="$row['underWay'] ? 'primary' : ($tones[$row['band']->code] ?? 'neutral')" />
                         </li>
                     @endforeach
                 </ul>
@@ -154,7 +154,7 @@
                         @foreach ($due as $status)
                             <tr class="border-t border-surface-container">
                                 <td class="py-xs"><a href="{{ route('movements.show', $status->movement) }}" class="text-primary underline">{{ $status->name }}</a></td>
-                                <td class="py-xs"><x-band-chip :band="$status->band" /></td>
+                                <td class="py-xs"><x-band-chip :band="$status->band" :under-way="isset($underWay[$status->movement_id])" /></td>
                                 <td class="py-xs">{{ $status->next_assessment_on->format('M Y') }} <span class="text-on-surface-variant">({{ $status->next_assessment_on->diffForHumans(['parts' => 1]) }})</span></td>
                             </tr>
                         @endforeach
