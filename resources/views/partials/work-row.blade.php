@@ -3,8 +3,28 @@
     A movement assigned to someone with no assessment under way comes as ['movement', 'artefact' => null, …].
     A movement whose assessment has started comes as ['movement', 'artefact' (where it stands), 'started' => true, …].
     A movement whose assessment is done (ODP signed) comes as ['movement', 'done' => the assessment, …].
+    An assessment opened with nothing uploaded yet comes as ['movement', 'artefact' (its OHA form), 'opened' => true, …].
 --}}
-@if (isset($entry['started']))
+@if (isset($entry['opened']))
+    @php
+        $assessment = $entry['artefact']->assessment;
+        $url = route('assessments.show', ['assessment' => $assessment->id, 'tab' => 'form']);
+    @endphp
+    <li class="flex flex-wrap items-center gap-sm p-sm rounded-lg border-[1.5px] border-outline-variant bg-surface-container-lowest">
+        <span class="material-symbols-outlined text-primary" aria-hidden="true">flag</span>
+        <div class="flex-1 min-w-[min(14rem,100%)]">
+            <a href="{{ $url }}" class="text-[0.875rem] font-semibold text-primary underline">{{ $entry['movement']->name }} · {{ $assessment->period_label }}</a>
+            <p class="text-[0.8125rem] text-on-surface-variant">
+                Assigned to you · opened {{ $assessment->opened_at?->format('j M Y') }} · the OHA form is not uploaded yet
+            </p>
+        </div>
+        <x-chip icon="radio_button_unchecked">Not started</x-chip>
+        @if ($entry['days_left'] !== null)
+            <x-due-chip :days="$entry['days_left']" />
+        @endif
+        <a href="{{ $url }}" class="px-md py-1.5 rounded bg-primary text-on-primary text-[0.8125rem] font-semibold">Upload the OHA form</a>
+    </li>
+@elseif (isset($entry['started']))
     @php
         $assessment = $entry['artefact']->assessment;
         $url = route('assessments.show', ['assessment' => $assessment->id, 'tab' => $entry['artefact']->kind->value]);
@@ -17,11 +37,17 @@
                 Started {{ $assessment->opened_at?->format('j M Y') }} · now: {{ $entry['artefact']->kind->label() }} · {{ $entry['holder'] }}
             </p>
         </div>
-        <x-chip tone="info" icon="play_circle">Assessment started</x-chip>
+        @if ($entry['actionable'])
+            <x-chip tone="warning" icon="pending_actions">Waiting on you</x-chip>
+        @else
+            <x-chip tone="info" icon="play_circle">Assessment started</x-chip>
+        @endif
+        <x-state-chip :state="$entry['artefact']->state" />
         @if ($entry['days_left'] !== null)
             <x-due-chip :days="$entry['days_left']" />
         @endif
-        <a href="{{ $url }}" class="px-md py-1.5 rounded border-[1.5px] border-primary text-primary text-[0.8125rem] font-semibold">Open</a>
+        <a href="{{ $url }}" @class(['px-md py-1.5 rounded text-[0.8125rem] font-semibold border-[1.5px] border-primary',
+            'bg-primary text-on-primary' => $entry['actionable'], 'text-primary' => ! $entry['actionable']])>Open</a>
     </li>
 @elseif (isset($entry['done']))
     @php

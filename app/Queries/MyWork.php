@@ -20,14 +20,12 @@ use Illuminate\Support\Facades\Gate;
 /**
  * One queue for every role: the same entry point, only the groups differ.
  *
- *   mine      assessors: work waiting on them, including anything sent back
  *   start     assessors: their movements with no assessment under way, to open
- *   started   assessors: their movements whose assessment has started (Administrators: every one)
+ *   started   assessors: their movements whose assessment has started; actionable when it is with them
  *   done      assessors: their movements whose assessment is done (ODP signed), follow-ups under way
  *   approve   Administrators: everything awaiting approval (what they submitted themselves is shown locked, with why)
  *   sign      the Board Chairperson: the approved ODP awaiting their signature
  *   gaps      forms on your movements that went forward with missing information still open
- *   watching  submitted by you, or on your movements, and now with someone else
  *
  * Each entry is one document, with its due date from v_work_items where it is on
  * the assessment's main line of work.
@@ -35,34 +33,12 @@ use Illuminate\Support\Facades\Gate;
 final class MyWork
 {
     /**
-     * @return list<array{key: string, items: list<array{artefact: Artefact|null, movement?: Movement, started?: true, done?: Assessment|null, holder: string, days_left: int|null, actionable: bool, blocked: string|null}>}>
+     * @return list<array{key: string, items: list<array{artefact: Artefact|null, movement?: Movement, opened?: true, started?: true, done?: Assessment|null, holder: string, days_left: int|null, actionable: bool, blocked: string|null}>}>
      */
     public function for(User $user): array
     {
         $groups = [];
         $assigned = $user->assignedMovements()->pluck('movements.id')->all();
-
-        if ($user->isAssessor()) {
-            $groups[] = $this->fromWork('mine', $this->work(HolderRole::Assessor)->whereIn('movement_id', $assigned)->get());
-
-            // Movements given to them with no assessment under way: theirs to open.
-            $toStart = $this->toStart($user);
-            if ($toStart !== []) {
-                $groups[] = ['key' => 'start', 'items' => $toStart];
-            }
-
-            // …and those whose assessment has started, with where each one stands.
-            $started = $this->started($user, $assigned);
-            if ($started !== []) {
-                $groups[] = ['key' => 'started', 'items' => $started];
-            }
-
-            // …and those whose assessment is done (ODP signed), its follow-ups under way.
-            $done = $this->done($user);
-            if ($done !== []) {
-                $groups[] = ['key' => 'done', 'items' => $done];
-            }
-        }
 
         if ($user->isAdmin()) {
             $groups[] = $this->fromArtefacts('approve', $this->artefacts()
@@ -79,24 +55,17 @@ final class MyWork
                 ->get(), __('oha.holder.board'), fn (Artefact $a) => Gate::forUser($user)->inspect('sign', $a));
         }
 
+        // The movements they assess, always these four (who did what is in each assessment's audit trail):
         if ($user->isAssessor()) {
-            // Only on the movements they assess: My Work is their own work. (Administrators
-            // see every form waiting on them under "approve".)
-            $gaps = $this->withOpenGaps($assigned);
-            if ($gaps->isNotEmpty()) {
-                $groups[] = $this->fromWork('gaps', $gaps, fn () => null);
-            }
-
-            // Administrators already see everything awaiting approval under "approve".
-            $watching = $this->work(null)
-                ->where('holder_role', '!=', HolderRole::Assessor->value)
-                ->when($user->isAdmin(), fn (Builder $q) => $q->where('holder_role', '!=', HolderRole::Approver->value))
-                ->where(fn (Builder $q) => $q->whereIn('movement_id', $assigned)
-                    ->orWhereHas('artefact', fn (Builder $a) => $a->where('submitted_by', $user->id)))
-                ->get();
-            if ($watching->isNotEmpty()) {
-                $groups[] = $this->fromWork('watching', $watching, fn () => null);
-            }
+            // assigned, with no assessment under way: theirs to open;
+            $groups[] = ['key' => 'start', 'items' => $this->toStart($user, $assigned)];
+            // opened and not yet signed by the board, with where each stands (theirs to act on when it is with them);
+            $groups[] = ['key' => 'started', 'items' => $this->started($assigned)];
+            // signed by the board, its follow-ups under way;
+            $groups[] = ['key' => 'done', 'items' => $this->done($user)];
+            // and forms that went forward with information missing. Only assessments under way:
+            // once the ODP is signed, the assessment leaves this list.
+            $groups[] = $this->fromWork('gaps', $this->withOpenGaps($assigned), fn () => null);
         }
 
         return $groups;
@@ -108,19 +77,21 @@ final class MyWork
     public function actionableCount(User $user): int
     {
         return collect($this->for($user))
-            ->whereIn('key', ['mine', 'start', 'approve', 'sign'])
+            ->whereIn('key', ['start', 'started', 'approve', 'sign'])
             ->sum(fn (array $group) => count(array_filter($group['items'], fn ($i) => $i['actionable'])));
     }
 
     /**
-     * The movements this person is assigned to assess that have no assessment under way:
-     * never assessed, or their last assessment is complete. Theirs to open.
+     * The movements this person is assigned to assess where nothing has started: no
+     * assessment under way (never assessed, or the next one is due), or one opened with
+     * nothing uploaded yet. Theirs to open, or to begin with the OHA form.
      *
-     * @return list<array{artefact: null, movement: Movement, holder: string, days_left: null, actionable: bool, blocked: string|null}>
+     * @param  list<int>  $assigned
+     * @return list<array{artefact: Artefact|null, movement: Movement, opened?: true, holder: string, days_left: int|null, actionable: bool, blocked: string|null}>
      */
-    private function toStart(User $user): array
+    private function toStart(User $user, array $assigned): array
     {
-        return $this->idle($user)
+        $toOpen = $this->idle($user)
             ->reject(fn (Movement $m) => $this->followingUp($m))
             ->map(function (Movement $m) use ($user) {
                 $response = Gate::forUser($user)->inspect('openAssessment', $m);
@@ -133,7 +104,29 @@ final class MyWork
                     'actionable' => $response->allowed(),
                     'blocked' => $response->denied() ? $response->message() : null,
                 ];
-            })->values()->all();
+            });
+
+        $opened = $this->work(null)->whereIn('movement_id', $assigned)->get()
+            ->filter(fn (WorkItem $w) => $this->notBegun($w))
+            ->map(fn (WorkItem $w) => [
+                'artefact' => $w->artefact,
+                'movement' => $w->artefact->assessment->movement,
+                'opened' => true,
+                'holder' => $w->holder_role->label(),
+                'days_left' => $w->days_left,
+                'actionable' => true,
+                'blocked' => null,
+            ]);
+
+        return $toOpen->concat($opened)->sortBy(fn (array $e) => $e['movement']->name)->values()->all();
+    }
+
+    /**
+     * Opened, but nothing done yet: the OHA form, the first step, has never been uploaded.
+     */
+    private function notBegun(WorkItem $w): bool
+    {
+        return $w->artefact->kind === ArtefactKind::Form && $w->artefact->state === ArtefactState::NotStarted;
     }
 
     /**
@@ -183,18 +176,19 @@ final class MyWork
     }
 
     /**
-     * The movements whose assessment has started (opened, its ODP not yet signed): the
-     * ones this person assesses, or every one for the Administrators. For reference, so
-     * never counted on the badge; the work itself is in the other groups.
+     * The ongoing assessments (opened, ODP not yet signed) of the movements this person
+     * assesses, with where each stands. One waiting on the assessor (to prepare, or sent
+     * back) is theirs to act on, so it counts on the badge; the rest are with someone else.
      *
      * @param  list<int>  $assigned
      * @return list<array{artefact: Artefact, movement: Movement, started: true, holder: string, days_left: int|null, actionable: bool, blocked: null}>
      */
-    private function started(User $user, array $assigned): array
+    private function started(array $assigned): array
     {
         return $this->work(null)
-            ->when(! $user->isAdmin(), fn (Builder $q) => $q->whereIn('movement_id', $assigned))
+            ->whereIn('movement_id', $assigned)
             ->get()
+            ->reject(fn (WorkItem $w) => $this->notBegun($w)) // nothing done yet: "To be started"
             ->sortBy(fn (WorkItem $w) => $w->artefact->assessment->movement->name)
             ->map(fn (WorkItem $w) => [
                 'artefact' => $w->artefact,
@@ -202,7 +196,7 @@ final class MyWork
                 'started' => true,
                 'holder' => $w->holder_role->label(),
                 'days_left' => $w->days_left,
-                'actionable' => false,
+                'actionable' => $w->holder_role === HolderRole::Assessor,
                 'blocked' => null,
             ])->values()->all();
     }

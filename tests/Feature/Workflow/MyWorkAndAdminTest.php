@@ -30,7 +30,9 @@ it('puts a submitted form in every Administrator’s queue, and no staff member�
     }
 
     expect(groupOf($this->j->otherStaff, 'approve'))->toBeNull()
-        ->and(groupOf($this->j->assessor, 'watching')['items'])->toHaveCount(1);
+        // The assessor sees it among their ongoing assessments, with the Administrators, not theirs to act on.
+        ->and(groupOf($this->j->assessor, 'started')['items'][0]['actionable'])->toBeFalse()
+        ->and(groupOf($this->j->assessor, 'watching'))->toBeNull();
 });
 
 it('lets an Administrator approve their own submission, like any other', function () {
@@ -50,8 +52,8 @@ it('lists forms that went forward with gaps for the movement’s own assessors, 
 
     // My Work is each person's own work: an Administrator not assessing Zambia approves its form, but its gaps are not theirs.
     expect(groupOf($this->j->assessor, 'gaps')['items'])->toHaveCount(1)
-        ->and(groupOf($this->j->secondAdmin, 'gaps'))->toBeNull()
-        ->and(groupOf($elsewhere, 'gaps'))->toBeNull();
+        ->and(groupOf($this->j->secondAdmin, 'gaps')['items'])->toBe([])
+        ->and(groupOf($elsewhere, 'gaps')['items'])->toBe([]);
 
     $this->j->secondAdmin->assignedMovements()->attach($this->j->zambia);
     expect(groupOf($this->j->secondAdmin, 'gaps')['items'])->toHaveCount(1);

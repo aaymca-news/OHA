@@ -106,7 +106,7 @@ it('keeps an Administrator’s My Work to approvals and their own movements', fu
     $groups = collect(app(MyWork::class)->for($this->j->admin))->keyBy('key');
 
     // Zambia is not theirs to assess, so its open gaps are not their work; its form is theirs to approve.
-    expect($groups->has('gaps'))->toBeFalse()
+    expect($groups['gaps']['items'])->toBe([])
         ->and(collect($groups['approve']['items'])->pluck('artefact.assessment.movement.slug')->all())->toBe(['zambia']);
 });
 

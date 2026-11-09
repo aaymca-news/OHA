@@ -62,11 +62,14 @@ it('puts an assigned movement with no assessment under way in My Work, until its
         ->and(app(MyWork::class)->actionableCount($this->staff))->toBe(1);
 
     $this->actingAs($this->staff)->get(route('my-work'))->assertOk()
-        ->assertSee('Movements to start')->assertSee('Ghana YMCA')->assertSee('not assessed yet')->assertSee('Start the assessment');
+        ->assertSee('To be started')->assertSee('Ghana YMCA')->assertSee('not assessed yet')->assertSee('Start the assessment');
     $this->actingAs($this->staff)->get(route('dashboard'))->assertOk()->assertSee('Start the assessment');
 
     app(OpenAssessment::class)->handle($this->staff, $this->j->ghana, 'Oct 2026', Carbon::parse('2026-10-01'));
 
-    expect($groups()->has('start'))->toBeFalse()
-        ->and(collect($groups()['mine']['items'])->pluck('artefact.assessment.movement.slug')->all())->toBe(['ghana']);
+    // Opened, nothing uploaded yet: still to be started, now with the OHA form to upload.
+    expect($groups()['start']['items'])->toHaveCount(1)
+        ->and($groups()['start']['items'][0]['opened'] ?? false)->toBeTrue()
+        ->and($groups()['start']['items'][0]['actionable'])->toBeTrue()
+        ->and($groups()['started']['items'])->toBe([]);
 });
