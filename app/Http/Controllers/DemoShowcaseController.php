@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Demo\DemoChanges;
 use App\Demo\DemoVisitor;
 use App\Demo\Sandboxes;
 use App\Enums\Role;
@@ -11,6 +12,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\URL;
+use Illuminate\View\View;
 
 /**
  * The demo site only: the showcase's Super Administrator goes into a visitor's demo, as
@@ -57,6 +59,36 @@ class DemoShowcaseController extends Controller
         $request->session()->regenerate();
 
         return redirect()->route('dashboard')->with('status', "You are in {$visitor->name}’s demo, as yourself. “Back to the showcase” in the banner when you are done.");
+    }
+
+    /** In the showcase: what deleting a visitor's account would undo, to confirm. */
+    public function confirmDelete(Request $request, DemoVisitor $visitor): View
+    {
+        $this->superAdminInShowcase($request);
+
+        return view('demo.delete-visitor', [
+            'visitor' => $visitor,
+            'plan' => $visitor->sandbox_key !== null ? DemoChanges::plan($visitor->sandbox_key) : ['ids' => [], 'own' => 0, 'others' => [], 'actions' => []],
+        ]);
+    }
+
+    /** In the showcase: deletes a visitor's account, undoing all their work (and what was built on it). */
+    public function deleteVisitor(Request $request, DemoVisitor $visitor): RedirectResponse
+    {
+        $this->superAdminInShowcase($request);
+        $undone = $visitor->sandbox_key !== null ? DemoChanges::undo($visitor->sandbox_key) : 0;
+        if ($visitor->sandbox_key !== null) {
+            Sandboxes::destroy($visitor->sandbox_key);
+        }
+        $visitor->delete();
+
+        return redirect()->route('admin.users.index', ['show' => 'visitors'])
+            ->with('status', "{$visitor->name}’s account is deleted, and their work undone ({$undone} ".($undone === 1 ? 'change' : 'changes').').');
+    }
+
+    private function superAdminInShowcase(Request $request): void
+    {
+        abort_unless(Sandboxes::enabled() && Sandboxes::showcase() && $request->user()?->isSuperAdmin(), 404);
     }
 
     /** From a visitor's demo, back to the showcase. */

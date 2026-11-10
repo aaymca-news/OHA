@@ -2,6 +2,7 @@
 
 namespace App\Http\Middleware;
 
+use App\Demo\DemoChanges;
 use App\Demo\Sandboxes;
 use Closure;
 use Illuminate\Http\Request;
@@ -43,7 +44,12 @@ class UseDemoSandbox
         self::$sessionCookie ??= (string) config('session.cookie');
         config(['session.cookie' => self::$sessionCookie]);
         $key = $request->cookie(Sandboxes::COOKIE);
+        // Whose changes these are, for the record (DemoChanges): nobody's until a visitor is known.
+        DemoChanges::actAs(null);
         if (is_string($key) && Sandboxes::use($key)) {
+            if (Sandboxes::shared()) {
+                DemoChanges::actAs($key);
+            }
             // On "Choose who to be", the visitor's copy catches up with the showcase's new
             // work by itself, as long as they have done nothing of their own in it.
             if ($request->isMethod('GET') && $request->is('login') && ($fresh = Sandboxes::refresh($key)) !== null) {

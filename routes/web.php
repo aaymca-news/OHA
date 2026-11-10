@@ -56,6 +56,9 @@ Route::post('demo/showcase/leave', [DemoAccountController::class, 'leaveShowcase
 Route::get('demo/showcase/visitors/{visitor}/open', [DemoShowcaseController::class, 'open'])->middleware('auth')->name('demo.showcase.open');
 Route::get('demo/showcase/visitors/{visitor}/enter', [DemoShowcaseController::class, 'enter'])->middleware('throttle:20,1')->name('demo.showcase.enter');
 Route::post('demo/showcase/back', [DemoShowcaseController::class, 'back'])->name('demo.showcase.back');
+// The Super Administrator deletes a visitor's account, undoing their work (after confirming).
+Route::get('demo/showcase/visitors/{visitor}/delete', [DemoShowcaseController::class, 'confirmDelete'])->middleware('auth')->name('demo.showcase.visitors.delete');
+Route::delete('demo/showcase/visitors/{visitor}', [DemoShowcaseController::class, 'deleteVisitor'])->middleware('auth')->name('demo.showcase.visitors.destroy');
 
 Route::middleware('guest')->group(function () {
     // The demo site only: "Choose who to be", one click per person in the visitor's demo.

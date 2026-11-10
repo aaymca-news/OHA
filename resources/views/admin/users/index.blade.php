@@ -41,7 +41,13 @@
                         <span class="block text-[0.8125rem] text-on-surface-variant">{{ $v->email }}</span>
                     </td>
                     <td>{{ $v->created_at?->asDay() }}</td>
-                    <td>{{ $v->updated_at?->asDay() }}</td>
+                    <td>
+                        <span class="flex flex-wrap items-center gap-sm">
+                            {{ $v->updated_at?->asDay() }}
+                            {{-- Deleting a visitor's account undoes their work (after a confirmation listing it). --}}
+                            <x-button size="sm" variant="secondary" :href="route('demo.showcase.visitors.delete', $v)">Delete…</x-button>
+                        </span>
+                    </td>
                     @unless ($shared)
                         <td>
                             @php($waiting = $v->sandbox_key !== null ? \App\Demo\DemoApprovals::waiting($v->sandbox_key) : [])

@@ -16,6 +16,7 @@ use Carbon\Carbon;
 use Database\Seeders\DemoSeeder;
 use Database\Seeders\DemoStorySeeder;
 use Illuminate\Auth\SessionGuard;
+use Illuminate\Database\QueryException;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\File;
@@ -688,4 +689,119 @@ it('has no starting over in the shared demo, and deleting an account keeps the w
     $as()->delete(route('demo.destroy'))->assertRedirect(route('home'));
     expect(DemoVisitor::query()->count())->toBe(0)
         ->and(Assessment::query()->count())->toBe(1);
+});
+
+it('keeps everything after a visitor signs out of the shared demo and back in: the signed ODP, and every person to be', function () {
+    config(['oha.demo_shared' => true, 'session.driver' => 'database']);
+    $odp = prepareInShowcase('zambia', makeSuperAdmin())->odp()->firstOrFail();
+    $key = register('ama@example.com', 'demo-pass-1');
+    $as = fn (string $k) => $this->withUnencryptedCookie(Sandboxes::COOKIE, $k);
+
+    // As Zambia's Board Chairperson, the visitor signs the ODP, then signs out of the demo.
+    $as($key)->post(route('demo.sign-in'), ['role' => 'chair', 'movement' => 'zambia'])->assertRedirect(route('dashboard'));
+    $as($key)->post(route('artefacts.sign', $odp), ['signature' => 'Ama Mensah', 'confirm' => '1'])->assertSessionHasNoErrors();
+    $as($key)->post(route('demo.sign-out'))->assertRedirect(route('home'));
+    $this->app['auth']->forgetGuards();
+
+    // They sign in again: the same key, and every person can still be chosen.
+    $again = demoCookie($this->post(route('demo.sign-in.store'), ['email' => 'ama@example.com', 'password' => 'demo-pass-1']));
+    expect($again)->toBe($key);
+    $as($again)->get(route('login'))->assertOk()->assertSee('Choose who to be');
+    foreach ([['role' => 'admin'], ['role' => 'assessor'], ['role' => 'ngs', 'movement' => 'zambia'], ['role' => 'chair', 'movement' => 'zambia']] as $who) {
+        $as($again)->post(route('demo.sign-in'), $who)->assertRedirect(route('dashboard'));
+        $as($again)->get(route('resources'))->assertOk()->assertSee('Validated');
+        $as($again)->post(route('demo.choose'))->assertRedirect(route('login'));
+    }
+    expect(BoardSignature::query()->count())->toBe(1);
+});
+
+it('lets the Super Administrator delete a visitor’s account, undoing all their work in the shared demo, and nobody else’s', function () {
+    config(['oha.demo_shared' => true]);
+    $ray = makeSuperAdmin();
+    $odp = prepareInShowcase('zambia', $ray)->odp()->firstOrFail();
+    $caleb = register('caleb@example.com');
+    $ama = register('ama@example.com');
+    $as = fn (string $k) => $this->withUnencryptedCookie(Sandboxes::COOKIE, $k);
+
+    // Caleb signs Zambia's ODP as its Board Chairperson, and opens Ghana's assessment as the assessor.
+    $as($caleb)->post(route('demo.sign-in'), ['role' => 'chair', 'movement' => 'zambia']);
+    $as($caleb)->post(route('artefacts.sign', $odp), ['signature' => 'Caleb Tester', 'confirm' => '1'])->assertSessionHasNoErrors();
+    $as($caleb)->post(route('demo.choose'));
+    $as($caleb)->post(route('demo.sign-in'), ['role' => 'assessor']);
+    $as($caleb)->post(route('assessments.store', Movement::query()->where('slug', 'ghana')->firstOrFail()), ['period_label' => 'Nov 2026', 'period_start' => '2026-11'])
+        ->assertSessionHasNoErrors();
+    $as($caleb)->post(route('demo.choose'));
+
+    // Ama, another visitor, opens Kenya's assessment.
+    $as($ama)->post(route('demo.sign-in'), ['role' => 'assessor']);
+    $as($ama)->post(route('assessments.store', Movement::query()->where('slug', 'kenya')->firstOrFail()), ['period_label' => 'Nov 2026', 'period_start' => '2026-11'])
+        ->assertSessionHasNoErrors();
+    $as($ama)->post(route('demo.choose'));
+    expect(BoardSignature::query()->count())->toBe(1)->and(Assessment::query()->count())->toBe(3);
+
+    // The Super Administrator sees what deleting Caleb would undo, and confirms.
+    $showcase = fn () => $this->withUnencryptedCookie(Sandboxes::COOKIE, Sandboxes::SHOWCASE);
+    $showcase()->post(route('login'), ['email' => $ray->email, 'password' => 'Showcase-Pass-2026']);
+    $visitor = DemoVisitor::query()->email('caleb@example.com')->firstOrFail();
+    $showcase()->get(route('admin.users.index', ['show' => 'visitors']))->assertOk()->assertSee(route('demo.showcase.visitors.delete', $visitor));
+    $showcase()->get(route('demo.showcase.visitors.delete', $visitor))->assertOk()
+        ->assertSee('of theirs will be undone')->assertSee('Zambia YMCA')->assertSee('Ghana YMCA');
+    $showcase()->delete(route('demo.showcase.visitors.destroy', $visitor))->assertRedirect(route('admin.users.index', ['show' => 'visitors']));
+
+    // Caleb's work is undone (the signature, Ghana's assessment, their audit entries); the showcase's and Ama's stay.
+    expect(DemoVisitor::query()->email('caleb@example.com')->exists())->toBeFalse()
+        ->and(BoardSignature::query()->count())->toBe(0)
+        ->and(Assessment::query()->whereHas('movement', fn ($q) => $q->where('slug', 'ghana'))->exists())->toBeFalse()
+        ->and(Assessment::query()->whereHas('movement', fn ($q) => $q->where('slug', 'kenya'))->exists())->toBeTrue()
+        ->and(Assessment::query()->whereHas('movement', fn ($q) => $q->where('slug', 'zambia'))->exists())->toBeTrue()
+        ->and(Artefact::query()->findOrFail($odp->id)->approved_at)->not->toBeNull()
+        ->and(DB::table('audit_events')->where('action', 'like', '%signed_by_board%')->exists())->toBeFalse()
+        ->and(DemoVisitor::query()->email('ama@example.com')->exists())->toBeTrue();
+
+    // The guards are back: the audit trail stays append-only.
+    expect(fn () => DB::table('audit_events')->limit(1)->delete())->toThrow(QueryException::class);
+});
+
+it('undoes what others built on a deleted visitor’s work too, after saying so', function () {
+    config(['oha.demo_shared' => true]);
+    $ray = makeSuperAdmin();
+    $caleb = register('caleb@example.com');
+    $ama = register('ama@example.com');
+    $as = fn (string $k) => $this->withUnencryptedCookie(Sandboxes::COOKIE, $k);
+    $ghana = Movement::query()->where('slug', 'ghana')->firstOrFail();
+
+    // Caleb opens Ghana's assessment; Ama then uploads its form.
+    $as($caleb)->post(route('demo.sign-in'), ['role' => 'assessor']);
+    $as($caleb)->post(route('assessments.store', $ghana), ['period_label' => 'Nov 2026', 'period_start' => '2026-11'])->assertSessionHasNoErrors();
+    $as($caleb)->post(route('demo.choose'));
+    $form = Assessment::query()->firstOrFail()->form()->firstOrFail();
+    $as($ama)->post(route('demo.sign-in'), ['role' => 'assessor']);
+    $file = DemoForm::make('Ghana YMCA', 'Ghana', 2026, 0.6, 3);
+    try {
+        $as($ama)->post(route('artefacts.upload', $form), ['form' => new UploadedFile($file, 'Ghana OHA Form 2026.xlsx', null, null, true)])->assertSessionHasNoErrors();
+    } finally {
+        @unlink($file);
+    }
+    $as($ama)->post(route('demo.choose'));
+
+    $showcase = fn () => $this->withUnencryptedCookie(Sandboxes::COOKIE, Sandboxes::SHOWCASE);
+    $showcase()->post(route('login'), ['email' => $ray->email, 'password' => 'Showcase-Pass-2026']);
+    $visitor = DemoVisitor::query()->email('caleb@example.com')->firstOrFail();
+    $showcase()->get(route('demo.showcase.visitors.delete', $visitor))->assertOk()->assertSee('Work by others built on theirs is undone too')->assertSee('Ama Mensah');
+    $showcase()->delete(route('demo.showcase.visitors.destroy', $visitor));
+
+    expect(Assessment::query()->count())->toBe(0)
+        ->and(DB::table('form_uploads')->count())->toBe(0)
+        ->and(DemoVisitor::query()->email('ama@example.com')->exists())->toBeTrue();
+});
+
+it('lets only the Super Administrator, in the showcase, delete a visitor’s account', function () {
+    config(['oha.demo_shared' => true]);
+    makeSuperAdmin();
+    $key = register('caleb@example.com');
+    $visitor = DemoVisitor::query()->email('caleb@example.com')->firstOrFail();
+    $this->withUnencryptedCookie(Sandboxes::COOKIE, $key)->post(route('demo.sign-in'), ['role' => 'admin']);
+    $this->withUnencryptedCookie(Sandboxes::COOKIE, $key)->get(route('demo.showcase.visitors.delete', $visitor))->assertNotFound();
+    $this->withUnencryptedCookie(Sandboxes::COOKIE, $key)->delete(route('demo.showcase.visitors.destroy', $visitor))->assertNotFound();
+    expect(DemoVisitor::query()->count())->toBe(1);
 });

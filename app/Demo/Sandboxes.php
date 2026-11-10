@@ -37,7 +37,7 @@ final class Sandboxes
     /** What a copy leaves out of the showcase: its machinery, sessions and the visitors' accounts. */
     private const NOT_COPIED = [
         'migrations', 'sessions', 'cache', 'cache_locks', 'jobs', 'job_batches', 'failed_jobs',
-        'password_reset_tokens', 'demo_sandboxes', 'demo_visitors', 'demo_visitor_password_resets',
+        'password_reset_tokens', 'demo_sandboxes', 'demo_visitors', 'demo_visitor_password_resets', 'demo_changes',
     ];
 
     /** The sandbox this request uses, if any. */
