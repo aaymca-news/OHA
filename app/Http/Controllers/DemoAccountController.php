@@ -13,7 +13,6 @@ use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Password;
 use Illuminate\Validation\Rule;
 use Illuminate\View\View;
-use Symfony\Component\HttpFoundation\Cookie;
 
 /**
  * The demo site only: a visitor's account and the demo that is theirs. They register
@@ -24,9 +23,6 @@ use Symfony\Component\HttpFoundation\Cookie;
  */
 class DemoAccountController extends Controller
 {
-    /** How long a browser stays signed in to the visitor's demo. */
-    private const COOKIE_DAYS = 30;
-
     public function create(): View
     {
         $this->demoOnly();
@@ -122,7 +118,7 @@ class DemoAccountController extends Controller
     {
         $this->demoOnly();
 
-        return redirect()->route('login')->withCookie(cookie(Sandboxes::COOKIE, Sandboxes::SHOWCASE, self::COOKIE_DAYS * 24 * 60, secure: request()->isSecure(), httpOnly: true, sameSite: 'lax'));
+        return redirect()->route('login')->withCookie(Sandboxes::cookie(Sandboxes::SHOWCASE));
     }
 
     /** Out of the showcase on this browser. */
@@ -192,7 +188,7 @@ class DemoAccountController extends Controller
         $visitor->touch();
         $visitor->save();
 
-        return redirect()->route('login')->withCookie($this->cookie((string) $visitor->sandbox_key))->with('status', $status);
+        return redirect()->route('login')->withCookie(Sandboxes::cookie((string) $visitor->sandbox_key))->with('status', $status);
     }
 
     private function leaveRole(Request $request): void
@@ -210,11 +206,6 @@ class DemoAccountController extends Controller
     {
         $this->leaveRole($request);
         $request->session()->setHandler(new NullSessionHandler);
-    }
-
-    private function cookie(string $key): Cookie
-    {
-        return cookie(Sandboxes::COOKIE, $key, self::COOKIE_DAYS * 24 * 60, secure: request()->isSecure(), httpOnly: true, sameSite: 'lax');
     }
 
     private function broker(): PasswordBroker

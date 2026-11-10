@@ -174,8 +174,8 @@ function makeSuperAdmin(): User
     return User::query()->where('email', 'superadmin.demo@africaymca.org')->firstOrFail();
 }
 
-/** Brings a movement's assessment to "ODP approved" in the showcase: the AAYMCA assessor's steps, approved by the Super Administrator. */
-function prepareInShowcase(string $slug, User $superAdmin): Assessment
+/** Brings a movement's assessment to a step ("ODP approved" unless told) in the showcase: the AAYMCA assessor's steps, approved by the Super Administrator. */
+function prepareInShowcase(string $slug, User $superAdmin, string $to = 'odp_approved'): Assessment
 {
     config(['queue.default' => 'sync']);
     Sandboxes::leave();
@@ -183,7 +183,7 @@ function prepareInShowcase(string $slug, User $superAdmin): Assessment
     (fn () => $this->admin = $superAdmin)->call($story);
     try {
         return (fn () => $this->assessment(Movement::query()->where('slug', $slug)->firstOrFail(),
-            User::query()->where('email', DemoPeople::STAFF['assessor']['email'])->firstOrFail(), 0.5, 2, 'odp_approved'))->call($story);
+            User::query()->where('email', DemoPeople::STAFF['assessor']['email'])->firstOrFail(), 0.5, 2, $to))->call($story);
     } finally {
         Carbon::setTestNow();
     }
@@ -274,6 +274,37 @@ it('lets the Super Administrator start an assessment in the showcase, which visi
     expect(DB::table('form_uploads')->count())->toBe(0);
 });
 
+it('shows Zambia’s Board Chairperson and NGS what was approved, by the Super Administrator in the showcase or by the visitor as the Administrator', function () {
+    // In the showcase: Zambia's form approved by the Super Administrator, its report sent for approval.
+    $assessment = prepareInShowcase('zambia', makeSuperAdmin(), 'report_submitted');
+    $formName = $assessment->form()->firstOrFail()->uploads()->whereNotNull('approved_at')->value('original_name');
+    $report = $assessment->report()->firstOrFail();
+    $reportName = (string) $report->latestVersion()->value('original_name');
+
+    $key = register();
+    $as = fn () => $this->withUnencryptedCookie(Sandboxes::COOKIE, $key);
+    $zambia = ['movement' => 'zambia'];
+
+    // As Zambia's NGS and Board Chairperson: the approved form, not yet the report.
+    foreach (['ngs', 'chair'] as $role) {
+        $as()->post(route('demo.sign-in'), ['role' => $role] + $zambia)->assertRedirect(route('dashboard'));
+        $as()->get(route('resources'))->assertOk()->assertSee($formName)->assertDontSee($reportName);
+        $as()->post(route('demo.choose'));
+    }
+
+    // As the Administrator, the visitor approves the report.
+    $as()->post(route('demo.sign-in'), ['role' => 'admin']);
+    $as()->post(route('artefacts.approve', $report))->assertSessionHasNoErrors();
+    $as()->post(route('demo.choose'));
+
+    // Zambia's NGS and Board Chairperson now see the report too.
+    foreach (['ngs', 'chair'] as $role) {
+        $as()->post(route('demo.sign-in'), ['role' => $role] + $zambia);
+        $as()->get(route('resources'))->assertOk()->assertSee($formName)->assertSee($reportName);
+        $as()->post(route('demo.choose'));
+    }
+});
+
 it('gives every visitor a copy of the showcase’s work: one signs Zambia’s ODP as its Board Chairperson, and it stays waiting for everyone else', function () {
     $assessment = prepareInShowcase('zambia', makeSuperAdmin());
     $odp = $assessment->odp()->firstOrFail();
@@ -304,29 +335,75 @@ it('gives every visitor a copy of the showcase’s work: one signs Zambia’s OD
     expect(BoardSignature::query()->exists())->toBeFalse();
 });
 
-it('tells a visitor when the showcase has new work, gives it to them on starting over, and keeps the showcase when they delete their demo', function () {
-    $ray = makeSuperAdmin();
-    $key = register();
-    $this->withUnencryptedCookie(Sandboxes::COOKIE, $key)->get(route('login'))->assertDontSee('New work was added to the showcase');
-
-    // Afterwards, the Super Administrator signs in to the showcase and opens Kenya's assessment.
-    $this->travel(1)->minutes();
-    $showcase = fn () => $this->withUnencryptedCookie(Sandboxes::COOKIE, Sandboxes::SHOWCASE);
+/** The Super Administrator opens a movement's assessment in the showcase, as they would on its page. */
+function openInShowcase(User $ray, string $slug): void
+{
+    test()->travel(1)->minutes();
+    $showcase = fn () => test()->withUnencryptedCookie(Sandboxes::COOKIE, Sandboxes::SHOWCASE);
     $showcase()->post(route('login'), ['email' => $ray->email, 'password' => 'Showcase-Pass-2026'])->assertRedirect(route('dashboard'));
-    $showcase()->post(route('assessments.store', Movement::query()->where('slug', 'kenya')->firstOrFail()), ['period_label' => 'Nov 2026', 'period_start' => '2026-11'])
+    $showcase()->post(route('assessments.store', Movement::query()->where('slug', $slug)->firstOrFail()), ['period_label' => 'Nov 2026', 'period_start' => '2026-11'])
         ->assertSessionHasNoErrors();
     $showcase()->post(route('logout'));
-    expect(Assessment::query()->count())->toBe(1);
-    $this->withUnencryptedCookie(Sandboxes::COOKIE, $key)->get(route('login'))->assertSee('New work was added to the showcase');
+    test()->travel(1)->minutes();
+}
 
-    $new = demoCookie($this->withUnencryptedCookie(Sandboxes::COOKIE, $key)->post(route('demo.start-over')));
-    Sandboxes::use($new);
-    expect(Assessment::query()->count())->toBe(1);
+/** The demo cookie a response sets, if any. */
+function newDemoCookie($response): ?string
+{
+    return collect($response->headers->getCookies())->first(fn ($c) => $c->getName() === Sandboxes::COOKIE)?->getValue();
+}
+
+it('brings the showcase’s new work into a visitor’s demo by itself, unless they have done work of their own', function () {
+    $ray = makeSuperAdmin();
+    $key = register();
+
+    // The Super Administrator only signing in is not new work.
+    $this->travel(1)->minutes();
+    $this->withUnencryptedCookie(Sandboxes::COOKIE, Sandboxes::SHOWCASE)->post(route('login'), ['email' => $ray->email, 'password' => 'Showcase-Pass-2026']);
+    $this->withUnencryptedCookie(Sandboxes::COOKIE, Sandboxes::SHOWCASE)->post(route('logout'));
+    $response = $this->withUnencryptedCookie(Sandboxes::COOKIE, $key)->get(route('login'));
+    $response->assertOk()->assertDontSee('New work was added to the showcase');
+    expect(newDemoCookie($response))->toBeNull();
+
+    // They open Kenya's assessment: on "Choose who to be", the visitor's demo has it, by itself.
+    openInShowcase($ray, 'kenya');
+    $response = $this->withUnencryptedCookie(Sandboxes::COOKIE, $key)->get(route('login'));
+    $response->assertOk();
+    $fresh = newDemoCookie($response);
+    expect($fresh)->not->toBeNull()->not->toBe($key)
+        ->and(Sandboxes::exists($key))->toBeFalse()
+        ->and(DemoVisitor::query()->email('ama@example.com')->value('sandbox_key'))->toBe($fresh);
+    Sandboxes::use($fresh);
+    expect(Assessment::query()->count())->toBe(1)
+        ->and(User::query()->where('email', DemoPeople::STAFF['admin']['email'])->value('name'))->toBe('Ama Mensah');
     Sandboxes::leave();
-    $this->withUnencryptedCookie(Sandboxes::COOKIE, $new)->get(route('login'))->assertDontSee('New work was added to the showcase');
 
+    // The visitor does work of their own (as the assessor, opens Zambia's assessment).
+    $as = fn () => $this->withUnencryptedCookie(Sandboxes::COOKIE, $fresh);
+    $as()->post(route('demo.sign-in'), ['role' => 'assessor']);
+    $as()->post(route('assessments.store', Movement::query()->where('slug', 'zambia')->firstOrFail()), ['period_label' => 'Nov 2026', 'period_start' => '2026-11'])
+        ->assertSessionHasNoErrors();
+    $as()->post(route('demo.choose'));
+
+    // New work in the showcase (Ghana) no longer replaces theirs: they are told, and choose.
+    openInShowcase($ray, 'ghana');
+    $response = $as()->get(route('login'));
+    $response->assertOk()->assertSee('“Start over” to get it');
+    expect(newDemoCookie($response))->toBeNull();
+    Sandboxes::use($fresh);
+    expect(Assessment::query()->count())->toBe(2);
+    Sandboxes::leave();
+
+    $new = demoCookie($as()->post(route('demo.start-over')));
+    Sandboxes::use($new);
+    expect(Assessment::query()->count())->toBe(2)
+        ->and(Assessment::query()->whereHas('movement', fn ($q) => $q->where('slug', 'ghana'))->exists())->toBeTrue()
+        ->and(Assessment::query()->whereHas('movement', fn ($q) => $q->where('slug', 'zambia'))->exists())->toBeFalse();
+    Sandboxes::leave();
+
+    // Deleting the visitor's demo leaves the showcase as it is.
     $this->withUnencryptedCookie(Sandboxes::COOKIE, $new)->delete(route('demo.destroy'))->assertRedirect(route('home'));
-    expect(Assessment::query()->count())->toBe(1);
+    expect(Assessment::query()->count())->toBe(2);
 });
 
 it('starts a visitor over with a clean demo, keeping their account, and deletes it all on request', function () {

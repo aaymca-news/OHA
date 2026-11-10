@@ -23,7 +23,11 @@
             @if ($visitor)
                 <span>Signed in to your demo as <strong>{{ $visitor->name }}</strong>.</span>
                 @if (\App\Demo\Sandboxes::showcaseChangedSince((string) $visitor->sandbox_key))
-                    <span class="font-semibold">New work was added to the showcase since your copy: “Start over” to get it.</span>
+                    @if (\App\Demo\Sandboxes::hasOwnWork((string) $visitor->sandbox_key))
+                        <span class="font-semibold">New work was added to the showcase since your copy: “Start over” to get it (it replaces what you did here).</span>
+                    @else
+                        <span class="font-semibold">New work was added to the showcase: it comes into your demo when you next choose who to be.</span>
+                    @endif
                 @endif
                 @auth
                     <form method="POST" action="{{ route('demo.choose') }}" class="inline">

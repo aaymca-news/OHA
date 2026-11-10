@@ -41,6 +41,15 @@ class UseDemoSandbox
         config(['session.cookie' => self::$sessionCookie]);
         $key = $request->cookie(Sandboxes::COOKIE);
         if (is_string($key) && Sandboxes::use($key)) {
+            // On "Choose who to be", the visitor's copy catches up with the showcase's new
+            // work by itself, as long as they have done nothing of their own in it.
+            if ($request->isMethod('GET') && $request->is('login') && ($fresh = Sandboxes::refresh($key)) !== null) {
+                $response = $next($request);
+                $response->headers->setCookie(Sandboxes::cookie($fresh));
+
+                return $response;
+            }
+
             return $next($request);
         }
         // The showcase: the main schema, where only the Super Administrator signs in (with

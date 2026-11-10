@@ -11,6 +11,7 @@ use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use RuntimeException;
+use Symfony\Component\HttpFoundation\Cookie;
 
 /**
  * The demo site's private copies: each visitor works in their own "sandbox", the
@@ -117,13 +118,67 @@ final class Sandboxes
         return self::$showcase;
     }
 
-    /** Whether the showcase has new work since this sandbox was copied from it. */
+    /** Whether the showcase has new work since this sandbox was copied from it (signing in and out is not work). */
     public static function showcaseChangedSince(string $key): bool
     {
-        $copied = self::registry()->where('key', $key)->value('created_at');
-        $latest = DB::connection('pgsql')->table('public.audit_events')->max('occurred_at');
+        return self::since(self::work('public'), $key)?->exists() ?? false;
+    }
 
-        return $copied !== null && $latest !== null && Carbon::parse((string) $latest)->gt(Carbon::parse((string) $copied));
+    /** Whether the visitor has done anything in their copy since it was made (signing in and out as someone is not work). */
+    public static function hasOwnWork(string $key): bool
+    {
+        return self::since(self::work(self::schema($key)), $key)?->exists() ?? false;
+    }
+
+    /**
+     * The audit entries after the copy was made: past the last entry it copied (or, for a
+     * copy made before that was kept, after the time it was made).
+     */
+    private static function since(Builder $entries, string $key): ?Builder
+    {
+        $row = self::registry()->where('key', $key)->first(['created_at', 'showcase_mark']);
+        if ($row === null) {
+            return null;
+        }
+
+        return $row->showcase_mark !== null
+            ? $entries->where('id', '>', (int) $row->showcase_mark)
+            : $entries->where('occurred_at', '>', Carbon::parse((string) $row->created_at));
+    }
+
+    /**
+     * Brings a visitor's copy up to date with the showcase, by a new copy, when the
+     * showcase has new work and the visitor has none of their own in it (nothing of theirs
+     * is lost). Returns the new copy's key, or null when it is kept as it is.
+     */
+    public static function refresh(string $key): ?string
+    {
+        if (! self::exists($key) || ! self::showcaseChangedSince($key) || self::hasOwnWork($key)) {
+            return null;
+        }
+        $visitor = self::visitors()->where('sandbox_key', $key)->first();
+
+        $new = self::create();
+        if ($visitor !== null) {
+            self::visitors()->where('id', $visitor->id)->update(['sandbox_key' => $new, 'updated_at' => now()]);
+            self::name($new, (string) $visitor->name);
+        }
+        self::destroy($key);
+        self::use($new);
+
+        return $new;
+    }
+
+    /** The browser's cookie for a visitor's copy (or the showcase): it stays for 30 days. */
+    public static function cookie(string $value): Cookie
+    {
+        return cookie(self::COOKIE, $value, 30 * 24 * 60, secure: request()->isSecure(), httpOnly: true, sameSite: 'lax');
+    }
+
+    /** @return Builder the audit entries in a schema that are work, not signing in or out */
+    private static function work(string $schema)
+    {
+        return DB::connection('pgsql')->table($schema.'.audit_events')->where('action', 'not like', 'auth.%');
     }
 
     /**
@@ -158,6 +213,8 @@ final class Sandboxes
                 // No showcase yet (a new demo site): the movements and the demo people.
                 Artisan::call('db:seed', ['--database' => 'sandbox', '--class' => DemoSeeder::class, '--force' => true]);
             }
+            // How far into the showcase's audit trail this copy goes.
+            self::registry()->where('key', $key)->update(['showcase_mark' => (int) DB::connection('pgsql')->table(self::schema($key).'.audit_events')->max('id')]);
         } catch (\Throwable $e) {
             self::leave();
             self::destroy($key);
