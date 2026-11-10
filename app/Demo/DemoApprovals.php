@@ -36,6 +36,21 @@ final class DemoApprovals
             ->values()->all();
     }
 
+    /**
+     * Every visitor with something waiting for approval in their demo, and what.
+     *
+     * @return list<array{visitor: DemoVisitor, items: list<string>}>
+     */
+    public static function byVisitor(): array
+    {
+        $live = Sandboxes::all();
+
+        return DemoVisitor::query()->whereIn('sandbox_key', $live)->orderBy('name')->get()
+            ->map(fn (DemoVisitor $v) => ['visitor' => $v, 'items' => self::waiting((string) $v->sandbox_key)])
+            ->filter(fn (array $row) => $row['items'] !== [])
+            ->values()->all();
+    }
+
     /** How many items wait for approval across every visitor's demo (counted at most once a minute). */
     public static function count(): int
     {

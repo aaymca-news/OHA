@@ -1,6 +1,7 @@
 @use('App\Oha\Profile')
 @use('App\Support\Viz')
 <x-layouts.app title="Dashboard" subtitle="The region at a glance: how healthy the National Movements are, where Stage 1 stands, and how the ODPs are being carried out. Scores come from approved OHA forms only.">
+    @include('demo.visitor-approvals')
     @php
         $rated = $insights->rated();
         $n = $rated->count();

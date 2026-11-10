@@ -1,4 +1,5 @@
 <x-layouts.app :title="__('oha.work.title')" :subtitle="__('oha.work.subtitle')">
+    @include('demo.visitor-approvals')
     @php($counts = collect($groups)->mapWithKeys(fn ($g) => [$g['key'] => count($g['items'])]))
     <x-segmented label="Work groups">
         @foreach ($groups as $group)

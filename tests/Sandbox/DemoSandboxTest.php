@@ -358,7 +358,10 @@ it('tells the Super Administrator what a visitor sends for approval, and lets th
     $showcase()->post(route('login'), ['email' => $ray->email, 'password' => 'Showcase-Pass-2026'])->assertRedirect(route('dashboard'));
     $this->assertAuthenticatedAs($ray);
     // What waits for approval in the visitors' demos: counted in the banner, listed per visitor.
-    $showcase()->get(route('dashboard'))->assertOk()->assertSee('1 item is waiting for approval in visitors’ demos', false);
+    $showcase()->get(route('dashboard'))->assertOk()->assertSee('1 item is waiting for approval in visitors’ demos', false)
+        ->assertSee('Waiting for approval in visitors’ demos', false)->assertSee('Zambia YMCA: OHA form');
+    $showcase()->get(route('my-work'))->assertOk()->assertSee('Waiting for approval in visitors’ demos', false)
+        ->assertSee('Zambia YMCA: OHA form')->assertSee(route('demo.showcase.open', $visitor));
     $showcase()->get(route('admin.users.index', ['show' => 'visitors']))->assertOk()
         ->assertSee('Zambia YMCA: OHA form')->assertSee('Open their demo');
 
