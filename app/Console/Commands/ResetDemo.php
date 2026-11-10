@@ -2,9 +2,11 @@
 
 namespace App\Console\Commands;
 
+use App\Demo\Sandboxes;
 use Illuminate\Console\Attributes\Description;
 use Illuminate\Console\Attributes\Signature;
 use Illuminate\Console\Command;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Storage;
 
 /**
@@ -34,6 +36,13 @@ class ResetDemo extends Command
         }
         if (! $this->option('force') && ! $this->confirm('Wipe the demo database and every uploaded file, and start the demo again?')) {
             return self::SUCCESS;
+        }
+
+        // Every visitor's private copy goes too (its schema and its files).
+        if (Sandboxes::enabled() && Schema::hasTable('demo_sandboxes')) {
+            foreach (Sandboxes::all() as $key) {
+                Sandboxes::destroy($key);
+            }
         }
 
         // The stored files (forms, reports, ODPs, evidence) go with the database.

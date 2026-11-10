@@ -13,6 +13,9 @@ use Illuminate\Support\Facades\Notification;
  * sign-in for each role, no email, and the demo accounts; none of it on the live site.
  */
 
+// These check the demo as one shared space; the private copies have their own tests (tests/Sandbox).
+beforeEach(fn () => config(['oha.demo_sandboxes' => false]));
+
 it('starts the demo with the 23 movements, no assessments, and the four demo accounts', function () {
     $this->seed(DemoSeeder::class);
 

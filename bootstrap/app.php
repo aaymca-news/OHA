@@ -1,6 +1,8 @@
 <?php
 
+use App\Demo\Sandboxes;
 use App\Exceptions\WorkflowRuleBroken;
+use App\Http\Middleware\UseDemoSandbox;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
@@ -15,6 +17,12 @@ return Application::configure(basePath: dirname(__DIR__))
     ->withMiddleware(function (Middleware $middleware): void {
         $middleware->redirectGuestsTo(fn () => route('login'));
         $middleware->redirectUsersTo('/dashboard');
+
+        // The demo site only: each visitor's own private copy, chosen before the session,
+        // sign-in or any data is read. Its key is read first, so it is not encrypted (it is
+        // a random key, like a session id).
+        $middleware->encryptCookies(except: [Sandboxes::COOKIE]);
+        $middleware->prependToGroup('web', UseDemoSandbox::class);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         // A refused workflow action is not an error page: send the person back with the reason.

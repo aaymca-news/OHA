@@ -32,9 +32,11 @@ class DemoSeeder extends Seeder
         /** @var array{secretariat: list<array{name: string, role: string, title: string, movements: list<string>}>, chairs: array<string, array{name: string, title: string}>, general_secretaries: array<string, array{name: string, title: string}>} $sample */
         $sample = require database_path('data/sample_people.php');
         $movements = Movement::query()->pluck('id', 'slug');
-        // Nobody signs in with a password here: the demo accounts are one click away.
+        // Nobody signs in with a password here: the demo accounts are one click away. One
+        // random, unknown password for all (hashed once: a private copy is made on a click).
+        $password = Hash::make(Str::random(40));
         $person = fn (string $name, string $email, Role $role, ?string $title = null, ?int $movement = null) => User::query()->firstOrCreate(['email' => $email], [
-            'name' => $name, 'password' => Hash::make(Str::random(40)), 'email_verified_at' => now(),
+            'name' => $name, 'password' => $password, 'email_verified_at' => now(),
             'role' => $role, 'title' => $title, 'movement_id' => $movement,
         ]);
 

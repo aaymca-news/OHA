@@ -18,6 +18,10 @@ pest()->extend(TestCase::class)
     ->use(RefreshDatabase::class)
     ->in('Feature');
 
+// The demo's private copies are made on a connection of their own (outside any test
+// transaction), so their tests clean up after themselves instead.
+pest()->extend(TestCase::class)->in('Sandbox');
+
 /*
 |--------------------------------------------------------------------------
 | Expectations

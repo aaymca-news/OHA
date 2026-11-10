@@ -42,6 +42,16 @@ return [
     */
     'demo' => (bool) env('OHA_DEMO', false),
 
+    /*
+    | On the demo site, each visitor gets a private copy (a "sandbox"): their own tables,
+    | in their own PostgreSQL schema, and their own files, made from scratch when they
+    | click "Start your own demo". What one visitor does, nobody else sees. A copy unused
+    | for sandbox_days is deleted; at most sandbox_max exist (the least recently used goes).
+    */
+    'demo_sandboxes' => (bool) env('OHA_DEMO_SANDBOXES', true),
+    'demo_sandbox_days' => (int) env('OHA_DEMO_SANDBOX_DAYS', 14),
+    'demo_sandbox_max' => (int) env('OHA_DEMO_SANDBOX_MAX', 200),
+
     /* How many rows a long list shows per page (assessments, users, audit, notifications). */
     'per_page' => (int) env('OHA_PER_PAGE', 25),
 

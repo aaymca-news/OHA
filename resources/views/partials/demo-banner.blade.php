@@ -1,7 +1,37 @@
-{{-- The demo site only: says plainly what this is, and that only made-up data belongs here. --}}
+{{--
+    The demo site only: what this is, that only made-up data belongs here, and the
+    visitor's own private copy: start one, its private link to come back to it, or start over.
+--}}
 @if (config('oha.demo'))
-    <div role="note" class="w-full bg-warning-wash text-warning-ink border-b-[1.5px] border-band-developing px-md py-xs text-center text-[0.8125rem] font-semibold">
-        <span class="material-symbols-outlined text-[1rem] align-middle" aria-hidden="true">science</span>
-        Demo site, for trying the platform. Use made-up data only: never upload a real movement’s forms, reports or documents.
+    @php
+        $sandboxes = \App\Demo\Sandboxes::enabled();
+        $mine = \App\Demo\Sandboxes::current();
+    @endphp
+    <div role="note" class="w-full bg-warning-wash text-warning-ink border-b-[1.5px] border-band-developing px-md py-xs text-[0.8125rem]"
+         x-data="{ copied: false }">
+        <div class="flex flex-wrap items-center justify-center gap-x-md gap-y-xs text-center">
+            <span class="font-semibold">
+                <span class="material-symbols-outlined text-[1rem] align-middle" aria-hidden="true">science</span>
+                Demo site, for trying the platform. Use made-up data only: never upload a real movement’s forms, reports or documents.
+            </span>
+            @if ($sandboxes && $mine)
+                <span>Your demo is private: nobody else sees it.</span>
+                <button type="button" class="underline"
+                        x-on:click="navigator.clipboard.writeText(@js(route('demo.resume', $mine))); copied = true; setTimeout(() => copied = false, 2500)">
+                    <span x-show="! copied">Copy your private demo link</span><span x-show="copied" x-cloak>Copied: open it on any computer to come back</span>
+                </button>
+                <form method="POST" action="{{ route('demo.start-over') }}" class="inline"
+                      x-on:submit="if (! confirm('Throw away everything you did in this demo and start again with a clean one?')) $event.preventDefault()">
+                    @csrf
+                    <button type="submit" class="underline">Start over</button>
+                </form>
+            @elseif ($sandboxes)
+                <form method="POST" action="{{ route('demo.start') }}" class="inline">
+                    @csrf
+                    <button type="submit" class="px-md py-1 rounded bg-primary text-on-primary font-semibold">Start your own demo</button>
+                </form>
+                <span>Private to you: what you do, nobody else sees.</span>
+            @endif
+        </div>
     </div>
 @endif

@@ -15,6 +15,10 @@ Schedule::command('oha:remind-missing-roles')->dailyAt('08:00')->timezone('Afric
 Schedule::command('oha:follow-up-digest')->weeklyOn(1, '07:00')->timezone('Africa/Nairobi')->withoutOverlapping();
 Schedule::command('oha:remind-reassessment')->dailyAt('07:30')->timezone('Africa/Nairobi')->withoutOverlapping();
 
+// The demo site only: the visitors' private copies unused for two weeks are deleted.
+Schedule::command('oha:demo-prune')->dailyAt('03:00')->timezone('Africa/Nairobi')->withoutOverlapping()
+    ->when(fn () => (bool) config('oha.demo'));
+
 // An ODP's tasks are read into Timelines as the ODP is saved; this catches up any that
 // were missed (a failed read is retried; an ODP already read is skipped). Pages never read ODPs.
 Schedule::command('oha:read-odp-tasks')->everyFifteenMinutes()->withoutOverlapping();

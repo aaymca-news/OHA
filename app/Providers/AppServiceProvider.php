@@ -45,7 +45,9 @@ class AppServiceProvider extends ServiceProvider
 
         // The demo site never sends email, whatever its mail settings say: mail is written to the log.
         if (config('oha.demo')) {
-            config(['mail.default' => 'log']);
+            // Notices are handled at once, in the visitor's own private copy (a queued job
+            // would run later, outside it).
+            config(['mail.default' => 'log', 'queue.default' => 'sync']);
         }
 
         // $date->asDay(), ->asStamp(), ->asMonth(): the platform's date formats, in one place.
