@@ -19,9 +19,8 @@
     $label = 'text-[0.75rem] font-semibold uppercase tracking-[0.06em] text-on-surface-variant';
 @endphp
 <x-layouts.app title="Dashboard" :subtitle="'Welcome back, '.\Illuminate\Support\Str::before($me->name, ' ').' · the region at a glance. Scores come from approved OHA forms only.'">
-    @include('demo.visitor-approvals')
-
-    {{-- Analytics only: each person's own work is in My Work (its count on the menu badge), never here. --}}
+    {{-- Analytics only: each person's own work is in My Work (its count on the menu badge), never here;
+         on the demo, that includes what waits for approval in visitors' demos. --}}
 
     {{-- Key figures --}}
     <section aria-label="Key figures" class="grid gap-md sm:grid-cols-2 xl:grid-cols-3">

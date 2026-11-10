@@ -2,6 +2,7 @@
 
 namespace App\Policies;
 
+use App\Demo\DemoPeople;
 use App\Enums\Role;
 use App\Models\User;
 use Illuminate\Auth\Access\Response;
@@ -36,6 +37,21 @@ class UserPolicy
         return ! $target->isAdmin() || $actor->isSuperAdmin() || $actor->id === $target->id
             ? Response::allow()
             : Response::deny('Only the Super Administrator manages an Administrator’s account.');
+    }
+
+    /**
+     * Deactivating or deleting an account: as administering it, except that on the demo
+     * site its own people (each a role every visitor chooses from) are kept for everyone.
+     */
+    public function remove(User $actor, User $target): Response
+    {
+        if (($administer = $this->administer($actor, $target))->denied()) {
+            return $administer;
+        }
+
+        return DemoPeople::isBuiltIn($target)
+            ? Response::deny('On the demo, '.$target->name.' is one of the people every visitor chooses from, so the account stays active for everyone.')
+            : Response::allow();
     }
 
     /** Whether this person may give a role, e.g. when inviting someone. */

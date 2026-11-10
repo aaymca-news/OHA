@@ -32,6 +32,17 @@ final class DemoPeople
         return [...array_keys(self::STAFF), ...array_keys(self::MOVEMENT)];
     }
 
+    /**
+     * Whether this is one of the demo's own people (the Administrator, the assessor, a
+     * movement's Board Chairperson or General Secretary): on the demo, all of them, every
+     * one at example.org. Visitors are each of them in turn, so none may be deactivated
+     * or deleted there: in the one shared demo it would take the role away from everyone.
+     */
+    public static function isBuiltIn(User $user): bool
+    {
+        return (bool) config('oha.demo') && str_ends_with(mb_strtolower($user->email), '@example.org');
+    }
+
     /** The demo person for a key (and, for a movement's people, the movement), if there is one. */
     public static function find(string $key, ?Movement $movement = null): ?User
     {

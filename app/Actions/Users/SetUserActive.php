@@ -18,7 +18,8 @@ final class SetUserActive
 
     public function handle(User $admin, User $user, bool $active): User
     {
-        $this->ensure($admin, 'administer', $user);
+        // Deactivating also keeps the demo's own people (UserPolicy::remove); reactivating does not need to.
+        $this->ensure($admin, $active ? 'administer' : 'remove', $user);
 
         if ($admin->id === $user->id) {
             throw new WorkflowRuleBroken('You cannot deactivate your own account.');

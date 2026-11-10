@@ -1,5 +1,6 @@
 <?php
 
+use App\Actions\Users\ChangeUserRole;
 use App\Demo\DemoForm;
 use App\Demo\DemoMail;
 use App\Demo\DemoOdp;
@@ -7,6 +8,7 @@ use App\Demo\DemoPeople;
 use App\Demo\DemoVisitor;
 use App\Demo\Sandboxes;
 use App\Enums\Role;
+use App\Exceptions\WorkflowRuleBroken;
 use App\Http\Middleware\UseDemoSandbox;
 use App\Models\Artefact;
 use App\Models\Assessment;
@@ -360,9 +362,10 @@ it('tells the Super Administrator what a visitor sends for approval, and lets th
     $showcase = fn () => $this->withUnencryptedCookie(Sandboxes::COOKIE, Sandboxes::SHOWCASE);
     $showcase()->post(route('login'), ['email' => $ray->email, 'password' => 'Showcase-Pass-2026'])->assertRedirect(route('dashboard'));
     $this->assertAuthenticatedAs($ray);
-    // What waits for approval in the visitors' demos: counted in the banner, listed per visitor.
+    // What waits for approval in the visitors' demos: counted in the banner, listed per visitor
+    // on My Work (the dashboard is analytics only).
     $showcase()->get(route('dashboard'))->assertOk()->assertSee('1 item is waiting for approval in visitors’ demos', false)
-        ->assertSee('Waiting for approval in visitors’ demos', false)->assertSee('Zambia YMCA: OHA form');
+        ->assertDontSee('Waiting for approval in visitors’ demos', false)->assertDontSee('Zambia YMCA: OHA form');
     $showcase()->get(route('my-work'))->assertOk()->assertSee('Waiting for approval in visitors’ demos', false)
         ->assertSee('Zambia YMCA: OHA form')->assertSee(route('demo.showcase.open', $visitor));
     $showcase()->get(route('admin.users.index', ['show' => 'visitors']))->assertOk()
@@ -826,4 +829,57 @@ it('lets only the Super Administrator, in the showcase, delete a visitor’s acc
     $this->withUnencryptedCookie(Sandboxes::COOKIE, $key)->get(route('demo.showcase.visitors.delete', $visitor))->assertNotFound();
     $this->withUnencryptedCookie(Sandboxes::COOKIE, $key)->delete(route('demo.showcase.visitors.destroy', $visitor))->assertNotFound();
     expect(DemoVisitor::query()->count())->toBe(1);
+});
+
+it('undoes a deleted visitor’s follow-up work too: a dropped task, the overall review and the closed cycle', function () {
+    config(['oha.demo_shared' => true]);
+    $ray = makeSuperAdmin();
+    $assessment = prepareInShowcase('zambia', $ray, 'signed');
+    $task = $assessment->odpTasks()->firstOrFail();
+    $caleb = register('caleb@example.com');
+    $as = fn () => $this->withUnencryptedCookie(Sandboxes::COOKIE, $caleb);
+
+    // Caleb, as the AAYMCA assessor, drops a task, writes the overall review and closes the cycle.
+    $as()->post(route('demo.sign-in'), ['role' => 'assessor']);
+    $as()->post(route('follow-up.drop', $task), ['reason' => 'No longer relevant.'])->assertSessionHasNoErrors();
+    $as()->post(route('follow-up.review', $assessment), ['achieved' => 'The plan was approved.', 'not_achieved' => 'The reserve fund, for lack of income.'])->assertSessionHasNoErrors();
+    $as()->post(route('follow-up.close', $assessment))->assertSessionHasNoErrors();
+    $as()->post(route('demo.choose'));
+    expect($assessment->refresh()->isFollowUpClosed())->toBeTrue()->and($task->refresh()->isDropped())->toBeTrue();
+
+    // The Super Administrator deletes Caleb's account: all three are undone.
+    $showcase = fn () => $this->withUnencryptedCookie(Sandboxes::COOKIE, Sandboxes::SHOWCASE);
+    $showcase()->post(route('login'), ['email' => $ray->email, 'password' => 'Showcase-Pass-2026']);
+    $showcase()->delete(route('demo.showcase.visitors.destroy', DemoVisitor::query()->email('caleb@example.com')->firstOrFail()))
+        ->assertRedirect(route('admin.users.index', ['show' => 'visitors']));
+
+    expect($assessment->refresh()->isFollowUpClosed())->toBeFalse()
+        ->and($assessment->odpReview()->exists())->toBeFalse()
+        ->and($task->refresh()->isDropped())->toBeFalse();
+});
+
+it('keeps the demo’s own people for everyone: a visitor cannot deactivate, delete or replace them', function () {
+    config(['oha.demo_shared' => true]);
+    $a = register('a@example.com');
+    $as = fn () => $this->withUnencryptedCookie(Sandboxes::COOKIE, $a);
+    $as()->post(route('demo.sign-in'), ['role' => 'admin']);
+    $zambia = Movement::query()->where('slug', 'zambia')->firstOrFail();
+    $chair = User::query()->where('role', Role::Board)->where('movement_id', $zambia->id)->firstOrFail();
+
+    $as()->get(route('admin.users.edit', $chair))->assertOk()
+        ->assertSee('one of the people every visitor chooses from')->assertDontSee(route('admin.users.deactivate', $chair), false);
+    $as()->post(route('admin.users.deactivate', $chair));
+    $as()->delete(route('admin.users.destroy', $chair));
+    expect($chair->refresh()->active)->toBeTrue()->and($chair->isDeleted())->toBeFalse();
+
+    // Nor are they replaced by giving their role to someone else.
+    $ngs = User::query()->where('role', Role::Ngs)->where('movement_id', $zambia->id)->firstOrFail();
+    expect(fn () => app(ChangeUserRole::class)->handle(User::query()->where('email', DemoPeople::STAFF['admin']['email'])->firstOrFail(), $ngs, Role::Board, $zambia, true))
+        ->toThrow(WorkflowRuleBroken::class);
+    expect($chair->refresh()->active)->toBeTrue();
+
+    // Everyone can still be chosen.
+    $as()->post(route('demo.choose'));
+    $as()->post(route('demo.sign-in'), ['role' => 'chair', 'movement' => 'zambia'])->assertRedirect();
+    expect(auth()->id())->toBe($chair->id);
 });

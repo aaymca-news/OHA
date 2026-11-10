@@ -11,8 +11,10 @@
     @include('partials.display-preferences')
     @vite(['resources/css/app.css', 'resources/js/app.js'])
 </head>
-<body class="min-h-screen flex flex-col items-center justify-center gap-lg p-md">
+{{-- The demo site's strip (none on the live site) runs along the top; the page is centred beneath it. --}}
+<body class="min-h-screen flex flex-col">
     @include('partials.demo-banner')
+    <div class="flex-1 flex flex-col items-center justify-center gap-lg p-md">
     <div class="flex flex-col items-center gap-sm text-center">
         <a href="{{ route('home') }}" title="About the Organisational Health Assessment">
             <img src="{{ asset('images/aaymca-logo.png') }}" alt="{{ __('oha.app.org') }}" width="1200" height="452" class="w-[16rem] max-w-full h-auto">
@@ -27,5 +29,6 @@
     </main>
 
     <p class="max-w-[28rem] text-center text-[0.8125rem] font-bold uppercase tracking-wider text-brand-red-ink">{{ __('oha.app.payoff') }}</p>
+    </div>
 </body>
 </html>

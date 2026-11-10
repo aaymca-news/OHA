@@ -25,7 +25,7 @@ final class DeleteUser
 
     public function handle(User $admin, User $user): void
     {
-        $this->ensure($admin, 'administer', $user);
+        $this->ensure($admin, 'remove', $user);
         if ($admin->id === $user->id) {
             throw new WorkflowRuleBroken('You cannot delete your own account.');
         }

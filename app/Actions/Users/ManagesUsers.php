@@ -3,6 +3,7 @@
 namespace App\Actions\Users;
 
 use App\Actions\Concerns\EnforcesPolicy;
+use App\Demo\DemoPeople;
 use App\Enums\Role;
 use App\Exceptions\WorkflowRuleBroken;
 use App\Models\Movement;
@@ -41,6 +42,10 @@ trait ManagesUsers
             return;
         }
 
+        // The demo site: its own people stay, for every visitor to choose from (UserPolicy::remove).
+        if (DemoPeople::isBuiltIn($current)) {
+            throw new WorkflowRuleBroken("On the demo, {$current->name} is {$movement->name}’s {$role->label()} for every visitor, so they cannot be replaced.");
+        }
         if (! $confirmReplace) {
             throw new WorkflowRuleBroken("{$current->name} is {$movement->name}’s {$role->label()}, and a movement has one. Confirm to replace them: their account will be deactivated.");
         }

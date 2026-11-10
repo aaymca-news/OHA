@@ -78,7 +78,10 @@
                             <x-button variant="secondary">Send a new invitation</x-button>
                         </form>
                     @endif
-                    @if ($target->id !== auth()->id())
+                    @if ($target->id !== auth()->id() && \App\Demo\DemoPeople::isBuiltIn($target))
+                        {{-- The demo site only: its own people stay, for every visitor to choose from. --}}
+                        <p class="text-[0.875rem] text-on-surface-variant">On the demo, {{ $target->name }} is one of the people every visitor chooses from, so this account cannot be deactivated or deleted.</p>
+                    @elseif ($target->id !== auth()->id())
                         @if ($target->active)
                             <form method="POST" action="{{ route('admin.users.deactivate', $target) }}">
                                 @csrf
