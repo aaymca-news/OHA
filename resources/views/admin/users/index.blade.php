@@ -34,7 +34,16 @@
                     </td>
                     <td>{{ $v->created_at?->asDay() }}</td>
                     <td>{{ $v->updated_at?->asDay() }}</td>
-                    <td>{{ $v->sandbox_key !== null && in_array($v->sandbox_key, $liveDemos, true) ? 'In use' : 'None now (a new one on signing in)' }}</td>
+                    <td>
+                        @if ($v->sandbox_key !== null && in_array($v->sandbox_key, $liveDemos, true))
+                            <span class="flex flex-wrap items-center gap-sm">
+                                In use
+                                <x-button size="sm" variant="secondary" :href="route('demo.showcase.open', $v)">Open their demo</x-button>
+                            </span>
+                        @else
+                            None now (a new one on signing in)
+                        @endif
+                    </td>
                 </tr>
             @empty
                 <tr><td colspan="4"><x-empty-state icon="group">Nobody has registered for a demo yet.</x-empty-state></td></tr>

@@ -79,7 +79,8 @@ class ArtefactController extends Controller
     {
         $request->validate([
             'odp' => UploadLimit::rule(),
-            'drive_url' => [$odp->drive_file_id === null ? 'required' : 'nullable', 'string', 'max:2000', new GoogleDriveLink],
+            // Required the first time, except on the demo site, where it is optional.
+            'drive_url' => [$odp->drive_file_id === null && ! config('oha.demo') ? 'required' : 'nullable', 'string', 'max:2000', new GoogleDriveLink],
             'note' => ['nullable', 'string', 'max:2000'],
         ], [
             'odp.required' => 'Choose the ODP file to save.',

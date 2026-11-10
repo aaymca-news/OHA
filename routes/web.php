@@ -6,6 +6,7 @@ use App\Http\Controllers\ArtefactController;
 use App\Http\Controllers\AssessmentController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\DemoAccountController;
+use App\Http\Controllers\DemoShowcaseController;
 use App\Http\Controllers\DemoSignInController;
 use App\Http\Controllers\DownloadController;
 use App\Http\Controllers\EvidenceController;
@@ -51,6 +52,10 @@ Route::prefix('demo/account')->name('demo.')->controller(DemoAccountController::
 // The showcase, where the demo's Super Administrator prepares the work every new copy starts from.
 Route::get('demo/showcase', [DemoAccountController::class, 'showcase'])->name('demo.showcase');
 Route::post('demo/showcase/leave', [DemoAccountController::class, 'leaveShowcase'])->name('demo.showcase.leave');
+// The Super Administrator into a visitor's demo, to act on what they sent for approval, and back.
+Route::get('demo/showcase/visitors/{visitor}/open', [DemoShowcaseController::class, 'open'])->middleware('auth')->name('demo.showcase.open');
+Route::get('demo/showcase/visitors/{visitor}/enter', [DemoShowcaseController::class, 'enter'])->middleware('throttle:20,1')->name('demo.showcase.enter');
+Route::post('demo/showcase/back', [DemoShowcaseController::class, 'back'])->name('demo.showcase.back');
 
 Route::middleware('guest')->group(function () {
     // The demo site only: "Choose who to be", one click per person in the visitor's demo.

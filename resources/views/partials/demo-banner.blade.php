@@ -1,7 +1,8 @@
 {{--
     The demo site only: what this is, that only made-up data belongs here, and, for a
     signed-in visitor, whose demo this is: choose who to be, start over, sign out of the
-    demo, or delete it and the account.
+    demo, or delete it and the account. The Super Administrator visiting a visitor's demo
+    is told so, and goes back to the showcase from here.
 --}}
 @if (config('oha.demo'))
     @php
@@ -20,7 +21,14 @@
                     <button type="submit" class="underline">Leave the showcase</button>
                 </form>
             @endif
-            @if ($visitor)
+            @if ($visitor && auth()->user()?->isSuperAdmin())
+                {{-- The Super Administrator visiting a visitor's demo, to act on what was sent for approval. --}}
+                <span>You are in <strong>{{ $visitor->name }}</strong>’s demo, as the Super Administrator.</span>
+                <form method="POST" action="{{ route('demo.showcase.back') }}" class="inline">
+                    @csrf
+                    <button type="submit" class="underline font-semibold">Back to the showcase</button>
+                </form>
+            @elseif ($visitor)
                 <span>Signed in to your demo as <strong>{{ $visitor->name }}</strong>.</span>
                 @if (\App\Demo\Sandboxes::showcaseChangedSince((string) $visitor->sandbox_key))
                     @if (\App\Demo\Sandboxes::hasOwnWork((string) $visitor->sandbox_key))

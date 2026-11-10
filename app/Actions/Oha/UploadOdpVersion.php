@@ -39,7 +39,8 @@ final class UploadOdpVersion
 
         $driveUrl = $driveUrl !== null && trim($driveUrl) !== '' ? trim($driveUrl) : null;
         $fileId = $driveUrl !== null ? DriveLink::fileId($driveUrl) : $odp->drive_file_id;
-        if ($fileId === null) {
+        // The demo site lets people try the ODP without a Google Drive document.
+        if ($fileId === null && ! config('oha.demo')) {
             throw new WorkflowRuleBroken('Add the link to the ODP in Google Drive, so everyone works on the same document.');
         }
 

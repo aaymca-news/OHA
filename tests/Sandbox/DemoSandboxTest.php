@@ -2,10 +2,12 @@
 
 use App\Demo\DemoForm;
 use App\Demo\DemoMail;
+use App\Demo\DemoOdp;
 use App\Demo\DemoPeople;
 use App\Demo\DemoVisitor;
 use App\Demo\Sandboxes;
 use App\Enums\Role;
+use App\Models\Artefact;
 use App\Models\Assessment;
 use App\Models\BoardSignature;
 use App\Models\Movement;
@@ -303,6 +305,92 @@ it('shows Zambia’s Board Chairperson and NGS what was approved, by the Super A
         $as()->get(route('resources'))->assertOk()->assertSee($formName)->assertSee($reportName);
         $as()->post(route('demo.choose'));
     }
+});
+
+it('lets the ODP be uploaded without a Google Drive link on the demo', function () {
+    $assessment = prepareInShowcase('zambia', makeSuperAdmin(), 'report_approved');
+    $odp = $assessment->odp()->firstOrFail();
+
+    $key = register();
+    $as = fn () => $this->withUnencryptedCookie(Sandboxes::COOKIE, $key);
+    $as()->post(route('demo.sign-in'), ['role' => 'assessor']);
+    $as()->get(route('assessments.show', ['assessment' => $assessment, 'tab' => 'odp']))->assertOk()->assertSee('(optional on the demo)');
+
+    $file = DemoOdp::make('Zambia YMCA', now(), [], 11);
+    try {
+        $as()->post(route('artefacts.versions', $odp), ['odp' => new UploadedFile($file, 'Zambia ODP 2026.xlsx', null, null, true)])
+            ->assertSessionHasNoErrors();
+    } finally {
+        @unlink($file);
+    }
+
+    // (Looked up afresh: a model read in the showcase stays on the showcase's connection.)
+    Sandboxes::use($key);
+    $mine = Artefact::query()->findOrFail($odp->id);
+    expect($mine->versions()->count())->toBe(1)
+        ->and($mine->drive_url)->toBeNull();
+});
+
+it('tells the Super Administrator what a visitor sends for approval, and lets them go into that demo, approve it as themselves, and come back', function () {
+    config(['session.driver' => 'database']);
+    $ray = makeSuperAdmin();
+    $assessment = prepareInShowcase('zambia', $ray, 'form_uploaded');
+    $form = $assessment->form()->firstOrFail();
+
+    // A visitor, as the AAYMCA assessor, sends Zambia's form for approval in their demo.
+    $key = register();
+    $visitor = DemoVisitor::query()->email('ama@example.com')->firstOrFail();
+    $as = fn () => $this->withUnencryptedCookie(Sandboxes::COOKIE, $key);
+    $as()->post(route('demo.sign-in'), ['role' => 'assessor']);
+    $as()->post(route('artefacts.submit', $form), ['acknowledge_gaps' => '1', 'reason' => 'Figures to follow.', 'seen' => $form->currentUpload()->value('id')])
+        ->assertSessionHasNoErrors();
+    $as()->post(route('demo.choose'));
+    Sandboxes::leave();
+
+    // The Super Administrator finds it in their notifications in the showcase.
+    $notices = DB::connection('pgsql')->table('public.notifications')->where('notifiable_id', $ray->id)->where('data', 'like', '%Ama Mensah%')->get();
+    expect($notices)->toHaveCount(1);
+    $data = json_decode((string) $notices[0]->data, true);
+    expect($data['subject'])->toContain('Ama Mensah’s demo')->toContain('Approval needed')
+        ->and($data['link'])->toBe(route('demo.showcase.open', $visitor, absolute: false));
+
+    $showcase = fn () => $this->withUnencryptedCookie(Sandboxes::COOKIE, Sandboxes::SHOWCASE);
+    $showcase()->post(route('login'), ['email' => $ray->email, 'password' => 'Showcase-Pass-2026'])->assertRedirect(route('dashboard'));
+    $this->assertAuthenticatedAs($ray);
+    $showcase()->get(route('admin.users.index', ['show' => 'visitors']))->assertOk()->assertSee('Open their demo');
+
+    // "Open their demo": a one-minute signed link, and this browser in the visitor's demo.
+    $open = $showcase()->get(route('demo.showcase.open', $visitor));
+    $open->assertRedirect()->assertCookie(Sandboxes::COOKIE, $key, false);
+    $enter = (string) $open->headers->get('Location');
+    $as()->get($enter)->assertRedirect(route('dashboard'));
+    Sandboxes::use($key);
+    $me = User::query()->where('role', Role::SuperAdmin)->firstOrFail();
+    Sandboxes::leave();
+    $this->assertAuthenticatedAs($me);
+    $as()->get(route('dashboard'))->assertOk()->assertSee('as the Super Administrator')->assertDontSee('Delete my demo and account');
+
+    // They approve the form, in the visitor's demo, as themselves; then go back.
+    $as()->post(route('artefacts.approve', $form))->assertSessionHasNoErrors();
+    $as()->post(route('demo.showcase.back'))->assertRedirect(route('login'))->assertCookie(Sandboxes::COOKIE, Sandboxes::SHOWCASE, false);
+
+    Sandboxes::use($key);
+    expect(Artefact::query()->findOrFail($form->id)->approved_by)->toBe($me->id);
+    Sandboxes::leave();
+    expect(Artefact::query()->findOrFail($form->id)->approved_by)->toBeNull();
+});
+
+it('lets nobody else into a visitor’s demo as the Super Administrator', function () {
+    $ray = makeSuperAdmin();
+    $key = register();
+    $visitor = DemoVisitor::query()->email('ama@example.com')->firstOrFail();
+    $as = fn () => $this->withUnencryptedCookie(Sandboxes::COOKIE, $key);
+
+    // Without the signed link; or as the visitor's own Administrator.
+    $as()->get(route('demo.showcase.enter', ['visitor' => $visitor, 'as' => $ray->email]))->assertNotFound();
+    $as()->post(route('demo.sign-in'), ['role' => 'admin']);
+    $as()->get(route('demo.showcase.open', $visitor))->assertNotFound();
+    $this->assertAuthenticatedAs(DemoPeople::find('admin'));
 });
 
 it('gives every visitor a copy of the showcase’s work: one signs Zambia’s ODP as its Board Chairperson, and it stays waiting for everyone else', function () {

@@ -3,6 +3,7 @@
 namespace App\Providers;
 
 use App\Demo\DemoMail;
+use App\Demo\DemoShowcaseInbox;
 use App\Models\User;
 use App\Support\Audit;
 use App\Support\DateFormats;
@@ -16,6 +17,7 @@ use Illuminate\Auth\Events\Logout;
 use Illuminate\Auth\Events\PasswordReset;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Mail\Events\MessageSending;
+use Illuminate\Notifications\Events\NotificationSent;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\View;
@@ -57,6 +59,8 @@ class AppServiceProvider extends ServiceProvider
         // On the demo, email is marked "Demo", never sent to the demo people, and its links
         // open the sender's demo (it does nothing anywhere else).
         Event::listen(MessageSending::class, [DemoMail::class, 'handle']);
+        // On the demo, approvals asked for in a visitor's demo also reach the showcase's Super Administrator.
+        Event::listen(NotificationSent::class, [DemoShowcaseInbox::class, 'handle']);
 
         // $date->asDay(), ->asStamp(), ->asMonth(): the platform's date formats, in one place.
         Carbon::mixin(new DateFormats);

@@ -25,6 +25,9 @@ class UseDemoSandbox
     /** The session cookie of a visitor without a private copy. */
     private const GUEST_SESSION = 'oha_demo_guest';
 
+    /** The session cookie in the showcase. */
+    private const SHOWCASE_SESSION = 'oha_showcase_session';
+
     /** The usual session cookie's name, as configured. */
     private static ?string $sessionCookie = null;
 
@@ -56,6 +59,8 @@ class UseDemoSandbox
         // their email and password; nobody is one click away there).
         if ($key === Sandboxes::SHOWCASE) {
             Sandboxes::useShowcase();
+            // A session of its own, kept while the Super Administrator visits a visitor's demo.
+            config(['session.cookie' => self::SHOWCASE_SESSION]);
 
             return $next($request);
         }

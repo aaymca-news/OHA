@@ -23,7 +23,8 @@
         <x-file-drop :name="$file" :accept="$accept" :label="$fileLabel" :prompt="$prompt" />
         @if ($askDriveLink)
             <div x-data="driveLink(@js(old('drive_url', '')))" class="flex flex-col gap-xs">
-                <x-input name="drive_url" label="Link to the ODP in Google Drive" type="url" required x-on:input="link = $event.target.value"
+                {{-- Optional on the demo site, where people try the ODP without a Google Drive document. --}}
+                <x-input name="drive_url" :label="config('oha.demo') ? 'Link to the ODP in Google Drive (optional on the demo)' : 'Link to the ODP in Google Drive'" type="url" :required="! config('oha.demo')" x-on:input="link = $event.target.value"
                          placeholder="https://docs.google.com/spreadsheets/d/…"
                          hint="The ODP file itself, not its folder: the Google Sheet (or Doc) the staff write the ODP in. In Google Drive, open it and use Share → Copy link." />
                 <p x-show="problem" x-cloak role="alert" class="flex items-start gap-xs text-[0.875rem] text-error">
