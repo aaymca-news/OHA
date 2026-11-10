@@ -209,7 +209,10 @@ class DemoAccountController extends Controller
     private function leaveDemo(Request $request): void
     {
         $this->leaveRole($request);
-        $request->session()->setHandler(new NullSessionHandler);
+        // A private copy's session is deleted with it; in one shared demo it stays, signed out.
+        if (! Sandboxes::shared()) {
+            $request->session()->setHandler(new NullSessionHandler);
+        }
     }
 
     private function broker(): PasswordBroker

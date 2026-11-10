@@ -7,6 +7,7 @@ use App\Demo\DemoPeople;
 use App\Demo\DemoVisitor;
 use App\Demo\Sandboxes;
 use App\Enums\Role;
+use App\Http\Middleware\UseDemoSandbox;
 use App\Models\Artefact;
 use App\Models\Assessment;
 use App\Models\BoardSignature;
@@ -793,6 +794,27 @@ it('undoes what others built on a deleted visitor’s work too, after saying so'
     expect(Assessment::query()->count())->toBe(0)
         ->and(DB::table('form_uploads')->count())->toBe(0)
         ->and(DemoVisitor::query()->email('ama@example.com')->exists())->toBeTrue();
+});
+
+it('starts afresh after an account is deleted: registering again, the visitor chooses who to be, not stuck as before', function () {
+    // As on the server: sessions in the database, kept by the browser's cookies.
+    config(['oha.demo_shared' => true, 'session.driver' => 'database']);
+    $key = register('caleb@example.com', 'demo-pass-1');
+    $signedIn = $this->withUnencryptedCookie(Sandboxes::COOKIE, $key)->post(route('demo.sign-in'), ['role' => 'chair', 'movement' => 'zambia']);
+    $signedIn->assertRedirect(route('dashboard'));
+    // The visitor account's session has a cookie of its own.
+    expect(collect($signedIn->headers->getCookies())->map->getName())->toContain(UseDemoSandbox::visitorSession($key));
+
+    // The visitor's account is deleted (by them here; the same when the Super Administrator does it).
+    $this->withUnencryptedCookie(Sandboxes::COOKIE, $key)->delete(route('demo.destroy'))->assertRedirect(route('home'));
+    $this->app['auth']->forgetGuards();
+
+    // Registered again, it is another account, with another session: "Choose who to be", anyone.
+    $again = register('caleb@example.com', 'demo-pass-1');
+    expect(UseDemoSandbox::visitorSession($again))->not->toBe(UseDemoSandbox::visitorSession($key));
+    $this->withUnencryptedCookie(Sandboxes::COOKIE, $again)->get(route('login'))->assertOk()->assertSee('Choose who to be');
+    $this->withUnencryptedCookie(Sandboxes::COOKIE, $again)->post(route('demo.sign-in'), ['role' => 'admin'])->assertRedirect(route('dashboard'));
+    $this->assertAuthenticatedAs(DemoPeople::find('admin'));
 });
 
 it('lets only the Super Administrator, in the showcase, delete a visitor’s account', function () {

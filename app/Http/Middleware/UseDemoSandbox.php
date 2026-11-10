@@ -29,8 +29,23 @@ class UseDemoSandbox
     /** The session cookie in the showcase. */
     private const SHOWCASE_SESSION = 'oha_showcase_session';
 
+    /** The session cookie of a visitor account. */
+    public static function visitorSession(string $key): string
+    {
+        return 'oha_demo_s_'.substr($key, 0, 12);
+    }
+
     /** The usual session cookie's name, as configured. */
     private static ?string $sessionCookie = null;
+
+    /** The session's cookie for this request (also on a session already made, as in tests). */
+    private static function nameSession(string $name): void
+    {
+        config(['session.cookie' => $name]);
+        foreach (app('session')->getDrivers() as $store) {
+            $store->setName($name);
+        }
+    }
 
     public function handle(Request $request, Closure $next): Response
     {
@@ -42,11 +57,14 @@ class UseDemoSandbox
         // request in this process used.
         Sandboxes::leave();
         self::$sessionCookie ??= (string) config('session.cookie');
-        config(['session.cookie' => self::$sessionCookie]);
+        self::nameSession(self::$sessionCookie);
         $key = $request->cookie(Sandboxes::COOKIE);
         // Whose changes these are, for the record (DemoChanges): nobody's until a visitor is known.
         DemoChanges::actAs(null);
         if (is_string($key) && Sandboxes::use($key)) {
+            // A session of each visitor account's own: a new or different account (or one
+            // registered again after being deleted) never finds someone else signed in.
+            self::nameSession(self::visitorSession($key));
             if (Sandboxes::shared()) {
                 DemoChanges::actAs($key);
             }
@@ -66,7 +84,7 @@ class UseDemoSandbox
         if ($key === Sandboxes::SHOWCASE) {
             Sandboxes::useShowcase();
             // A session of its own, kept while the Super Administrator visits a visitor's demo.
-            config(['session.cookie' => self::SHOWCASE_SESSION]);
+            self::nameSession(self::SHOWCASE_SESSION);
 
             return $next($request);
         }
@@ -74,7 +92,7 @@ class UseDemoSandbox
         if ($request->is(...self::OPEN)) {
             // Without a private copy nobody is signed in: a session of its own (another
             // cookie), so an older sign-in, from before private copies, is never read.
-            config(['session.cookie' => self::GUEST_SESSION]);
+            self::nameSession(self::GUEST_SESSION);
             // Nor an old "remember me" sign-in.
             foreach ($request->cookies->keys() as $name) {
                 if (str_starts_with((string) $name, 'remember_')) {
