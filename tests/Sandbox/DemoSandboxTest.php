@@ -5,7 +5,9 @@ use App\Demo\Sandboxes;
 use App\Models\Assessment;
 use App\Models\Movement;
 use App\Models\User;
+use Illuminate\Auth\SessionGuard;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 
 /*
  * The demo site's private copies: each visitor works in their own copy (their own
@@ -62,6 +64,27 @@ it('gives each visitor a private copy: what one does, the other never sees', fun
 it('sends a visitor without a private copy to the landing page to start one', function () {
     $this->get(route('login'))->assertRedirect(route('home'));
     $this->get(route('home'))->assertOk()->assertSee('Start your own demo');
+});
+
+it('shows the landing page, not a loop, to someone still signed in from before private copies', function () {
+    // A sign-in kept in the main schema, as on the demo when it was one shared space.
+    config(['session.driver' => 'database']);
+    $user = User::factory()->create();
+    $id = Str::random(40);
+    DB::connection('pgsql')->table('sessions')->insert([
+        'id' => $id,
+        'user_id' => $user->id,
+        'payload' => base64_encode((string) json_encode(['_token' => Str::random(40), 'login_web_'.sha1(SessionGuard::class) => $user->id])),
+        'last_activity' => time(),
+    ]);
+
+    try {
+        $this->withCookie((string) config('session.cookie'), $id)->get(route('home'))
+            ->assertOk()->assertSee('Start your own demo');
+    } finally {
+        DB::connection('pgsql')->table('sessions')->where('id', $id)->delete();
+        $user->delete();
+    }
 });
 
 it('brings a visitor back to their copy with its private link, and starts over with a clean one', function () {
