@@ -72,6 +72,20 @@ it('sends a visitor without a private copy to the landing page, whose buttons st
         ->assertSee('Continue your demo')->assertDontSee('Start your own demo');
 });
 
+it('keeps the visitor’s session (their sign-in) in their own copy, even on the sign-in pages', function () {
+    // As on the server: sessions in the database. The sign-in page's controller opens the
+    // session before the route's middleware runs, so the copy must be chosen before that.
+    config(['session.driver' => 'database']);
+    $key = Sandboxes::create();
+    Sandboxes::leave();
+    $mainBefore = DB::connection('pgsql')->table('public.sessions')->count();
+
+    $this->withUnencryptedCookie(Sandboxes::COOKIE, $key)->get(route('login'))->assertOk();
+
+    expect(DB::connection('pgsql')->table('demo_'.$key.'.sessions')->count())->toBe(1)
+        ->and(DB::connection('pgsql')->table('public.sessions')->count())->toBe($mainBefore);
+});
+
 it('shows the landing page, not a loop, to someone still signed in from before private copies', function () {
     // A sign-in kept in the main schema, as on the demo when it was one shared space.
     config(['session.driver' => 'database']);
@@ -90,6 +104,18 @@ it('shows the landing page, not a loop, to someone still signed in from before p
     } finally {
         DB::connection('pgsql')->table('sessions')->where('id', $id)->delete();
         $user->delete();
+    }
+});
+
+it('shows the landing page, not a loop, to someone with an old "remember me" sign-in', function () {
+    // In a transaction, undone after: a sign-in it allowed would leave a trail in the main schema.
+    DB::connection('pgsql')->beginTransaction();
+    try {
+        $user = User::factory()->create(['remember_token' => 'old-remember-token']);
+        $this->withCookie('remember_web_'.sha1(SessionGuard::class), $user->id.'|old-remember-token|'.$user->password)
+            ->get(route('home'))->assertOk()->assertSee('Start your own demo');
+    } finally {
+        DB::connection('pgsql')->rollBack();
     }
 });
 

@@ -20,9 +20,11 @@ return Application::configure(basePath: dirname(__DIR__))
 
         // The demo site only: each visitor's own private copy, chosen before the session,
         // sign-in or any data is read. Its key is read first, so it is not encrypted (it is
-        // a random key, like a session id).
+        // a random key, like a session id). Global, not in the "web" group: the router
+        // builds a route's controller (and some, like Fortify's, open the session and the
+        // sign-in) before the route's own middleware runs.
         $middleware->encryptCookies(except: [Sandboxes::COOKIE]);
-        $middleware->prependToGroup('web', UseDemoSandbox::class);
+        $middleware->append(UseDemoSandbox::class);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         // A refused workflow action is not an error page: send the person back with the reason.

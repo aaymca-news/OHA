@@ -34,9 +34,10 @@ Route::get('/', LandingController::class)->middleware('guest')->name('home');
 // Sign-in and password reset routes are registered by Fortify.
 
 // The demo site only: each visitor's own private copy (404 anywhere else, as on live).
-Route::post('demo/start', [DemoSandboxController::class, 'start'])->middleware('throttle:5,60')->name('demo.start');
+// At most 30 new copies an hour from one address: a workshop room shares one.
+Route::post('demo/start', [DemoSandboxController::class, 'start'])->middleware('throttle:30,60')->name('demo.start');
 Route::get('demo/resume/{key}', [DemoSandboxController::class, 'resume'])->where('key', '[a-z0-9]{24}')->middleware('throttle:30,1')->name('demo.resume');
-Route::post('demo/start-over', [DemoSandboxController::class, 'startOver'])->middleware('throttle:5,60')->name('demo.start-over');
+Route::post('demo/start-over', [DemoSandboxController::class, 'startOver'])->middleware('throttle:30,60')->name('demo.start-over');
 
 Route::middleware('guest')->group(function () {
     // The demo site only: one-click sign-in as each role's demo account. Anywhere else

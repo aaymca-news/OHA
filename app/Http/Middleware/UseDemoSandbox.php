@@ -8,7 +8,7 @@ use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\Response;
 
 /**
- * The demo site only: every request works in the visitor's own private copy (their
+ * The demo site only (global middleware): every request works in the visitor’s own private copy (their
  * sandbox, named by their cookie), before the session, sign-in or any data is read. A
  * visitor without one sees the landing page and starts one there; anything else sends
  * them to it.
@@ -44,6 +44,12 @@ class UseDemoSandbox
             // Without a private copy nobody is signed in: a session of its own (another
             // cookie), so an older sign-in, from before private copies, is never read.
             config(['session.cookie' => self::GUEST_SESSION]);
+            // Nor an old "remember me" sign-in.
+            foreach ($request->cookies->keys() as $name) {
+                if (str_starts_with((string) $name, 'remember_')) {
+                    $request->cookies->remove($name);
+                }
+            }
 
             return $next($request);
         }
