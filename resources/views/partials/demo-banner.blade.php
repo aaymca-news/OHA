@@ -1,6 +1,6 @@
 {{--
     The demo site only: what this is, that only made-up data belongs here, and the
-    visitor's own private copy: start one, its private link to come back to it, or start over.
+    visitor’s own private copy: its private link to come back to it, or start over (the landing page starts one).
 --}}
 @if (config('oha.demo'))
     @php
@@ -25,12 +25,6 @@
                     @csrf
                     <button type="submit" class="underline">Start over</button>
                 </form>
-            @elseif ($sandboxes)
-                <form method="POST" action="{{ route('demo.start') }}" class="inline">
-                    @csrf
-                    <button type="submit" class="px-md py-1 rounded bg-primary text-on-primary font-semibold">Start your own demo</button>
-                </form>
-                <span>Private to you: what you do, nobody else sees.</span>
             @endif
         </div>
     </div>

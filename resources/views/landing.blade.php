@@ -85,9 +85,7 @@
                 <a href="#areas" class="hover:text-primary">The nine areas</a>
                 <a href="#how" class="hover:text-primary">How it works</a>
             </nav>
-            <a href="{{ route('login') }}" class="ml-auto md:ml-0 inline-flex items-center gap-xs rounded-lg bg-primary text-on-primary px-md py-[0.55rem] text-[0.9375rem] font-semibold hover:bg-primary-container">
-                Sign in
-            </a>
+            <x-landing.sign-in class="ml-auto md:ml-0 inline-flex items-center gap-xs rounded-lg bg-primary text-on-primary px-md py-[0.55rem] text-[0.9375rem] font-semibold hover:bg-primary-container" />
         </div>
     </header>
 
@@ -104,9 +102,9 @@
                         The Organisational Health Assessment helps every National Movement see where it is strong, where it is at risk, and what to do next.
                     </p>
                     <div class="mt-xl flex flex-wrap gap-sm" data-reveal style="--d: 3">
-                        <a href="{{ route('login') }}" class="inline-flex items-center gap-sm rounded-lg bg-primary text-on-primary px-lg py-[0.8rem] text-[1rem] font-semibold hover:bg-primary-container">
-                            Sign in <x-landing.icon name="arrow-right" class="size-5" />
-                        </a>
+                        <x-landing.sign-in class="inline-flex items-center gap-sm rounded-lg bg-primary text-on-primary px-lg py-[0.8rem] text-[1rem] font-semibold hover:bg-primary-container">
+                            <x-landing.icon name="arrow-right" class="size-5" />
+                        </x-landing.sign-in>
                         <a href="#how" class="inline-flex items-center gap-sm rounded-lg border-[1.5px] border-primary text-primary px-lg py-[0.8rem] text-[1rem] font-semibold hover:bg-surface-container-low">
                             How it works <x-landing.icon name="arrow-down" class="size-5" />
                         </a>
@@ -261,10 +259,10 @@
                     @endforeach
                 </div>
                 <div class="mt-xl pt-lg border-t border-white/10 flex flex-col sm:flex-row sm:items-center gap-md" data-reveal>
-                    <a href="{{ route('login') }}" class="self-start inline-flex items-center gap-sm rounded-lg bg-surface-container-lowest text-primary px-lg py-[0.8rem] text-[1rem] font-semibold hover:bg-surface-container">
-                        Sign in to your dashboard <x-landing.icon name="arrow-right" class="size-5" />
-                    </a>
-                    <p class="text-[0.9375rem] text-brand-grey">Access is by invitation only.</p>
+                    <x-landing.sign-in label="Sign in to your dashboard" class="self-start inline-flex items-center gap-sm rounded-lg bg-surface-container-lowest text-primary px-lg py-[0.8rem] text-[1rem] font-semibold hover:bg-surface-container">
+                        <x-landing.icon name="arrow-right" class="size-5" />
+                    </x-landing.sign-in>
+                    <p class="text-[0.9375rem] text-brand-grey">{{ \App\Demo\Sandboxes::enabled() ? 'Free to try, nothing to sign up for. Your demo is private: nobody else sees it.' : 'Access is by invitation only.' }}</p>
                 </div>
             </div>
         </section>

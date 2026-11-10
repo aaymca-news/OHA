@@ -61,9 +61,15 @@ it('gives each visitor a private copy: what one does, the other never sees', fun
     expect(User::query()->whereIn('email', array_column(DemoPeople::ACCOUNTS, 'email'))->count())->toBe(4);
 });
 
-it('sends a visitor without a private copy to the landing page to start one', function () {
+it('sends a visitor without a private copy to the landing page, whose buttons start one', function () {
     $this->get(route('login'))->assertRedirect(route('home'));
-    $this->get(route('home'))->assertOk()->assertSee('Start your own demo');
+    // The landing page's sign-in buttons start a demo instead; once started, they continue it.
+    $this->get(route('home'))->assertOk()->assertSee('Start your own demo')
+        ->assertSee('action="'.route('demo.start').'"', false)
+        ->assertDontSee('Sign in to your dashboard');
+    $a = startDemo();
+    $this->withUnencryptedCookie(Sandboxes::COOKIE, $a)->get(route('home'))->assertOk()
+        ->assertSee('Continue your demo')->assertDontSee('Start your own demo');
 });
 
 it('shows the landing page, not a loop, to someone still signed in from before private copies', function () {
@@ -120,5 +126,7 @@ it('is off on the live site', function () {
 
     $this->post(route('demo.start'))->assertNotFound();
     $this->get(route('login'))->assertOk();
+    $this->get(route('home'))->assertOk()->assertSee('Sign in to your dashboard')->assertSee('Access is by invitation only.')
+        ->assertDontSee('Start your own demo')->assertDontSee('Continue your demo');
     expect(Sandboxes::all())->toBe([]);
 });
