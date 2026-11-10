@@ -45,6 +45,10 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
+    @if (config('oha.demo'))
+        {{-- The demo site is never indexed by search engines. --}}
+        <meta name="robots" content="noindex, nofollow">
+    @endif
     <title>{{ $title }}</title>
     <meta name="description" content="{{ $description }}">
     <link rel="canonical" href="{{ url('/') }}">
@@ -69,6 +73,7 @@
 </head>
 <body class="bg-surface-container-lowest">
     <a href="#main" class="sr-only focus:not-sr-only focus:absolute focus:m-sm focus:p-sm focus:bg-surface-container-lowest focus:z-50">Skip to content</a>
+    @include('partials.demo-banner')
 
     <header class="sticky top-0 z-30 bg-surface-container-lowest border-b border-surface-container">
         <div class="mx-auto max-w-[72rem] px-md h-16 flex items-center gap-md">

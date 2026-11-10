@@ -21,7 +21,7 @@
                 @if ($task->ref)<span class="text-on-surface-variant font-normal no-underline">{{ $task->ref }} · </span>@endif{{ $task->task }}
             </p>
             <p class="text-[0.8125rem] text-on-surface-variant">
-                {{ collect([$task->priority ? \Illuminate\Support\Str::title(mb_strtolower($task->priority)) : null, $task->responsible ? 'By: '.$task->responsible : null, $task->source === \App\Models\OdpTask::TYPED ? 'Typed in' : null])->filter()->join(' · ') }}
+                {{ collect([$task->priority ? \Illuminate\Support\Str::title(mb_strtolower($task->priority)) : null, $task->responsible ? 'By: '.$task->responsible : null, $task->source === \App\Models\OdpTask::TYPED ? 'Typed in' : null, $task->source === \App\Models\OdpTask::CARRIED ? 'Carried over from an earlier ODP' : null])->filter()->join(' · ') }}
             </p>
         </div>
         <div class="flex flex-col items-start sm:items-end gap-xs text-[0.8125rem]">

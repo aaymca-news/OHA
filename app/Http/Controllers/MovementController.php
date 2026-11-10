@@ -14,6 +14,7 @@ use App\Models\Zone;
 use App\Oha\CategoryRows;
 use App\Queries\AllianceInsights;
 use App\Queries\MovementSnapshot;
+use App\Queries\OdpProgress;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
@@ -108,7 +109,9 @@ class MovementController extends Controller
             'assignedSince' => $assignedSince,
             'underWay' => $movement->assessmentUnderWay(),
             // Stage 1 done (ODP signed): its follow-ups are under way until the next assessment is due.
-            'lastDone' => $movement->lastAssessmentDone(),
+            'lastDone' => $lastDone = $movement->lastAssessmentDone(),
+            // Stage 2: how its signed ODP is being carried out, for those who follow it up.
+            'followUpProgress' => $lastDone !== null && Gate::forUser($user)->allows('viewFollowUp', $lastDone) ? OdpProgress::of($lastDone) : null,
             'followingUp' => $status->has_odp && $status->next_assessment_on?->isFuture(),
             'canOpen' => Gate::forUser($user)->allows('openAssessment', $movement),
             'canAssign' => Gate::forUser($user)->allows('assignAssessors', $movement),

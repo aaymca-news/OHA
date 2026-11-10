@@ -14,6 +14,7 @@ use App\Queries\AllianceStats;
 use App\Queries\MovementSnapshot;
 use App\Queries\MyWork;
 use App\Queries\OdpActivity;
+use App\Queries\OdpProgress;
 use App\Support\OdpTimeline;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
@@ -129,28 +130,17 @@ class DashboardController extends Controller
      * per movement, how many of its tasks are done and how many are overdue.
      *
      * @param  Collection<int, Assessment>  $assessments
-     * @return array{counts: Collection<array-key, int>, total: int, rows: Collection<int, array{movement: Movement|null, all: positive-int, done: int, overdue: int}>}
+     * @return array{counts: Collection<array-key, int>, total: int, rows: list<array<string, mixed>>}
      */
     private function odpProgress(Collection $assessments): array
     {
         $tasks = OdpTask::query()->whereIn('assessment_id', $assessments->pluck('id'))->get();
-        $by = $tasks->groupBy('assessment_id');
 
         return [
             'counts' => $tasks->countBy(fn (OdpTask $t) => $t->state()),
             'total' => $tasks->count(),
-            'rows' => $assessments->map(function (Assessment $a) use ($by): array {
-                $mine = $by[$a->id] ?? collect();
-
-                return [
-                    'movement' => $a->movement,
-                    'all' => $mine->count(),
-                    'done' => $mine->where('done', true)->count(),
-                    'overdue' => $mine->filter(fn (OdpTask $t) => $t->state() === 'overdue')->count(),
-                ];
-            })->filter(fn (array $r) => $r['all'] > 0)
-                // Most overdue first; then the least done.
-                ->sort(fn (array $a, array $b) => [$b['overdue'], $a['done'] / $a['all']] <=> [$a['overdue'], $b['done'] / $b['all']])->values(),
+            // Each movement side by side, falling behind first (App\Queries\OdpProgress).
+            'rows' => OdpProgress::alliance($assessments),
         ];
     }
 }

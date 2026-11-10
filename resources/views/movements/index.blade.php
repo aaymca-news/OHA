@@ -101,8 +101,8 @@
                                         </span>
                                     @endif
                                 @endif
-                                <span class="ml-auto {{ $status->reassessment_overdue ? 'font-semibold text-critical-ink' : 'text-on-surface-variant' }}">
-                                    {{ $status->next_assessment_on ? 'Next '.$status->next_assessment_on->asMonth().($status->reassessment_overdue ? ' · overdue' : '') : 'Not scheduled' }}
+                                <span class="ml-auto {{ $status->reassessment_overdue && ! $status->movement->followUpPaused() ? 'font-semibold text-critical-ink' : 'text-on-surface-variant' }}">
+                                    {{ $status->next_assessment_on ? 'Next '.$status->next_assessment_on->asMonth().($status->movement->followUpPaused() ? ' · paused' : ($status->reassessment_overdue ? ' · overdue' : '')) : 'Not scheduled' }}
                                 </span>
                             </div>
                         </li>
@@ -142,7 +142,7 @@
                     <td><x-band-chip :band="$status->band" :under-way="$started($status)" /></td>
                     <td>
                         @if ($status->next_assessment_on)
-                            <span class="{{ $status->reassessment_overdue ? 'font-semibold text-critical-ink' : '' }}">{{ $status->next_assessment_on->asMonth() }}{{ $status->reassessment_overdue ? ' · overdue' : '' }}</span>
+                            <span class="{{ $status->reassessment_overdue && ! $status->movement->followUpPaused() ? 'font-semibold text-critical-ink' : '' }}">{{ $status->next_assessment_on->asMonth() }}{{ $status->movement->followUpPaused() ? ' · paused' : ($status->reassessment_overdue ? ' · overdue' : '') }}</span>
                         @else
                             <span class="text-on-surface-variant">Not scheduled</span>
                         @endif

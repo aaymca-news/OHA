@@ -69,3 +69,14 @@ it('keeps the sidebar badges between pages, and counts them again once anything 
     expect(DB::getQueryLog())->not->toBe([]);
     DB::disableQueryLog();
 });
+
+it('serves the cached sidebar again to a movement’s own users (plain values only in the cache)', function () {
+    // As on the live site: the database cache, with the sidebar kept between pages.
+    config(['cache.default' => 'database', 'oha.badge_cache_seconds' => 60]);
+    $ngs = User::factory()->generalSecretary($this->j->zambia)->create();
+
+    foreach ([$this->j->chair, $ngs] as $user) {
+        $this->actingAs($user)->get(route('dashboard'))->assertOk();
+        $this->actingAs($user)->get(route('dashboard'))->assertOk()->assertSee(route('movements.show', $this->j->zambia), false);
+    }
+});

@@ -7,6 +7,7 @@ use App\Enums\ArtefactState;
 use App\Enums\FindingSeverity;
 use App\Enums\HolderRole;
 use App\Enums\Role;
+use App\Enums\TaskProgress;
 use App\Models\Artefact;
 use App\Models\Assessment;
 use App\Models\Movement;
@@ -33,7 +34,7 @@ use Illuminate\Support\Facades\Gate;
 final class MyWork
 {
     /**
-     * @return list<array{key: string, items: list<array{artefact: Artefact|null, movement?: Movement, opened?: true, started?: true, done?: Assessment|null, holder: string, days_left: int|null, actionable: bool, blocked: string|null}>}>
+     * @return list<array{key: string, items: list<array{artefact: Artefact|null, movement?: Movement, opened?: true, started?: true, done?: Assessment|null, waiting?: int, holder: string, days_left: int|null, actionable: bool, blocked: string|null}>}>
      */
     public function for(User $user): array
     {
@@ -77,7 +78,7 @@ final class MyWork
     public function actionableCount(User $user): int
     {
         return collect($this->for($user))
-            ->whereIn('key', ['start', 'started', 'approve', 'sign'])
+            ->whereIn('key', ['start', 'started', 'done', 'approve', 'sign'])
             ->sum(fn (array $group) => count(array_filter($group['items'], fn ($i) => $i['actionable'])));
     }
 
@@ -154,23 +155,31 @@ final class MyWork
 
     /**
      * The movements this person assesses whose assessment is done (Stage 1: ODP signed),
-     * with its follow-ups under way, until the next assessment is due. For reference.
+     * with its follow-ups under way (Stage 2), until the next assessment is due. Tasks the
+     * movement reported done wait for this assessor to confirm them: then it is theirs to
+     * act on, and counts on the badge.
      *
-     * @return list<array{artefact: null, movement: Movement, done: Assessment, holder: string, days_left: null, actionable: bool, blocked: null}>
+     * @return list<array{artefact: null, movement: Movement, done: Assessment, waiting: int, holder: string, days_left: null, actionable: bool, blocked: null}>
      */
     private function done(User $user): array
     {
         return $this->idle($user)
             ->filter(fn (Movement $m) => $this->followingUp($m))
-            ->map(fn (Movement $m) => [
-                'artefact' => null,
-                'movement' => $m,
-                'done' => $m->lastAssessmentDone(),
-                'holder' => __('oha.holder.assessor'),
-                'days_left' => null,
-                'actionable' => false,
-                'blocked' => null,
-            ])
+            ->map(function (Movement $m) {
+                $done = $m->lastAssessmentDone();
+                $waiting = $done === null ? 0 : $done->odpTasks()->where('progress', TaskProgress::Done)->where('done', false)->count();
+
+                return [
+                    'artefact' => null,
+                    'movement' => $m,
+                    'done' => $done,
+                    'waiting' => $waiting,
+                    'holder' => __('oha.holder.assessor'),
+                    'days_left' => null,
+                    'actionable' => $waiting > 0,
+                    'blocked' => null,
+                ];
+            })
             ->filter(fn (array $entry) => $entry['done'] !== null)
             ->values()->all();
     }

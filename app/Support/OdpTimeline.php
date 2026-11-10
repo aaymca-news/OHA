@@ -31,7 +31,7 @@ final class OdpTimeline
      */
     public static function assessments(?array $movementIds = null): Collection
     {
-        return Assessment::query()->with(['movement', 'odpReadDocument'])
+        return Assessment::query()->with(['movement', 'odpReadDocument', 'workItem'])
             ->when($movementIds !== null, fn ($q) => $q->whereIn('movement_id', $movementIds))
             ->latestPerMovement(fn ($q) => $q->where(fn ($q) => $q
                 ->whereHas('odp.documents', fn ($d) => $d->where('purpose', DocumentPurpose::Uploaded))->orWhereHas('odpTasks')))
@@ -108,20 +108,42 @@ final class OdpTimeline
     private static function replace(Assessment $assessment, Document $document, array $tasks): void
     {
         $previous = $assessment->odpTasks()->where('source', OdpTask::FROM_ODP)->get();
-        $corrected = $previous->whereNotNull('edited_at')->keyBy(fn (OdpTask $t) => self::key($t->ref, $t->task));
+        $byKey = fn ($tasks) => $tasks->keyBy(fn (OdpTask $t) => self::key($t->ref, $t->task));
+        // A date a person corrected, and progress reported in Stage 2, outlive a newer version.
+        $corrected = $byKey($previous->whereNotNull('edited_at'));
+        $reported = $byKey($previous->filter(fn (OdpTask $t) => $t->reported_at !== null || $t->confirmed_at !== null));
+        // Once the ODP is signed, progress is tracked in the platform only: the sheet's
+        // own "task completed" column no longer counts (decided 10 Nov 2026).
+        $signed = $assessment->odp()->first()?->signature()->exists() ?? false;
         $assessment->odpTasks()->where('source', OdpTask::FROM_ODP)->delete();
 
         foreach ($tasks as $i => $task) {
             $row = $task + ['assessment_id' => $assessment->id, 'document_id' => $document->id, 'source' => OdpTask::FROM_ODP, 'sort_order' => $i];
-            $before = $corrected[self::key($task['ref'], $task['task'])] ?? null;
-            if ($before !== null) {
+            if ($signed) {
+                $row['done'] = false;
+            }
+            $key = self::key($task['ref'], $task['task']);
+            if (($before = $corrected[$key] ?? null) !== null) {
                 $row = array_merge($row, [
                     'due_on' => $before->due_on?->toDateString(),
                     'date_guessed' => false,
                     'responsible' => $before->responsible,
-                    'done' => $before->done || $task['done'],
+                    'done' => $before->done || $row['done'],
                     'edited_by' => $before->edited_by,
                     'edited_at' => $before->edited_at,
+                ]);
+            }
+            if (($before = $reported[$key] ?? null) !== null) {
+                $row = array_merge($row, [
+                    'done' => $before->done,
+                    'progress' => $before->progress,
+                    'progress_note' => $before->progress_note,
+                    'evidence_id' => $before->evidence_id,
+                    'reported_by' => $before->reported_by,
+                    'reported_at' => $before->reported_at,
+                    'confirmed_by' => $before->confirmed_by,
+                    'confirmed_at' => $before->confirmed_at,
+                    'returned_reason' => $before->returned_reason,
                 ]);
             }
             OdpTask::query()->create($row);

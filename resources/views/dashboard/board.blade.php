@@ -71,13 +71,18 @@
             @endif
         </x-card>
 
-        <x-card title="Your ODP" :subtitle="$odpAssessment ? 'Its tasks and their deadlines. Your AAYMCA assessors keep them up to date.' : null">
+        <x-card title="Your ODP" :subtitle="$odpAssessment ? 'Its tasks and their deadlines, and where each stands.' : null">
+            @if ($odpAssessment && auth()->user()->can('viewFollowUp', $odpAssessment))
+                <x-slot:actions>
+                    <x-button :href="route('follow-up.show', $odpAssessment)" size="sm" icon="checklist">{{ auth()->user()->isGeneralSecretaryOf($odpAssessment->movement) ? 'Report progress' : 'ODP follow-up' }}</x-button>
+                </x-slot:actions>
+            @endif
             @if (! $odpAssessment)
                 <x-empty-state icon="checklist">Your ODP’s tasks appear here once it is approved.</x-empty-state>
             @elseif ($tasks->isEmpty())
                 <x-empty-state icon="checklist">Your ODP’s tasks have not been entered yet.</x-empty-state>
             @else
-                <x-bar wide :value="$tasks->where('done', true)->count()" :max="$tasks->count()" tone="good" :label="$tasks->where('done', true)->count().' of '.$tasks->count().' done'" />
+                @include('follow-up._progress', ['progress' => ['summary' => \App\Queries\OdpProgress::summary($tasks), 'priorities' => \App\Queries\OdpProgress::byPriority($tasks)]])
                 @php($next = $open->sortBy(fn ($t) => [$t->due_on === null ? 1 : 0, $t->due_on?->timestamp ?? 0])->take(5))
                 @if ($next->isEmpty())
                     <x-empty-state icon="task_alt">Every task is done.</x-empty-state>

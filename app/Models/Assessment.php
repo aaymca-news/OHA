@@ -181,6 +181,32 @@ class Assessment extends Model
     }
 
     /**
+     * The follow-up meetings recorded on its signed ODP (Stage 2), first to last.
+     *
+     * @return HasMany<OdpFollowUp, $this>
+     */
+    public function followUps(): HasMany
+    {
+        return $this->hasMany(OdpFollowUp::class)->orderBy('number');
+    }
+
+    /**
+     * The annual review of its signed ODP (Stage 2), once written.
+     *
+     * @return HasOne<OdpReview, $this>
+     */
+    public function odpReview(): HasOne
+    {
+        return $this->hasOne(OdpReview::class);
+    }
+
+    /** The movement's next assessment after this one (opened later), if there is one yet. */
+    public function nextAssessment(): ?self
+    {
+        return self::query()->where('movement_id', $this->movement_id)->where('id', '>', $this->id)->oldest('id')->first();
+    }
+
+    /**
      * @return HasMany<AuditEvent, $this>
      */
     public function auditEvents(): HasMany

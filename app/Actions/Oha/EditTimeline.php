@@ -3,6 +3,7 @@
 namespace App\Actions\Oha;
 
 use App\Actions\Concerns\EnforcesPolicy;
+use App\Enums\TaskProgress;
 use App\Exceptions\WorkflowRuleBroken;
 use App\Models\Assessment;
 use App\Models\Gate;
@@ -173,6 +174,10 @@ final class EditTimeline
             }
             if ($odpTask->isDirty('done')) {
                 $changes[] = $details['done'] ? 'done' : 'reopened';
+                // Ticked by an assessor: Done and confirmed, as on the Follow-up page.
+                $odpTask->fill($details['done']
+                    ? ['progress' => TaskProgress::Done, 'confirmed_by' => $user->id, 'confirmed_at' => now(), 'returned_reason' => null]
+                    : ['progress' => TaskProgress::InProgress, 'confirmed_by' => null, 'confirmed_at' => null]);
             }
             if ($odpTask->isDirty('task') || $odpTask->isDirty('responsible')) {
                 $changes[] = 'details corrected';

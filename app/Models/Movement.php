@@ -14,7 +14,8 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasManyThrough;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 
-#[Fillable(['slug', 'name', 'country', 'city', 'zone_id', 'membership_status_id', 'planned_assessment_label', 'planned_assessment_on'])]
+#[Fillable(['slug', 'name', 'country', 'city', 'zone_id', 'membership_status_id', 'planned_assessment_label', 'planned_assessment_on',
+    'follow_up_paused_until', 'follow_up_pause_reason', 'follow_up_paused_by'])]
 #[RouteKey('slug')]
 class Movement extends Model
 {
@@ -146,10 +147,29 @@ class Movement extends Model
         return $this->hasOne(MovementStatus::class);
     }
 
+    /**
+     * Its follow-up is paused (an approved pause: elections, a crisis): no reminders, and
+     * "Paused" shown instead of "Overdue", until the end date.
+     */
+    public function followUpPaused(): bool
+    {
+        // Paused up to and including its end date.
+        return $this->follow_up_paused_until !== null && today()->lte($this->follow_up_paused_until);
+    }
+
+    /**
+     * @return BelongsTo<User, $this>
+     */
+    public function pausedBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'follow_up_paused_by');
+    }
+
     protected function casts(): array
     {
         return [
             'planned_assessment_on' => 'date',
+            'follow_up_paused_until' => 'date',
         ];
     }
 }

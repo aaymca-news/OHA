@@ -13,6 +13,7 @@
 </head>
 <body class="min-h-screen" x-data="layout">
     <a href="#main" class="sr-only focus:not-sr-only focus:absolute focus:m-sm focus:p-sm focus:bg-surface-container-lowest focus:z-50">Skip to content</a>
+    @include('partials.demo-banner')
 
     <div class="flex min-h-screen">
         {{--

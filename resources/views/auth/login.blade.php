@@ -1,4 +1,23 @@
 <x-layouts.guest title="Sign in">
+    @if (config('oha.demo'))
+        {{-- The demo site only: one click per role, no password. --}}
+        <div class="flex flex-col gap-sm">
+            <p class="text-[0.875rem] font-semibold">Explore the demo as:</p>
+            @foreach (\App\Demo\DemoPeople::ACCOUNTS as $role => $account)
+                <form method="POST" action="{{ route('demo.sign-in', $role) }}">
+                    @csrf
+                    <button type="submit" class="w-full text-left flex items-center gap-sm p-sm rounded-lg border-[1.5px] border-outline-variant hover:border-primary bg-surface-container-lowest">
+                        <span class="material-symbols-outlined text-primary" aria-hidden="true">login</span>
+                        <span class="flex flex-col">
+                            <span class="text-[0.875rem] font-semibold text-primary">{{ $account['label'] }}</span>
+                            <span class="text-[0.8125rem] text-on-surface-variant">{{ $account['explains'] }}</span>
+                        </span>
+                    </button>
+                </form>
+            @endforeach
+            <p class="text-[0.8125rem] text-on-surface-variant mt-sm">Or sign in with an email and password below.</p>
+        </div>
+    @endif
     <form method="POST" action="{{ route('login') }}" class="flex flex-col gap-md">
         @csrf
         <x-input name="email" label="Email" type="email" autocomplete="username" required autofocus />

@@ -106,6 +106,48 @@ class AssessmentPolicy
     }
 
     /**
+     * Stage 2, ODP follow-up (once the ODP is signed): the movement's own users, its
+     * assessors and the Administrators.
+     */
+    public function viewFollowUp(User $user, Assessment $assessment): Response
+    {
+        if ($assessment->isUnderWay()) {
+            return Response::deny('Follow-up starts once the Board Chairperson has signed the ODP.');
+        }
+
+        return $user->active && ($this->worksOn($user, $assessment) || $user->isOfMovement($assessment->movement))
+            ? Response::allow()
+            : Response::deny('The ODP follow-up is seen by the movement, its assessors and the Administrators.');
+    }
+
+    /** A follow-up meeting on the signed ODP is recorded by an assessor on the movement. */
+    public function recordFollowUp(User $user, Assessment $assessment): Response
+    {
+        if ($assessment->isUnderWay()) {
+            return Response::deny('Follow-up meetings start once the Board Chairperson has signed the ODP.');
+        }
+
+        return $user->canAssess($assessment->movement)
+            ? Response::allow()
+            : Response::deny('Follow-up meetings are recorded by the movement’s assessors.');
+    }
+
+    /**
+     * The annual review of a signed ODP, and carrying its unfinished tasks into the next
+     * assessment: the movement's assessors.
+     */
+    public function reviewOdp(User $user, Assessment $assessment): Response
+    {
+        if ($assessment->isUnderWay()) {
+            return Response::deny('The ODP is reviewed once the Board Chairperson has signed it.');
+        }
+
+        return $user->canAssess($assessment->movement)
+            ? Response::allow()
+            : Response::deny('The ODP review is written by the movement’s assessors.');
+    }
+
+    /**
      * The assessors on the movement set its timeline; the Administrators may set any.
      */
     public function editTimeline(User $user, Assessment $assessment): Response

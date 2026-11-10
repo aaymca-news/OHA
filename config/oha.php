@@ -29,6 +29,19 @@ return [
     */
     'badge_cache_seconds' => (int) env('OHA_BADGE_CACHE_SECONDS', 60),
 
+    /*
+    | Stage 2, ODP follow-up: how many follow-up meetings a year, evenly spread from the
+    | signing of the ODP. 3, as in the ODP template (decided 10 Nov 2026): every 4 months.
+    */
+    'follow_ups_per_year' => (int) env('OHA_FOLLOW_UPS_PER_YEAR', 3),
+
+    /*
+    | The demo site (demo.oha.africaymca.org): the same platform, for trying it with made-up
+    | data. On, it shows a "Demo" banner, offers one-click sign-in for each role and never
+    | sends email; oha:demo-reset starts it again by hand. Never on the live site.
+    */
+    'demo' => (bool) env('OHA_DEMO', false),
+
     /* How many rows a long list shows per page (assessments, users, audit, notifications). */
     'per_page' => (int) env('OHA_PER_PAGE', 25),
 

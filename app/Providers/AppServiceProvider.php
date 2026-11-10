@@ -43,6 +43,11 @@ class AppServiceProvider extends ServiceProvider
 
         Password::defaults(fn () => Password::min(12)->letters()->mixedCase()->numbers());
 
+        // The demo site never sends email, whatever its mail settings say: mail is written to the log.
+        if (config('oha.demo')) {
+            config(['mail.default' => 'log']);
+        }
+
         // $date->asDay(), ->asStamp(), ->asMonth(): the platform's date formats, in one place.
         Carbon::mixin(new DateFormats);
 

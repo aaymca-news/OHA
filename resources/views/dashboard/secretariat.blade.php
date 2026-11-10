@@ -25,7 +25,7 @@
             <x-slot:sub>Signed by the Board Chairperson</x-slot:sub>
         </x-stat-tile>
         <x-stat-tile label="ODP tasks overdue" :value="$overdueTasks">
-            <x-slot:sub>Of {{ $odp['total'] }} tasks in {{ $odp['rows']->count() }} {{ $odp['rows']->count() === 1 ? 'ODP' : 'ODPs' }}</x-slot:sub>
+            <x-slot:sub>Of {{ $odp['total'] }} tasks in {{ count($odp['rows']) }} {{ count($odp['rows']) === 1 ? 'ODP' : 'ODPs' }}</x-slot:sub>
         </x-stat-tile>
     </div>
 
@@ -108,15 +108,40 @@
                 <x-chip tone="neutral" icon="event">Later {{ $odp['counts']['upcoming'] ?? 0 }}</x-chip>
                 <x-chip tone="serious" icon="help">No date {{ $odp['counts']['undated'] ?? 0 }}</x-chip>
             </div>
-            <ul class="grid lg:grid-cols-2 gap-x-lg gap-y-xs">
+            {{-- Each movement side by side, falling behind first. A signed ODP opens its follow-up. --}}
+            <x-table bare>
+                <x-slot:head><tr><th>Movement</th><th class="w-1/3">Done</th><th>Overdue</th><th>To confirm</th><th>Blocked</th><th>Next follow-up</th><th></th></tr></x-slot:head>
                 @foreach ($odp['rows'] as $row)
-                    <li class="grid grid-cols-[minmax(6rem,9rem)_1fr_4.5rem] items-center gap-sm text-[0.875rem]">
-                        <a href="{{ route('timelines', ['movement' => $row['movement']->slug]) }}" class="truncate text-primary underline">{{ str_replace(' YMCA', '', $row['movement']->name) }}</a>
-                        <x-bar :value="$row['done']" :max="$row['all']" tone="good" :label="$row['done'].' / '.$row['all'].' done'" wide />
-                        <span @class(['text-[0.8125rem] text-right tabular-nums', 'font-bold text-critical-ink' => $row['overdue'] > 0, 'text-on-surface-variant' => $row['overdue'] === 0])>{{ $row['overdue'] }} late</span>
-                    </li>
+                    @php($m = $row['assessment']->movement)
+                    <tr class="border-t border-surface-container">
+                        <td>
+                            <a href="{{ $row['signed'] ? route('follow-up.show', $row['assessment']) : route('timelines', ['movement' => $m->slug]) }}" class="font-semibold text-primary underline">{{ str_replace(' YMCA', '', $m->name) }}</a>
+                        </td>
+                        <td><x-bar :value="$row['summary']['done']" :max="$row['summary']['total']" tone="good" :label="$row['summary']['done'].' / '.$row['summary']['total'].' · '.$row['summary']['pct'].'%'" wide /></td>
+                        <td @class(['tabular-nums', 'font-bold text-critical-ink' => $row['summary']['overdue'] > 0])>{{ $row['summary']['overdue'] }}</td>
+                        <td class="tabular-nums">{{ $row['summary']['waiting'] }}</td>
+                        <td @class(['tabular-nums', 'font-semibold text-serious-ink' => $row['summary']['blocked'] > 0])>{{ $row['summary']['blocked'] }}</td>
+                        <td class="text-[0.8125rem]">
+                            @if ($row['meeting'])
+                                <span @class(['font-semibold text-critical-ink' => $row['meeting']['overdue'] && ! $row['paused']])>{{ $row['meeting']['number'] }} · {{ $row['meeting']['due_on']->asDay() }}</span>
+                            @else
+                                <span class="text-on-surface-variant">{{ $row['signed'] ? 'All held' : 'Once signed' }}</span>
+                            @endif
+                        </td>
+                        <td>
+                            @if ($row['paused'])
+                                <x-chip tone="warning" icon="pause_circle">Paused</x-chip>
+                            @elseif ($row['behind'])
+                                <x-chip tone="critical" icon="trending_down">Falling behind</x-chip>
+                            @elseif ($row['signed'])
+                                <x-chip tone="good" icon="check">On track</x-chip>
+                            @else
+                                <x-chip icon="draw">Not yet signed</x-chip>
+                            @endif
+                        </td>
+                    </tr>
                 @endforeach
-            </ul>
+            </x-table>
         @endif
     </x-card>
 

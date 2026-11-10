@@ -52,7 +52,8 @@
     @php
         $m = $entry['movement'];
         $done = $entry['done'];
-        $url = route('assessments.show', ['assessment' => $done->id, 'tab' => 'odp']);
+        $url = route('follow-up.show', $done);
+        $waiting = $entry['waiting'] ?? 0;
         $next = $m->status?->next_assessment_on;
     @endphp
     <li class="flex flex-wrap items-center gap-sm p-sm rounded-lg border-[1.5px] border-outline-variant bg-surface-container-lowest">
@@ -65,7 +66,10 @@
         </div>
         <x-chip tone="good" icon="verified">Stage 1 done</x-chip>
         <x-chip tone="info" icon="autorenew">Follow-ups ongoing</x-chip>
-        <x-button :href="$url" variant="outline" size="sm">Open</x-button>
+        @if ($waiting > 0)
+            <x-chip tone="warning" icon="hourglass_top">{{ $waiting }} to confirm</x-chip>
+        @endif
+        <x-button :href="$url" :variant="$waiting > 0 ? 'primary' : 'outline'" size="sm">Open</x-button>
     </li>
 @elseif (isset($entry['movement']))
     @php

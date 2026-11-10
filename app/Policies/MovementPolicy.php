@@ -58,6 +58,14 @@ class MovementPolicy
             : Response::deny("{$movement->name}’s {$underWay->period_label} assessment has already started. A new one can start once it is finished (its ODP signed by the board).");
     }
 
+    /** An approved pause of a movement's follow-up (elections, a crisis) is agreed by an Administrator. */
+    public function pauseFollowUp(User $user, Movement $movement): Response
+    {
+        return $user->active && $user->isAdmin()
+            ? Response::allow()
+            : Response::deny('A pause of the follow-up is agreed by an Administrator.');
+    }
+
     /** Staff cannot give themselves work: the Administrators assign it. */
     public function assignAssessors(User $user, Movement $movement): Response
     {

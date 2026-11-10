@@ -11,7 +11,9 @@
         </x-stat-tile>
         <x-stat-tile label="Next assessment" :value="$status->next_assessment_on?->asMonth() ?? 'Not scheduled'">
             <x-slot:sub>
-                @if ($status->reassessment_overdue)
+                @if ($movement->followUpPaused())
+                    <x-chip tone="warning" icon="pause_circle">Paused until {{ $movement->follow_up_paused_until->asDay() }}</x-chip>
+                @elseif ($status->reassessment_overdue)
                     <x-chip tone="critical" icon="alarm">Overdue</x-chip>
                 @elseif ($status->latest_assessment_id)
                     Every {{ $status->reassess_months }} months at this band
@@ -71,6 +73,13 @@
         @include('movements._profile')
     @endif
 
+    @if ($followUpProgress && $followUpProgress['summary']['total'] > 0)
+        <x-card title="ODP follow-up" :subtitle="'How the '.$lastDone->period_label.' ODP is being carried out. Tasks count as done once an assessor confirms them.'">
+            <x-slot:actions><x-button :href="route('follow-up.show', $lastDone)" size="sm" variant="outline" icon="checklist">Open the follow-up</x-button></x-slot:actions>
+            @include('follow-up._progress', ['progress' => $followUpProgress])
+        </x-card>
+    @endif
+
     <x-card title="Assessments">
         @if ($underWay)
             {{-- One assessment at a time: no "Start new assessment" while this one runs. --}}
@@ -95,6 +104,9 @@
                             <a href="{{ route('assessments.show', ['assessment' => $lastDone, 'tab' => 'odp']) }}" class="font-semibold text-primary underline">{{ $lastDone->period_label }}</a>
                         @else
                             <span class="font-semibold">{{ $lastDone->period_label }}</span>
+                        @endcan
+                        @can('viewFollowUp', $lastDone)
+                            <x-button :href="route('follow-up.show', $lastDone)" size="sm" icon="checklist">ODP follow-up</x-button>
                         @endcan
                     </span>
                     @if ($canOpen)
@@ -134,6 +146,10 @@
                 @endforeach
                 @if ($assessment->score)
                     <x-band-chip :band="$assessment->score->band" />
+                @endif
+                {{-- A signed ODP: its follow-up (tasks, meetings, the annual review and carry-over). --}}
+                @if ($assessment->workItem === null && auth()->user()->can('viewFollowUp', $assessment))
+                    <x-button :href="route('follow-up.show', $assessment)" variant="link" icon="checklist" class="text-[0.8125rem]">Follow-up</x-button>
                 @endif
             </div>
         @empty

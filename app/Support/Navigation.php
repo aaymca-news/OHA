@@ -34,7 +34,8 @@ final class Navigation
             return $this->build($user);
         }
 
-        return Cache::remember('nav:'.Cache::get('nav:version', 0).':'.$user->id, $seconds, fn () => $this->build($user));
+        // "v2": entries cached before the sidebar held only plain values are never read back.
+        return Cache::remember('nav:v2:'.Cache::get('nav:version', 0).':'.$user->id, $seconds, fn () => $this->build($user));
     }
 
     /** Every sidebar is worked out afresh on its next page: something changed. */
@@ -63,7 +64,9 @@ final class Navigation
             if (self::hasMyWork($user)) {
                 $items[] = $item('my_work', 'my-work', 'inbox', $this->myWork->actionableCount($user));
             }
-            $items[] = $item('our_movement', 'movements.show', 'flag', params: ['movement' => $user->movement], active: 'movements.*');
+            // Plain values only (its slug, not the model): the sidebar is cached, and a model
+            // read back from the cache cannot be rebuilt (it came back incomplete: a 500).
+            $items[] = $item('our_movement', 'movements.show', 'flag', params: ['movement' => $user->movement?->getRouteKey()], active: 'movements.*');
             $items[] = $item('resources', 'resources', 'folder_open');
 
             return $items;
@@ -73,7 +76,10 @@ final class Navigation
         // assessments (Assessments) and manage the users (Users & Roles).
         $items[] = $item('my_work', 'my-work', 'inbox', $this->myWork->actionableCount($user));
         $items[] = $item('movements', 'movements.index', 'public',
-            MovementStatus::query()->where('reassessment_overdue', true)->count(), 'warning', active: 'movements.*');
+            // Reassessments overdue, apart from movements whose follow-up is paused.
+            MovementStatus::query()->where('reassessment_overdue', true)
+                ->whereHas('movement', fn ($m) => $m->where(fn ($q) => $q->whereNull('follow_up_paused_until')->orWhere('follow_up_paused_until', '<', today())))
+                ->count(), 'warning', active: 'movements.*');
         if ($user->isAdmin()) {
             $items[] = $item('assessments', 'assessments.index', 'fact_check',
                 $this->unassigned(), 'warning', active: 'assessments.*');

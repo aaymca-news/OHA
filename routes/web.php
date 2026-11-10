@@ -1,12 +1,15 @@
 <?php
 
+use App\Demo\DemoPeople;
 use App\Http\Controllers\Admin\MovementController as AdminMovementController;
 use App\Http\Controllers\Admin\UserController;
 use App\Http\Controllers\ArtefactController;
 use App\Http\Controllers\AssessmentController;
 use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\DemoSignInController;
 use App\Http\Controllers\DownloadController;
 use App\Http\Controllers\EvidenceController;
+use App\Http\Controllers\FollowUpController;
 use App\Http\Controllers\GapController;
 use App\Http\Controllers\InvitationController;
 use App\Http\Controllers\LandingController;
@@ -30,6 +33,11 @@ Route::get('/', LandingController::class)->middleware('guest')->name('home');
 // Sign-in and password reset routes are registered by Fortify.
 
 Route::middleware('guest')->group(function () {
+    // The demo site only: one-click sign-in as each role's demo account. Anywhere else
+    // (config oha.demo off, as on the live site) it answers 404.
+    Route::post('demo/sign-in/{role}', DemoSignInController::class)->whereIn('role', array_keys(DemoPeople::ACCOUNTS))
+        ->middleware('throttle:30,1')->name('demo.sign-in');
+
     Route::get('invitation/{token}', [InvitationController::class, 'show'])->name('invitation.show');
     Route::post('invitation', [InvitationController::class, 'store'])->middleware('throttle:10,1')->name('invitation.store');
 });
@@ -120,6 +128,15 @@ Route::middleware('auth')->group(function () {
     Route::post('assessments/{assessment}/odp-tasks', [TimelineController::class, 'addTask'])->name('timeline.tasks.store');
     Route::put('odp-tasks/{odpTask}', [TimelineController::class, 'updateTask'])->name('timeline.tasks.update');
     Route::delete('odp-tasks/{odpTask}', [TimelineController::class, 'removeTask'])->name('timeline.tasks.destroy');
+
+    // Stage 2, ODP follow-up: each task's progress, reported and confirmed.
+    Route::get('assessments/{assessment}/follow-up', [FollowUpController::class, 'show'])->name('follow-up.show');
+    Route::post('odp-tasks/{odpTask}/progress', [FollowUpController::class, 'progress'])->name('follow-up.progress');
+    Route::post('odp-tasks/{odpTask}/confirm', [FollowUpController::class, 'confirm'])->name('follow-up.confirm');
+    Route::post('assessments/{assessment}/follow-up/meetings', [FollowUpController::class, 'record'])->name('follow-up.meetings.store');
+    Route::put('assessments/{assessment}/follow-up/pause', [FollowUpController::class, 'pause'])->name('follow-up.pause');
+    Route::post('assessments/{assessment}/follow-up/review', [FollowUpController::class, 'review'])->name('follow-up.review');
+    Route::post('assessments/{assessment}/follow-up/carry', [FollowUpController::class, 'carry'])->name('follow-up.carry');
 
     Route::prefix('downloads')->name('downloads.')->group(function () {
         Route::get('blank-oha-form', [DownloadController::class, 'blankForm'])->name('blank-form');
