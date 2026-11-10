@@ -50,9 +50,11 @@ class CreateDemoSuperAdmin extends Command
         // In the showcase (the main schema), whatever else this process used.
         Sandboxes::leave();
         $user = User::query()->updateOrCreate(['email' => $email], [
-            'name' => $name, 'password' => Hash::make($password), 'role' => Role::SuperAdmin,
-            'active' => true, 'email_verified_at' => now(),
+            'name' => $name, 'password' => Hash::make($password), 'role' => Role::SuperAdmin, 'active' => true,
         ]);
+        // Their own account, not an invitation waiting to be accepted (a field set directly:
+        // it is not among those filled in bulk).
+        $user->forceFill(['email_verified_at' => $user->email_verified_at ?? now()])->save();
         // The only Super Administrator: anyone else who was one becomes an Administrator.
         User::query()->where('role', Role::SuperAdmin)->whereKeyNot($user->id)->update(['role' => Role::Admin]);
 

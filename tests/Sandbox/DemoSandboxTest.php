@@ -190,6 +190,7 @@ function prepareInShowcase(string $slug, User $superAdmin): Assessment
 it('lets the Super Administrator, and only them, sign in to the showcase with their own email and password', function () {
     $ray = makeSuperAdmin();
     expect($ray->role)->toBe(Role::SuperAdmin)
+        ->and($ray->isInvitationPending())->toBeFalse()
         ->and(User::query()->where('role', Role::SuperAdmin)->count())->toBe(1);
 
     $this->get(route('demo.showcase'))->assertRedirect(route('login'))->assertCookie(Sandboxes::COOKIE, Sandboxes::SHOWCASE, false);
