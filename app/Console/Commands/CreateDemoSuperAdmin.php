@@ -5,6 +5,7 @@ namespace App\Console\Commands;
 use App\Demo\DemoSite;
 use App\Demo\Sandboxes;
 use App\Enums\Role;
+use App\Models\Movement;
 use App\Models\User;
 use Illuminate\Console\Attributes\Description;
 use Illuminate\Console\Attributes\Signature;
@@ -57,6 +58,8 @@ class CreateDemoSuperAdmin extends Command
         $user->forceFill(['email_verified_at' => $user->email_verified_at ?? now()])->save();
         // The only Super Administrator: anyone else who was one becomes an Administrator.
         User::query()->where('role', Role::SuperAdmin)->whereKeyNot($user->id)->update(['role' => Role::Admin]);
+        // Assigned to every movement, so they can start and run any assessment in the showcase.
+        $user->assignedMovements()->syncWithoutDetaching(Movement::query()->pluck('id')->all());
 
         $this->info("{$user->name} ({$user->email}) is the demo's Super Administrator. Sign in at ".url('demo/showcase'));
 

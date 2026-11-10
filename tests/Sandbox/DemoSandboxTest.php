@@ -1,5 +1,6 @@
 <?php
 
+use App\Demo\DemoForm;
 use App\Demo\DemoMail;
 use App\Demo\DemoPeople;
 use App\Demo\DemoVisitor;
@@ -13,6 +14,7 @@ use Carbon\Carbon;
 use Database\Seeders\DemoSeeder;
 use Database\Seeders\DemoStorySeeder;
 use Illuminate\Auth\SessionGuard;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Str;
@@ -235,6 +237,43 @@ it('shows the Super Administrator, in the showcase, everyone who registered for 
     $this->withUnencryptedCookie(Sandboxes::COOKIE, $key)->get(route('admin.users.index', ['show' => 'visitors']))->assertNotFound();
 });
 
+it('lets the Super Administrator start an assessment in the showcase, which visitors carry on in their copies', function () {
+    $ray = makeSuperAdmin();
+    expect($ray->assignedMovements()->count())->toBe(23);
+
+    // Ray starts Zambia's assessment in the showcase.
+    $showcase = fn () => $this->withUnencryptedCookie(Sandboxes::COOKIE, Sandboxes::SHOWCASE);
+    $showcase()->post(route('login'), ['email' => $ray->email, 'password' => 'Showcase-Pass-2026']);
+    $showcase()->post(route('assessments.store', Movement::query()->where('slug', 'zambia')->firstOrFail()), ['period_label' => 'Nov 2026', 'period_start' => '2026-11'])
+        ->assertSessionHasNoErrors();
+    $showcase()->post(route('logout'));
+    $assessment = Assessment::query()->firstOrFail();
+    $form = $assessment->form()->firstOrFail();
+
+    // A visitor, as the AAYMCA assessor, uploads the movement's form to it in their copy.
+    $key = register();
+    $as = fn () => $this->withUnencryptedCookie(Sandboxes::COOKIE, $key);
+    $as()->post(route('demo.sign-in'), ['role' => 'assessor']);
+    $file = DemoForm::make('Zambia YMCA', 'Zambia', 2026, 0.6, 7);
+    try {
+        $as()->post(route('artefacts.upload', $form), ['form' => new UploadedFile($file, 'Zambia OHA Form 2026.xlsx', null, null, true)])
+            ->assertSessionHasNoErrors();
+    } finally {
+        @unlink($file);
+    }
+
+    // As the Administrator, the visitor sees it on the assessment.
+    $as()->post(route('demo.choose'));
+    $as()->post(route('demo.sign-in'), ['role' => 'admin']);
+    $as()->get(route('assessments.show', $assessment))->assertOk()->assertSee('Zambia OHA Form 2026.xlsx');
+    Sandboxes::use($key);
+    expect(DB::table('form_uploads')->count())->toBe(1);
+
+    // The showcase is as Ray left it.
+    Sandboxes::leave();
+    expect(DB::table('form_uploads')->count())->toBe(0);
+});
+
 it('gives every visitor a copy of the showcase’s work: one signs Zambia’s ODP as its Board Chairperson, and it stays waiting for everyone else', function () {
     $assessment = prepareInShowcase('zambia', makeSuperAdmin());
     $odp = $assessment->odp()->firstOrFail();
@@ -270,10 +309,8 @@ it('tells a visitor when the showcase has new work, gives it to them on starting
     $key = register();
     $this->withUnencryptedCookie(Sandboxes::COOKIE, $key)->get(route('login'))->assertDontSee('New work was added to the showcase');
 
-    // Afterwards, the Super Administrator signs in to the showcase and opens Kenya's
-    // assessment (assigned to it first, as on the live site).
+    // Afterwards, the Super Administrator signs in to the showcase and opens Kenya's assessment.
     $this->travel(1)->minutes();
-    $ray->assignedMovements()->attach(Movement::query()->where('slug', 'kenya')->value('id'));
     $showcase = fn () => $this->withUnencryptedCookie(Sandboxes::COOKIE, Sandboxes::SHOWCASE);
     $showcase()->post(route('login'), ['email' => $ray->email, 'password' => 'Showcase-Pass-2026'])->assertRedirect(route('dashboard'));
     $showcase()->post(route('assessments.store', Movement::query()->where('slug', 'kenya')->firstOrFail()), ['period_label' => 'Nov 2026', 'period_start' => '2026-11'])
