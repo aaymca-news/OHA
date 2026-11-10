@@ -13,8 +13,18 @@
                 <span class="material-symbols-outlined text-[1rem] align-middle" aria-hidden="true">science</span>
                 Demo site, for trying the platform. Use made-up data only: never upload a real movement’s forms, reports or documents.
             </span>
+            @if (\App\Demo\Sandboxes::showcase())
+                <span><strong>Showcase:</strong> what you do here, every visitor gets a copy of when they register or start over.</span>
+                <form method="POST" action="{{ route('demo.showcase.leave') }}" class="inline">
+                    @csrf
+                    <button type="submit" class="underline">Leave the showcase</button>
+                </form>
+            @endif
             @if ($visitor)
                 <span>Signed in to your demo as <strong>{{ $visitor->name }}</strong>.</span>
+                @if (\App\Demo\Sandboxes::showcaseChangedSince((string) $visitor->sandbox_key))
+                    <span class="font-semibold">New work was added to the showcase since your copy: “Start over” to get it.</span>
+                @endif
                 @auth
                     <form method="POST" action="{{ route('demo.choose') }}" class="inline">
                         @csrf
@@ -22,7 +32,7 @@
                     </form>
                 @endauth
                 <form method="POST" action="{{ route('demo.start-over') }}" class="inline"
-                      x-data x-on:submit="if (! confirm('Throw away everything you did in this demo and start again with a clean one? Your account stays.')) $event.preventDefault()">
+                      x-data x-on:submit="if (! confirm('Throw away everything you did in this demo and start again from the latest showcase? Your account stays.')) $event.preventDefault()">
                     @csrf
                     <button type="submit" class="underline">Start over</button>
                 </form>

@@ -51,6 +51,8 @@ return [
     'demo_sandboxes' => (bool) env('OHA_DEMO_SANDBOXES', true),
     'demo_sandbox_days' => (int) env('OHA_DEMO_SANDBOX_DAYS', 30),
     'demo_sandbox_max' => (int) env('OHA_DEMO_SANDBOX_MAX', 200),
+    // The showcase's files (null: the platform's usual folder, storage/app/private/oha).
+    'demo_showcase_folder' => env('OHA_DEMO_SHOWCASE_FOLDER'),
 
     /*
     | Whether the demo really sends email, through the site's mail settings: only the

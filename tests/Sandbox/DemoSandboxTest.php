@@ -10,23 +10,32 @@ use App\Models\BoardSignature;
 use App\Models\Movement;
 use App\Models\User;
 use Carbon\Carbon;
+use Database\Seeders\DemoSeeder;
 use Database\Seeders\DemoStorySeeder;
 use Illuminate\Auth\SessionGuard;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\File;
 use Illuminate\Support\Str;
 
 /*
  * The demo site: each visitor registers and gets a demo of their own (their own schema
- * and files), with everyone in it already (the Administrator, the AAYMCA assessor on
- * every movement, each movement's Board Chairperson and General Secretary). They choose
- * who to be, sign in again on any computer, choose a new password by email, start over,
- * or delete it all. Nobody sees anyone else's demo. Real schemas, cleaned up after each test.
+ * and files), a copy of the showcase the Super Administrator prepares, with everyone in
+ * it already (the Administrator, the AAYMCA assessor on every movement, each movement's
+ * Board Chairperson and General Secretary). They choose who to be, sign in again on any
+ * computer, choose a new password by email, start over (from the latest showcase), or
+ * delete it all. Nobody sees anyone else's demo. Real schemas, cleaned up after each test.
  */
 
 beforeEach(function () {
-    $this->artisan('migrate', ['--force' => true]);
-    config(['oha.demo' => true, 'oha.demo_sandboxes' => true, 'mail.default' => 'array']);
-    DemoVisitor::query()->delete();
+    config([
+        'oha.demo' => true, 'oha.demo_sandboxes' => true, 'mail.default' => 'array',
+        'oha.demo_showcase_folder' => storage_path('framework/testing/demo-showcase'),
+    ]);
+    // A fresh showcase (the main schema): the movements and the demo people, no work yet.
+    $this->artisan('migrate:fresh', ['--force' => true]);
+    $this->seed(DemoSeeder::class);
+    File::deleteDirectory((string) config('oha.demo_showcase_folder'));
+    config(['filesystems.disks.oha.root' => config('oha.demo_showcase_folder')]);
 });
 
 afterEach(function () {
@@ -77,7 +86,10 @@ it('registers a visitor into a demo of their own, with everyone already in it', 
         ->and($assessor->assignedMovements()->count())->toBe(23)
         ->and(User::query()->where('role', Role::Board)->distinct()->count('movement_id'))->toBe(23)
         ->and(User::query()->where('role', Role::Ngs)->distinct()->count('movement_id'))->toBe(23)
-        ->and(User::query()->where('email', 'not like', '%@example.org')->exists())->toBeFalse();
+        ->and(User::query()->where('email', 'not like', '%@example.org')->exists())->toBeFalse()
+        // Everyone carries the visitor's own name; their role and title tell them apart.
+        ->and(User::query()->where('name', '!=', 'Ama Mensah')->exists())->toBeFalse()
+        ->and(DemoPeople::find('chair', Movement::query()->where('slug', 'zambia')->firstOrFail())->title)->toBe('Board Chairperson, Zambia YMCA (demo)');
 });
 
 it('keeps each visitor’s demo to themselves', function () {
@@ -100,9 +112,12 @@ it('signs a visitor in to the same demo on another computer', function () {
     $key = register('ama@example.com', 'demo-pass-1');
 
     $this->post(route('demo.sign-in.store'), ['email' => 'ama@example.com', 'password' => 'wrong-pass'])->assertSessionHasErrors('email');
+    // A demo made before everyone carried the visitor's name gets it on signing in.
+    DB::connection('pgsql')->table('demo_'.$key.'.users')->update(['name' => 'Someone Else']);
     $response = $this->post(route('demo.sign-in.store'), ['email' => 'AMA@example.com', 'password' => 'demo-pass-1']);
     $response->assertRedirect(route('login'));
-    expect(demoCookie($response))->toBe($key);
+    expect(demoCookie($response))->toBe($key)
+        ->and(DB::connection('pgsql')->table('demo_'.$key.'.users')->where('name', '!=', 'Ama Mensah')->exists())->toBeFalse();
 
     // One account per email.
     $this->post(route('demo.register.store'), ['name' => 'Again', 'email' => 'ama@example.com', 'password' => 'demo-pass-2', 'password_confirmation' => 'demo-pass-2'])
@@ -136,39 +151,116 @@ it('emails a visitor a link to choose a new password, and only to the email they
         ->assertSessionHasErrors('email');
 });
 
-it('goes from assessing Zambia, to signing its ODP as Zambia’s Board Chairperson, to seeing it signed as the Administrator', function () {
-    config(['queue.default' => 'sync']);
-    $key = register();
-    $as = fn () => $this->withUnencryptedCookie(Sandboxes::COOKIE, $key);
+/** The showcase's Super Administrator, made with the command (the password typed in, as on the server). */
+function makeSuperAdmin(): User
+{
+    test()->artisan('oha:demo-super-admin', ['email' => 'superadmin.demo@africaymca.org', 'name' => 'Ray'])
+        ->expectsQuestion('Password (not shown as you type)', 'Showcase-Pass-2026')
+        ->expectsQuestion('The same password again', 'Showcase-Pass-2026')
+        ->assertSuccessful();
 
-    // The AAYMCA assessor assesses Zambia and the Administrator approves each step, up to
-    // the ODP (the platform's own steps, as in the demo's invented story).
-    Sandboxes::use($key);
-    $zambia = Movement::query()->where('slug', 'zambia')->firstOrFail();
-    $assessor = User::query()->where('email', DemoPeople::STAFF['assessor']['email'])->firstOrFail();
+    return User::query()->where('email', 'superadmin.demo@africaymca.org')->firstOrFail();
+}
+
+/** Brings a movement's assessment to "ODP approved" in the showcase: the AAYMCA assessor's steps, approved by the Super Administrator. */
+function prepareInShowcase(string $slug, User $superAdmin): Assessment
+{
+    config(['queue.default' => 'sync']);
+    Sandboxes::leave();
     $story = new DemoStorySeeder;
-    (fn () => $this->admin = User::query()->where('email', DemoPeople::STAFF['admin']['email'])->firstOrFail())->call($story);
+    (fn () => $this->admin = $superAdmin)->call($story);
     try {
-        $assessment = (fn () => $this->assessment($zambia, $assessor, 0.5, 2, 'odp_approved'))->call($story);
+        return (fn () => $this->assessment(Movement::query()->where('slug', $slug)->firstOrFail(),
+            User::query()->where('email', DemoPeople::STAFF['assessor']['email'])->firstOrFail(), 0.5, 2, 'odp_approved'))->call($story);
     } finally {
         Carbon::setTestNow();
     }
-    $odp = $assessment->odp()->firstOrFail();
-    $chair = DemoPeople::find('chair', $zambia);
-    Sandboxes::leave();
+}
 
-    // As Zambia's Board Chairperson: the approved work is there to sign.
+it('lets the Super Administrator, and only them, sign in to the showcase with their own email and password', function () {
+    $ray = makeSuperAdmin();
+    expect($ray->role)->toBe(Role::SuperAdmin)
+        ->and(User::query()->where('role', Role::SuperAdmin)->count())->toBe(1);
+
+    $this->get(route('demo.showcase'))->assertRedirect(route('login'))->assertCookie(Sandboxes::COOKIE, Sandboxes::SHOWCASE, false);
+    $showcase = fn () => $this->withUnencryptedCookie(Sandboxes::COOKIE, Sandboxes::SHOWCASE);
+    $showcase()->get(route('login'))->assertOk()->assertSee('Showcase sign-in')->assertSee('name="password"', false)->assertDontSee('Choose who to be');
+
+    // Nobody is one click away in the showcase, and the demo people have no password.
+    $showcase()->post(route('demo.sign-in'), ['role' => 'admin'])->assertNotFound();
+    $showcase()->post(route('login'), ['email' => DemoPeople::STAFF['admin']['email'], 'password' => 'anything'])->assertSessionHasErrors();
+    $this->assertGuest();
+
+    $showcase()->post(route('login'), ['email' => 'superadmin.demo@africaymca.org', 'password' => 'Showcase-Pass-2026'])->assertRedirect(route('dashboard'));
+    $this->assertAuthenticatedAs($ray);
+    $showcase()->get(route('dashboard'))->assertOk()->assertSee(route('admin.users.index'))->assertSee('Showcase:');
+    $showcase()->post(route('logout'));
+
+    // In a visitor's demo, there is no signing in as the Super Administrator.
+    $key = register();
+    $this->withUnencryptedCookie(Sandboxes::COOKIE, $key)->post(route('login'), ['email' => 'superadmin.demo@africaymca.org', 'password' => 'Showcase-Pass-2026'])
+        ->assertSessionHasErrors();
+    $this->withUnencryptedCookie(Sandboxes::COOKIE, $key)->get(route('login'))->assertOk()->assertDontSee('Super Administrator');
+    Sandboxes::use($key);
+    expect(DemoPeople::find('admin')->role)->toBe(Role::Admin)
+        ->and(User::query()->where('email', 'superadmin.demo@africaymca.org')->value('name'))->toBe('Ray');
+});
+
+it('gives every visitor a copy of the showcase’s work: one signs Zambia’s ODP as its Board Chairperson, and it stays waiting for everyone else', function () {
+    $assessment = prepareInShowcase('zambia', makeSuperAdmin());
+    $odp = $assessment->odp()->firstOrFail();
+    $chair = DemoPeople::find('chair', Movement::query()->where('slug', 'zambia')->firstOrFail());
+
+    $a = register('a@example.com');
+    $b = register('b@example.com');
+    $as = fn () => $this->withUnencryptedCookie(Sandboxes::COOKIE, $a);
+
+    // Visitor A, as Zambia's Board Chairperson, finds the ODP and signs it.
     $as()->post(route('demo.sign-in'), ['role' => 'chair', 'movement' => 'zambia'])->assertRedirect(route('dashboard'));
     $this->assertAuthenticatedAs($chair);
     $as()->get(route('dashboard'))->assertOk();
-    $as()->post(route('artefacts.sign', $odp), ['signature' => $chair->name, 'confirm' => '1'])->assertSessionHasNoErrors();
+    $as()->post(route('artefacts.sign', $odp), ['signature' => 'Ama Mensah', 'confirm' => '1'])->assertSessionHasNoErrors();
 
-    // Signing out goes back to "Choose who to be"; as the Administrator, it is signed.
+    // Signing out goes back to "Choose who to be"; as the Administrator, A sees it signed.
     $as()->post(route('logout'))->assertRedirect(route('login'));
     $as()->post(route('demo.sign-in'), ['role' => 'admin'])->assertRedirect(route('dashboard'));
     $as()->get(route('dashboard'))->assertOk();
-    Sandboxes::use($key);
+    Sandboxes::use($a);
     expect(BoardSignature::query()->where('signed_by', $chair->id)->exists())->toBeTrue();
+
+    // In the showcase and in visitor B's demo, it is still waiting to be signed.
+    Sandboxes::use($b);
+    expect(BoardSignature::query()->exists())->toBeFalse()
+        ->and(Assessment::query()->whereKey($assessment->id)->exists())->toBeTrue();
+    Sandboxes::leave();
+    expect(BoardSignature::query()->exists())->toBeFalse();
+});
+
+it('tells a visitor when the showcase has new work, gives it to them on starting over, and keeps the showcase when they delete their demo', function () {
+    $ray = makeSuperAdmin();
+    $key = register();
+    $this->withUnencryptedCookie(Sandboxes::COOKIE, $key)->get(route('login'))->assertDontSee('New work was added to the showcase');
+
+    // Afterwards, the Super Administrator signs in to the showcase and opens Kenya's
+    // assessment (assigned to it first, as on the live site).
+    $this->travel(1)->minutes();
+    $ray->assignedMovements()->attach(Movement::query()->where('slug', 'kenya')->value('id'));
+    $showcase = fn () => $this->withUnencryptedCookie(Sandboxes::COOKIE, Sandboxes::SHOWCASE);
+    $showcase()->post(route('login'), ['email' => $ray->email, 'password' => 'Showcase-Pass-2026'])->assertRedirect(route('dashboard'));
+    $showcase()->post(route('assessments.store', Movement::query()->where('slug', 'kenya')->firstOrFail()), ['period_label' => 'Nov 2026', 'period_start' => '2026-11'])
+        ->assertSessionHasNoErrors();
+    $showcase()->post(route('logout'));
+    expect(Assessment::query()->count())->toBe(1);
+    $this->withUnencryptedCookie(Sandboxes::COOKIE, $key)->get(route('login'))->assertSee('New work was added to the showcase');
+
+    $new = demoCookie($this->withUnencryptedCookie(Sandboxes::COOKIE, $key)->post(route('demo.start-over')));
+    Sandboxes::use($new);
+    expect(Assessment::query()->count())->toBe(1);
+    Sandboxes::leave();
+    $this->withUnencryptedCookie(Sandboxes::COOKIE, $new)->get(route('login'))->assertDontSee('New work was added to the showcase');
+
+    $this->withUnencryptedCookie(Sandboxes::COOKIE, $new)->delete(route('demo.destroy'))->assertRedirect(route('home'));
+    expect(Assessment::query()->count())->toBe(1);
 });
 
 it('starts a visitor over with a clean demo, keeping their account, and deletes it all on request', function () {

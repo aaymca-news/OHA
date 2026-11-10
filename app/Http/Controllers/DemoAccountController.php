@@ -113,6 +113,27 @@ class DemoAccountController extends Controller
             ->with('status', 'Your demo and your account are deleted.');
     }
 
+    /**
+     * The showcase, for the demo's Super Administrator: this browser works in the main
+     * schema, where they sign in with their email and password and prepare the work every
+     * new copy starts from.
+     */
+    public function showcase(): RedirectResponse
+    {
+        $this->demoOnly();
+
+        return redirect()->route('login')->withCookie(cookie(Sandboxes::COOKIE, Sandboxes::SHOWCASE, self::COOKIE_DAYS * 24 * 60, secure: request()->isSecure(), httpOnly: true, sameSite: 'lax'));
+    }
+
+    /** Out of the showcase on this browser. */
+    public function leaveShowcase(Request $request): RedirectResponse
+    {
+        $this->demoOnly();
+        $this->leaveRole($request);
+
+        return redirect()->route('home')->withCookie(cookie()->forget(Sandboxes::COOKIE));
+    }
+
     public function forgot(): View
     {
         $this->demoOnly();
@@ -166,6 +187,8 @@ class DemoAccountController extends Controller
         if ($visitor->sandbox_key === null || ! Sandboxes::exists($visitor->sandbox_key)) {
             $visitor->sandbox_key = Sandboxes::create();
         }
+        // Everyone in it carries the visitor's own name (demos made before this, too).
+        Sandboxes::name((string) $visitor->sandbox_key, $visitor->name);
         $visitor->touch();
         $visitor->save();
 

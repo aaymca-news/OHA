@@ -41,7 +41,9 @@ class DemoSeeder extends Seeder
             'role' => $role, 'title' => $title, 'movement_id' => $movement, 'active' => true,
         ]);
 
-        $person(DemoPeople::STAFF['admin']['email'], 'Wanjiru Kamau', Role::SuperAdmin, 'Head of Movement Strengthening (demo)');
+        // An Administrator, not a Super Administrator: the demo's only Super Administrator
+        // is the one who prepares the showcase (oha:demo-super-admin).
+        $person(DemoPeople::STAFF['admin']['email'], 'Wanjiru Kamau', Role::Admin, 'Head of Movement Strengthening (demo)');
         $assessor = $person(DemoPeople::STAFF['assessor']['email'], 'Kofi Asante', Role::Staff, 'Movement Strengthening Officer (demo)');
         $assessor->assignedMovements()->syncWithoutDetaching($movements->pluck('id')->all());
 

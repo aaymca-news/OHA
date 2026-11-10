@@ -2,6 +2,7 @@
 
 namespace App\Console\Commands;
 
+use App\Demo\DemoSite;
 use App\Demo\Sandboxes;
 use Illuminate\Console\Attributes\Description;
 use Illuminate\Console\Attributes\Signature;
@@ -22,19 +23,13 @@ class ResetDemo extends Command
 {
     public function handle(): int
     {
-        if (! config('oha.demo')) {
-            $this->error('This is not the demo site (OHA_DEMO is off). Nothing was changed.');
+        // Two locks: the demo setting, and the site's own address says "demo".
+        if (($refusal = DemoSite::refusal()) !== null) {
+            $this->error($refusal);
 
             return self::FAILURE;
         }
-        // A second lock: the site's own address says "demo" (or this is a developer's
-        // machine), so a demo setting switched on by mistake can never wipe the live site.
-        if (! app()->isLocal() && ! app()->runningUnitTests() && ! str_contains((string) parse_url((string) config('app.url'), PHP_URL_HOST), 'demo')) {
-            $this->error('APP_URL is not the demo site’s address. Nothing was changed.');
-
-            return self::FAILURE;
-        }
-        if (! $this->option('force') && ! $this->confirm('Wipe the demo database and every uploaded file, and start the demo again?')) {
+        if (! $this->option('force') && ! $this->confirm('Wipe the demo database (the showcase, every visitor’s demo and account) and every uploaded file, and start the demo again?')) {
             return self::SUCCESS;
         }
 
@@ -59,6 +54,7 @@ class ResetDemo extends Command
         $this->info($this->option('with-story')
             ? 'The demo is ready again, with the invented story at every stage.'
             : 'The demo is ready again: the 23 movements and the demo accounts, no assessments.');
+        $this->line('Create the showcase Super Administrator again: php artisan oha:demo-super-admin <email> "<name>"');
 
         return self::SUCCESS;
     }

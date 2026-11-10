@@ -17,7 +17,7 @@ class UseDemoSandbox
 {
     /** Pages a visitor without a private copy may open. */
     private const OPEN = [
-        '/', 'up',
+        '/', 'up', 'demo/showcase',
         'demo/account/register', 'demo/account/sign-in',
         'demo/account/forgot-password', 'demo/account/reset-password', 'demo/account/reset-password/*',
     ];
@@ -41,6 +41,13 @@ class UseDemoSandbox
         config(['session.cookie' => self::$sessionCookie]);
         $key = $request->cookie(Sandboxes::COOKIE);
         if (is_string($key) && Sandboxes::use($key)) {
+            return $next($request);
+        }
+        // The showcase: the main schema, where only the Super Administrator signs in (with
+        // their email and password; nobody is one click away there).
+        if ($key === Sandboxes::SHOWCASE) {
+            Sandboxes::useShowcase();
+
             return $next($request);
         }
 

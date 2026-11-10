@@ -48,6 +48,9 @@ Route::prefix('demo/account')->name('demo.')->controller(DemoAccountController::
     Route::get('reset-password/{token}', 'showReset')->name('password.reset');
     Route::post('reset-password', 'reset')->middleware('throttle:10,1')->name('password.update');
 });
+// The showcase, where the demo's Super Administrator prepares the work every new copy starts from.
+Route::get('demo/showcase', [DemoAccountController::class, 'showcase'])->name('demo.showcase');
+Route::post('demo/showcase/leave', [DemoAccountController::class, 'leaveShowcase'])->name('demo.showcase.leave');
 
 Route::middleware('guest')->group(function () {
     // The demo site only: "Choose who to be", one click per person in the visitor's demo.

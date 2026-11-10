@@ -7,8 +7,9 @@ use Symfony\Component\Mime\Address;
 
 /**
  * The demo site's email, as it leaves: marked "Demo" (subject and a note at the top), and
- * never sent to the demo people (example.org, which receives no mail). In practice the
- * only email the demo sends is a visitor's own "choose a new password" link.
+ * sent only to registered visitors (DemoVisitor), never to anyone in the demo itself (its
+ * people at example.org, or the showcase's Super Administrator). In practice the only
+ * email the demo sends is a visitor's own "choose a new password" link.
  */
 final class DemoMail
 {
@@ -22,8 +23,8 @@ final class DemoMail
             return null;
         }
 
-        // Never to the demo people's invented addresses.
-        $real = fn (array $addresses) => array_values(array_filter($addresses, fn (Address $a) => ! str_ends_with(strtolower($a->getAddress()), '@example.org')));
+        // Only to registered visitors.
+        $real = fn (array $addresses) => array_values(array_filter($addresses, fn (Address $a) => DemoVisitor::query()->email($a->getAddress())->exists()));
         $to = $real($message->getTo());
         if ($to === []) {
             return false;

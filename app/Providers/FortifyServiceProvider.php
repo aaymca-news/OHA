@@ -4,6 +4,8 @@ namespace App\Providers;
 
 use App\Actions\Fortify\ResetUserPassword;
 use App\Actions\Fortify\UpdateUserPassword;
+use App\Demo\Sandboxes;
+use App\Enums\Role;
 use App\Http\Responses\LogoutResponse;
 use App\Models\User;
 use Illuminate\Cache\RateLimiting\Limit;
@@ -37,6 +39,11 @@ class FortifyServiceProvider extends ServiceProvider
         // A deactivated account cannot sign in, even with the right password.
         Fortify::authenticateUsing(function (Request $request): ?User {
             $user = User::query()->where('email', Str::lower((string) $request->input('email')))->first();
+            // On the demo site, only its Super Administrator signs in with a password, and only
+            // in the showcase (visitors choose who to be, one click each, in their own demo).
+            if (config('oha.demo') && ($user?->role !== Role::SuperAdmin || (Sandboxes::enabled() && ! Sandboxes::showcase()))) {
+                return null;
+            }
 
             return $user !== null && $user->active && Hash::check((string) $request->input('password'), $user->password)
                 ? $user
