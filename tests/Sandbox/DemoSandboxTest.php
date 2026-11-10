@@ -1,25 +1,32 @@
 <?php
 
+use App\Demo\DemoMail;
 use App\Demo\DemoPeople;
+use App\Demo\DemoVisitor;
 use App\Demo\Sandboxes;
+use App\Enums\Role;
 use App\Models\Assessment;
+use App\Models\BoardSignature;
 use App\Models\Movement;
 use App\Models\User;
+use Carbon\Carbon;
+use Database\Seeders\DemoStorySeeder;
 use Illuminate\Auth\SessionGuard;
-use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Str;
 
 /*
- * The demo site's private copies: each visitor works in their own copy (their own
- * schema and files), sees nobody else's work, can come back with a private link, start
- * over, and unused copies are deleted. Real schemas, cleaned up after each test.
+ * The demo site: each visitor registers and gets a demo of their own (their own schema
+ * and files), with everyone in it already (the Administrator, the AAYMCA assessor on
+ * every movement, each movement's Board Chairperson and General Secretary). They choose
+ * who to be, sign in again on any computer, choose a new password by email, start over,
+ * or delete it all. Nobody sees anyone else's demo. Real schemas, cleaned up after each test.
  */
 
 beforeEach(function () {
     $this->artisan('migrate', ['--force' => true]);
-    config(['oha.demo' => true, 'oha.demo_sandboxes' => true]);
+    config(['oha.demo' => true, 'oha.demo_sandboxes' => true, 'mail.default' => 'array']);
+    DemoVisitor::query()->delete();
 });
 
 afterEach(function () {
@@ -27,60 +34,205 @@ afterEach(function () {
     foreach (Sandboxes::all() as $key) {
         Sandboxes::destroy($key);
     }
+    DemoVisitor::query()->delete();
 });
 
-/** Starts a visitor's private copy through the page, and returns its key. */
-function startDemo(): string
+/** Registers a visitor through the page, and returns their demo's key. */
+function register(string $email = 'ama@example.com', string $password = 'demo-pass-1'): string
 {
-    $response = test()->post(route('demo.start'));
-    $response->assertRedirect(route('login'));
+    $response = test()->post(route('demo.register.store'), [
+        'name' => 'Ama Mensah', 'email' => $email, 'password' => $password, 'password_confirmation' => $password,
+    ]);
+    $response->assertSessionHasNoErrors()->assertRedirect(route('login'));
+
+    return demoCookie($response);
+}
+
+function demoCookie($response): string
+{
     $cookie = collect($response->headers->getCookies())->first(fn ($c) => $c->getName() === Sandboxes::COOKIE);
     expect($cookie)->not->toBeNull();
 
-    return $cookie->getValue();
+    return (string) $cookie->getValue();
 }
 
-it('gives each visitor a private copy: what one does, the other never sees', function () {
-    $a = startDemo();
-    $b = startDemo();
+/** The emails sent (to the "array" mailer). @return list<Symfony\Component\Mime\Email> */
+function sentMails(): array
+{
+    return collect(app('mail.manager')->mailer('array')->getSymfonyTransport()->messages())
+        ->map(fn ($sent) => $sent->getOriginalMessage())->values()->all();
+}
+
+it('registers a visitor into a demo of their own, with everyone already in it', function () {
+    $key = register();
+
+    $this->withUnencryptedCookie(Sandboxes::COOKIE, $key)->get(route('login'))->assertOk()
+        ->assertSee('Choose who to be')->assertSee('AAYMCA staff')->assertSee('A National Movement')
+        ->assertSee('Zambia YMCA')->assertSee('Signed in to your demo as')
+        ->assertDontSee('name="password"', false);
+
+    Sandboxes::use($key);
+    $assessor = User::query()->where('email', DemoPeople::STAFF['assessor']['email'])->firstOrFail();
+    expect(User::query()->count())->toBe(48)
+        ->and($assessor->assignedMovements()->count())->toBe(23)
+        ->and(User::query()->where('role', Role::Board)->distinct()->count('movement_id'))->toBe(23)
+        ->and(User::query()->where('role', Role::Ngs)->distinct()->count('movement_id'))->toBe(23)
+        ->and(User::query()->where('email', 'not like', '%@example.org')->exists())->toBeFalse();
+});
+
+it('keeps each visitor’s demo to themselves', function () {
+    $a = register('a@example.com');
+    $b = register('b@example.com');
     expect($a)->not->toBe($b);
 
-    // Visitor A gives the assessor Ghana (as their Administrator would), then, as the
-    // assessor, starts Ghana's assessment in their copy.
-    Sandboxes::use($a);
-    $ghana = Movement::query()->where('slug', 'ghana')->firstOrFail();
-    User::query()->where('email', DemoPeople::ACCOUNTS['assessor']['email'])->firstOrFail()->assignedMovements()->attach($ghana->id);
-    Sandboxes::leave();
-    $this->withUnencryptedCookie(Sandboxes::COOKIE, $a)->post(route('demo.sign-in', 'assessor'))->assertRedirect(route('dashboard'));
-    $this->withUnencryptedCookie(Sandboxes::COOKIE, $a)->post(route('assessments.store', $ghana), ['period_label' => 'Nov 2026', 'period_start' => '2026-11'])->assertRedirect();
+    $this->withUnencryptedCookie(Sandboxes::COOKIE, $a)->post(route('demo.sign-in'), ['role' => 'assessor'])->assertRedirect(route('dashboard'));
+    $zambia = Movement::query()->where('slug', 'zambia')->firstOrFail();
+    $this->withUnencryptedCookie(Sandboxes::COOKIE, $a)->post(route('assessments.store', $zambia), ['period_label' => 'Nov 2026', 'period_start' => '2026-11'])->assertRedirect();
     expect(Assessment::query()->count())->toBe(1);
 
-    // Visitor B's copy has no assessment, and the main schema none either.
     Sandboxes::use($b);
-    expect(Assessment::query()->count())->toBe(0)
-        ->and(Movement::query()->count())->toBe(23);
+    expect(Assessment::query()->count())->toBe(0);
     Sandboxes::leave();
     expect(DB::connection('pgsql')->table('assessments')->count())->toBe(0);
-
-    // Each copy has its own four demo people.
-    Sandboxes::use($b);
-    expect(User::query()->whereIn('email', array_column(DemoPeople::ACCOUNTS, 'email'))->count())->toBe(4);
 });
 
-it('sends a visitor without a private copy to the landing page, whose buttons start one', function () {
+it('signs a visitor in to the same demo on another computer', function () {
+    $key = register('ama@example.com', 'demo-pass-1');
+
+    $this->post(route('demo.sign-in.store'), ['email' => 'ama@example.com', 'password' => 'wrong-pass'])->assertSessionHasErrors('email');
+    $response = $this->post(route('demo.sign-in.store'), ['email' => 'AMA@example.com', 'password' => 'demo-pass-1']);
+    $response->assertRedirect(route('login'));
+    expect(demoCookie($response))->toBe($key);
+
+    // One account per email.
+    $this->post(route('demo.register.store'), ['name' => 'Again', 'email' => 'ama@example.com', 'password' => 'demo-pass-2', 'password_confirmation' => 'demo-pass-2'])
+        ->assertSessionHasErrors('email');
+});
+
+it('emails a visitor a link to choose a new password, and only to the email they registered', function () {
+    $key = register('ama@example.com', 'demo-pass-1');
+
+    $this->post(route('demo.password.email'), ['email' => 'nobody@example.com'])->assertSessionHas('status');
+    expect(sentMails())->toBe([]);
+
+    $this->post(route('demo.password.email'), ['email' => 'ama@example.com'])->assertSessionHas('status');
+    $mails = sentMails();
+    expect($mails)->toHaveCount(1)
+        ->and($mails[0]->getTo()[0]->getAddress())->toBe('ama@example.com')
+        ->and($mails[0]->getSubject())->toStartWith('[Demo] ')
+        ->and($mails[0]->getTextBody())->toContain(DemoMail::NOTE);
+
+    preg_match('#'.preg_quote(url('demo/account/reset-password'), '#').'/([A-Za-z0-9]+)\?email=[^\s\]]+#', (string) $mails[0]->getTextBody(), $m);
+    expect($m)->not->toBeEmpty();
+    $this->get($m[0])->assertOk()->assertSee('Choose a new password');
+
+    $response = $this->post(route('demo.password.update'), ['token' => $m[1], 'email' => 'ama@example.com', 'password' => 'new-pass-22', 'password_confirmation' => 'new-pass-22']);
+    $response->assertRedirect(route('login'));
+    expect(demoCookie($response))->toBe($key);
+    $this->post(route('demo.sign-in.store'), ['email' => 'ama@example.com', 'password' => 'new-pass-22'])->assertRedirect(route('login'));
+
+    // The link works once.
+    $this->post(route('demo.password.update'), ['token' => $m[1], 'email' => 'ama@example.com', 'password' => 'other-pass-33', 'password_confirmation' => 'other-pass-33'])
+        ->assertSessionHasErrors('email');
+});
+
+it('goes from assessing Zambia, to signing its ODP as Zambia’s Board Chairperson, to seeing it signed as the Administrator', function () {
+    config(['queue.default' => 'sync']);
+    $key = register();
+    $as = fn () => $this->withUnencryptedCookie(Sandboxes::COOKIE, $key);
+
+    // The AAYMCA assessor assesses Zambia and the Administrator approves each step, up to
+    // the ODP (the platform's own steps, as in the demo's invented story).
+    Sandboxes::use($key);
+    $zambia = Movement::query()->where('slug', 'zambia')->firstOrFail();
+    $assessor = User::query()->where('email', DemoPeople::STAFF['assessor']['email'])->firstOrFail();
+    $story = new DemoStorySeeder;
+    (fn () => $this->admin = User::query()->where('email', DemoPeople::STAFF['admin']['email'])->firstOrFail())->call($story);
+    try {
+        $assessment = (fn () => $this->assessment($zambia, $assessor, 0.5, 2, 'odp_approved'))->call($story);
+    } finally {
+        Carbon::setTestNow();
+    }
+    $odp = $assessment->odp()->firstOrFail();
+    $chair = DemoPeople::find('chair', $zambia);
+    Sandboxes::leave();
+
+    // As Zambia's Board Chairperson: the approved work is there to sign.
+    $as()->post(route('demo.sign-in'), ['role' => 'chair', 'movement' => 'zambia'])->assertRedirect(route('dashboard'));
+    $this->assertAuthenticatedAs($chair);
+    $as()->get(route('dashboard'))->assertOk();
+    $as()->post(route('artefacts.sign', $odp), ['signature' => $chair->name, 'confirm' => '1'])->assertSessionHasNoErrors();
+
+    // Signing out goes back to "Choose who to be"; as the Administrator, it is signed.
+    $as()->post(route('logout'))->assertRedirect(route('login'));
+    $as()->post(route('demo.sign-in'), ['role' => 'admin'])->assertRedirect(route('dashboard'));
+    $as()->get(route('dashboard'))->assertOk();
+    Sandboxes::use($key);
+    expect(BoardSignature::query()->where('signed_by', $chair->id)->exists())->toBeTrue();
+});
+
+it('starts a visitor over with a clean demo, keeping their account, and deletes it all on request', function () {
+    // As on the server: sessions in the database (the old demo's are deleted with it).
+    config(['session.driver' => 'database']);
+    $old = register();
+    $this->withUnencryptedCookie(Sandboxes::COOKIE, $old)->post(route('demo.sign-in'), ['role' => 'admin']);
+
+    $response = $this->withUnencryptedCookie(Sandboxes::COOKIE, $old)->post(route('demo.start-over'));
+    $response->assertRedirect(route('login'));
+    $new = demoCookie($response);
+    expect($new)->not->toBe($old)
+        ->and(Sandboxes::exists($old))->toBeFalse()
+        ->and(Sandboxes::exists($new))->toBeTrue()
+        ->and(DemoVisitor::query()->email('ama@example.com')->value('sandbox_key'))->toBe($new);
+
+    $this->withUnencryptedCookie(Sandboxes::COOKIE, $new)->delete(route('demo.destroy'))->assertRedirect(route('home'));
+    expect(Sandboxes::exists($new))->toBeFalse()
+        ->and(DemoVisitor::query()->count())->toBe(0);
+});
+
+it('sends a visitor without a demo to the front page, whose buttons start one', function () {
     $this->get(route('login'))->assertRedirect(route('home'));
-    // The landing page's sign-in buttons start a demo instead; once started, they continue it.
-    $this->get(route('home'))->assertOk()->assertSee('Start your own demo')
-        ->assertSee('action="'.route('demo.start').'"', false)
+    $this->get(route('home'))->assertOk()->assertSee('Start your demo')->assertSee(route('demo.register'))
         ->assertDontSee('Sign in to your dashboard');
-    $a = startDemo();
-    $this->withUnencryptedCookie(Sandboxes::COOKIE, $a)->get(route('home'))->assertOk()
-        ->assertSee('Continue your demo')->assertDontSee('Start your own demo');
+    $key = register();
+    $this->withUnencryptedCookie(Sandboxes::COOKIE, $key)->get(route('home'))->assertOk()->assertSee('Continue your demo');
 });
 
-it('keeps the visitor’s session (their sign-in) in their own copy, even on the sign-in pages', function () {
+it('has no invitations in the demo: everyone is already there', function () {
+    $key = register();
+    $this->withUnencryptedCookie(Sandboxes::COOKIE, $key)->post(route('demo.sign-in'), ['role' => 'admin']);
+
+    $this->withUnencryptedCookie(Sandboxes::COOKIE, $key)->get(route('admin.users.index'))->assertOk()->assertDontSee('Invite a user');
+    $this->withUnencryptedCookie(Sandboxes::COOKIE, $key)->get(route('admin.users.create'))->assertNotFound();
+    $this->withUnencryptedCookie(Sandboxes::COOKIE, $key)->post(route('admin.users.store'), ['name' => 'Real Person', 'email' => 'real@example.com', 'role' => 'staff'])
+        ->assertSessionHasErrors('action');
+    Sandboxes::use($key);
+    expect(User::query()->where('email', 'real@example.com')->exists())->toBeFalse();
+});
+
+it('deletes a demo and its account after 30 days unused, keeps at most the allowed number, and makes a new demo for a returning visitor', function () {
+    $old = register('old@example.com');
+    $recent = register('recent@example.com');
+    DB::connection('pgsql')->table('demo_sandboxes')->where('key', $old)->update(['last_used_at' => now()->subDays(31)]);
+
+    expect(Sandboxes::prune())->toBe(1)
+        ->and(Sandboxes::exists($old))->toBeFalse()
+        ->and(DemoVisitor::query()->email('old@example.com')->exists())->toBeFalse()
+        ->and(DemoVisitor::query()->email('recent@example.com')->exists())->toBeTrue();
+
+    // At the limit, the least recently used demo makes way; its visitor gets a new one on signing in.
+    config(['oha.demo_sandbox_max' => 1]);
+    register('newest@example.com');
+    expect(Sandboxes::exists($recent))->toBeFalse();
+    $response = $this->post(route('demo.sign-in.store'), ['email' => 'recent@example.com', 'password' => 'demo-pass-1']);
+    expect(Sandboxes::exists(demoCookie($response)))->toBeTrue();
+});
+
+it('keeps the visitor’s session (who they are being) in their own demo, even on the sign-in pages', function () {
     // As on the server: sessions in the database. The sign-in page's controller opens the
-    // session before the route's middleware runs, so the copy must be chosen before that.
+    // session before the route's middleware runs, so the demo must be chosen before that.
+    // (Made directly: in a test every request shares one app, and a page before this one
+    // would already have opened its session; on the server each request starts afresh.)
     config(['session.driver' => 'database']);
     $key = Sandboxes::create();
     Sandboxes::leave();
@@ -92,155 +244,31 @@ it('keeps the visitor’s session (their sign-in) in their own copy, even on the
         ->and(DB::connection('pgsql')->table('public.sessions')->count())->toBe($mainBefore);
 });
 
-it('shows the landing page, not a loop, to someone still signed in from before private copies', function () {
-    // A sign-in kept in the main schema, as on the demo when it was one shared space.
+it('shows the front page, not a loop, to someone still signed in from before demos had accounts', function () {
     config(['session.driver' => 'database']);
-    $user = User::factory()->create();
-    $id = Str::random(40);
-    DB::connection('pgsql')->table('sessions')->insert([
-        'id' => $id,
-        'user_id' => $user->id,
-        'payload' => base64_encode((string) json_encode(['_token' => Str::random(40), 'login_web_'.sha1(SessionGuard::class) => $user->id])),
-        'last_activity' => time(),
-    ]);
-
-    try {
-        $this->withCookie((string) config('session.cookie'), $id)->get(route('home'))
-            ->assertOk()->assertSee('Start your own demo');
-    } finally {
-        DB::connection('pgsql')->table('sessions')->where('id', $id)->delete();
-        $user->delete();
-    }
-});
-
-it('shows the landing page, not a loop, to someone with an old "remember me" sign-in', function () {
-    // In a transaction, undone after: a sign-in it allowed would leave a trail in the main schema.
     DB::connection('pgsql')->beginTransaction();
     try {
         $user = User::factory()->create(['remember_token' => 'old-remember-token']);
+        $id = Str::random(40);
+        DB::connection('pgsql')->table('sessions')->insert([
+            'id' => $id, 'user_id' => $user->id, 'last_activity' => time(),
+            'payload' => base64_encode((string) json_encode(['_token' => Str::random(40), 'login_web_'.sha1(SessionGuard::class) => $user->id])),
+        ]);
+        $this->withCookie((string) config('session.cookie'), $id)->get(route('home'))->assertOk()->assertSee('Start your demo');
         $this->withCookie('remember_web_'.sha1(SessionGuard::class), $user->id.'|old-remember-token|'.$user->password)
-            ->get(route('home'))->assertOk()->assertSee('Start your own demo');
+            ->get(route('home'))->assertOk()->assertSee('Start your demo');
     } finally {
         DB::connection('pgsql')->rollBack();
     }
 });
 
-it('brings a visitor back to their copy with its private link, and starts over with a clean one', function () {
-    $a = startDemo();
-    $this->get(route('demo.resume', $a))->assertRedirect(route('login'))->assertCookie(Sandboxes::COOKIE, $a, false);
-    $this->withUnencryptedCookie(Sandboxes::COOKIE, $a)->get(route('login'))->assertOk()->assertSee('Copy your private demo link')->assertSee('Start over');
-
-    $response = $this->withUnencryptedCookie(Sandboxes::COOKIE, $a)->post(route('demo.start-over'));
-    $response->assertRedirect(route('login'));
-    $new = collect($response->headers->getCookies())->first(fn ($c) => $c->getName() === Sandboxes::COOKIE)->getValue();
-    expect($new)->not->toBe($a)
-        ->and(Sandboxes::exists($a))->toBeFalse()
-        ->and(Sandboxes::exists($new))->toBeTrue();
-});
-
-it('deletes copies unused for two weeks, and keeps at most the allowed number', function () {
-    $old = startDemo();
-    $recent = startDemo();
-    DB::connection('pgsql')->table('demo_sandboxes')->where('key', $old)->update(['last_used_at' => now()->subDays(15)]);
-
-    expect(Sandboxes::prune())->toBe(1)
-        ->and(Sandboxes::exists($old))->toBeFalse()
-        ->and(Sandboxes::exists($recent))->toBeTrue();
-
-    // At the limit, the least recently used makes way.
-    config(['oha.demo_sandbox_max' => 1]);
-    $newest = startDemo();
-    expect(Sandboxes::exists($recent))->toBeFalse()->and(Sandboxes::exists($newest))->toBeTrue();
-});
-
 it('is off on the live site', function () {
     config(['oha.demo' => false]);
 
-    $this->post(route('demo.start'))->assertNotFound();
-    $this->get(route('login'))->assertOk();
+    $this->get(route('demo.register'))->assertNotFound();
+    $this->post(route('demo.sign-in.store'), ['email' => 'a@example.com', 'password' => 'x'])->assertNotFound();
+    $this->get(route('login'))->assertOk()->assertSee('name="password"', false)->assertDontSee('Choose who to be');
     $this->get(route('home'))->assertOk()->assertSee('Sign in to your dashboard')->assertSee('Access is by invitation only.')
-        ->assertDontSee('Start your own demo')->assertDontSee('Continue your demo');
+        ->assertDontSee('Start your demo');
     expect(Sandboxes::all())->toBe([]);
-});
-
-/** The emails the demo sent (to the "array" mailer). @return list<Symfony\Component\Mime\Email> */
-function demoMails(): array
-{
-    return collect(app('mail.manager')->mailer('array')->getSymfonyTransport()->messages())
-        ->map(fn ($sent) => $sent->getOriginalMessage())->values()->all();
-}
-
-it('starts a demo with only the four demo people, the assessor assigned to nothing', function () {
-    $a = startDemo();
-    Sandboxes::use($a);
-
-    expect(User::query()->count())->toBe(4)
-        ->and(User::query()->where('email', DemoPeople::ACCOUNTS['assessor']['email'])->first()->assignedMovements()->count())->toBe(0);
-});
-
-it('invites people like the live site: a real email marked Demo, whose link opens the inviter’s demo', function () {
-    config(['mail.default' => 'array']);
-    Cache::store('demo')->flush();
-    $a = startDemo();
-    $this->withUnencryptedCookie(Sandboxes::COOKIE, $a)->post(route('demo.sign-in', 'admin'));
-    $this->withUnencryptedCookie(Sandboxes::COOKIE, $a)->post(route('admin.users.store'), [
-        'name' => 'Ama Mensah', 'email' => 'ama@example.com', 'role' => 'staff',
-    ])->assertSessionHasNoErrors()->assertRedirect();
-
-    // One email, to the invited person, marked as the demo's.
-    $mails = demoMails();
-    expect($mails)->toHaveCount(1);
-    $mail = $mails[0];
-    expect($mail->getTo()[0]->getAddress())->toBe('ama@example.com')
-        ->and($mail->getSubject())->toStartWith('[Demo] ')
-        ->and($mail->getHtmlBody())->toContain('It is not from the live platform')
-        ->and($mail->getTextBody())->toContain('It is not from the live platform');
-
-    // Its link goes through the inviter's demo, then on to setting a password.
-    preg_match('#'.preg_quote(route('demo.resume', $a), '#').'\?next=%2Finvitation[^\s\]]+#', (string) $mail->getTextBody(), $m);
-    expect($m)->not->toBeEmpty();
-    // The invited person is someone else, in another browser: nobody signed in.
-    $this->withUnencryptedCookie(Sandboxes::COOKIE, $a)->post(route('logout'));
-    Sandboxes::leave();
-    $response = $this->get($m[0]);
-    $response->assertCookie(Sandboxes::COOKIE, $a, false);
-    $next = $response->headers->get('Location');
-    expect(parse_url((string) $next, PHP_URL_PATH))->toStartWith('/invitation/');
-
-    // The invited person sets a password and carries on, in that demo.
-    parse_str((string) parse_url((string) $next, PHP_URL_QUERY), $query);
-    $this->withUnencryptedCookie(Sandboxes::COOKIE, $a)->get($next)->assertOk();
-    $this->withUnencryptedCookie(Sandboxes::COOKIE, $a)->post(route('invitation.store'), [
-        'token' => basename((string) parse_url((string) $next, PHP_URL_PATH)), 'email' => $query['email'],
-        'password' => 'Demo-Password-2026', 'password_confirmation' => 'Demo-Password-2026',
-    ])->assertRedirect(route('dashboard'));
-    Sandboxes::use($a);
-    expect(User::query()->where('email', 'ama@example.com')->first()->isInvitationPending())->toBeFalse();
-});
-
-it('never emails the demo people, and limits invitations a day', function () {
-    config(['mail.default' => 'array', 'oha.demo_invites_per_demo' => 1]);
-    Cache::store('demo')->flush();
-    $a = startDemo();
-
-    Sandboxes::use($a);
-    Mail::raw('A notice.', fn ($m) => $m->to(DemoPeople::ACCOUNTS['ngs']['email'])->subject('Notice'));
-    expect(demoMails())->toBe([]);
-    Sandboxes::leave();
-
-    $this->withUnencryptedCookie(Sandboxes::COOKIE, $a)->post(route('demo.sign-in', 'admin'));
-    $this->withUnencryptedCookie(Sandboxes::COOKIE, $a)->post(route('admin.users.store'), ['name' => 'One', 'email' => 'one@example.com', 'role' => 'staff'])
-        ->assertSessionHasNoErrors();
-    $this->withUnencryptedCookie(Sandboxes::COOKIE, $a)->post(route('admin.users.store'), ['name' => 'Two', 'email' => 'two@example.com', 'role' => 'staff'])
-        ->assertSessionHasErrors('action');
-    Sandboxes::use($a);
-    expect(User::query()->where('email', 'two@example.com')->exists())->toBeFalse()
-        ->and(demoMails())->toHaveCount(1);
-});
-
-it('opens only pages on this site from a private link', function () {
-    $a = startDemo();
-    $this->get(route('demo.resume', ['key' => $a, 'next' => '//elsewhere.example/x']))->assertRedirect(route('login'));
-    $this->get(route('demo.resume', ['key' => $a, 'next' => '/\elsewhere.example']))->assertRedirect(route('login'));
-    $this->get(route('demo.resume', ['key' => $a, 'next' => '/dashboard']))->assertRedirect(url('/dashboard'));
 });

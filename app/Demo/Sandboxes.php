@@ -15,7 +15,7 @@ use RuntimeException;
  * The demo site's private copies: each visitor works in their own "sandbox", the
  * platform's tables in a PostgreSQL schema of their own (demo_{key}) and their files in a
  * folder of their own, made from scratch (the 23 movements and the demo people) when they
- * start. What one visitor does, no other visitor sees.
+ * register (DemoVisitor). What one visitor does, no other visitor sees.
  *
  * A request uses a sandbox (use()) through the connection "sandbox", made the default,
  * so every query, model, session and cache entry stays in that visitor's schema. The list
@@ -70,8 +70,11 @@ final class Sandboxes
         Storage::forgetDisk((string) config('oha.disk'));
         self::$current = $key;
 
-        // Remember it is in use (at most every ten minutes), so unused ones can be deleted.
-        self::registry()->where('key', $key)->where('last_used_at', '<', now()->subMinutes(10))->update(['last_used_at' => now()]);
+        // Remember it is in use (at most every ten minutes), so unused ones can be deleted,
+        // and its visitor's account with it.
+        if (self::registry()->where('key', $key)->where('last_used_at', '<', now()->subMinutes(10))->update(['last_used_at' => now()]) > 0) {
+            self::visitors()->where('sandbox_key', $key)->update(['updated_at' => now()]);
+        }
 
         return true;
     }
@@ -135,16 +138,22 @@ final class Sandboxes
     }
 
     /**
-     * Deletes the sandboxes unused for config oha.demo_sandbox_days.
+     * Deletes the sandboxes unused for config oha.demo_sandbox_days, with their visitors'
+     * accounts, and the accounts unused that long whose demo is already gone.
      *
-     * @return int how many were deleted
+     * @return int how many sandboxes were deleted
      */
     public static function prune(): int
     {
-        $old = self::registry()->where('last_used_at', '<', now()->subDays(max(1, (int) config('oha.demo_sandbox_days'))))->pluck('key');
+        $cutoff = now()->subDays(max(1, (int) config('oha.demo_sandbox_days')));
+        $old = self::registry()->where('last_used_at', '<', $cutoff)->pluck('key');
         foreach ($old as $key) {
             self::destroy((string) $key);
+            self::visitors()->where('sandbox_key', $key)->delete();
         }
+        self::visitors()->where('updated_at', '<', $cutoff)
+            ->where(fn ($q) => $q->whereNull('sandbox_key')->orWhereNotIn('sandbox_key', self::registry()->select('key')))
+            ->delete();
 
         return $old->count();
     }
@@ -169,5 +178,11 @@ final class Sandboxes
     private static function registry()
     {
         return DB::connection('pgsql')->table('demo_sandboxes');
+    }
+
+    /** @return Builder the visitors' accounts (DemoVisitor), in the main schema */
+    private static function visitors()
+    {
+        return DB::connection('pgsql')->table('demo_visitors');
     }
 }

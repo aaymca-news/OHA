@@ -2,7 +2,6 @@
 
 namespace App\Actions\Users;
 
-use App\Demo\DemoInvitations;
 use App\Enums\Role;
 use App\Exceptions\WorkflowRuleBroken;
 use App\Models\Movement;
@@ -39,6 +38,7 @@ final class InviteUser
         ?Movement $chairOf = null,
         bool $confirmReplace = false,
     ): User {
+        $this->refuseOnDemo();
         $this->ensureAdmin($admin);
         $this->ensure($admin, 'grantRole', [User::class, $role]);
 
@@ -83,6 +83,7 @@ final class InviteUser
      */
     public function resend(User $user, User $admin): void
     {
+        $this->refuseOnDemo();
         $this->ensure($admin, 'administer', $user);
         if (! $user->isInvitationPending()) {
             throw new WorkflowRuleBroken("{$user->name} has already accepted their invitation.");
@@ -92,10 +93,16 @@ final class InviteUser
         Audit::record($admin, 'user.invitation_resent', $user);
     }
 
+    /** The demo site has everyone already, and nobody is invited into a visitor's demo. */
+    private function refuseOnDemo(): void
+    {
+        if (config('oha.demo')) {
+            throw new WorkflowRuleBroken('The demo has no invitations: everyone is already here. Choose who to be from the sign-in page.');
+        }
+    }
+
     private function sendInvitation(User $user, User $admin): void
     {
-        // The demo site sends real invitations, so many a day (nothing anywhere else).
-        DemoInvitations::allow();
 
         /** @var PasswordBroker $broker */
         $broker = Password::broker('invites');

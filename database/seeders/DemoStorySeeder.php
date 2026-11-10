@@ -88,9 +88,9 @@ class DemoStorySeeder extends Seeder
         // Everything happens at once while seeding: notices are stored straight away.
         config(['queue.default' => 'sync', 'mail.default' => 'log']);
 
-        // The movements, the demo people and the invented people come first (safe to run again).
-        $this->call([DemoSeeder::class, DemoSamplePeopleSeeder::class]);
-        $this->admin = User::query()->where('email', DemoPeople::ACCOUNTS['admin']['email'])->firstOrFail();
+        // The movements and the demo people come first (DemoSeeder; safe to run again).
+        $this->call(DemoSeeder::class);
+        $this->admin = User::query()->where('email', DemoPeople::STAFF['admin']['email'])->firstOrFail();
 
         try {
             foreach (self::STORIES as $slug => $story) {
@@ -108,7 +108,7 @@ class DemoStorySeeder extends Seeder
     {
         $extra = $story['extra'] ?? null;
         // The demo assessor does the work on the movements given to them, so that account shows it all.
-        $assessor = $movement->activeAssessors()->where('email', DemoPeople::ACCOUNTS['assessor']['email'])->first()
+        $assessor = $movement->activeAssessors()->where('email', DemoPeople::STAFF['assessor']['email'])->first()
             ?? $movement->activeAssessors()->where('role', Role::Staff)->first()
             ?? $movement->activeAssessors()->firstOrFail();
 

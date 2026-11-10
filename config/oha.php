@@ -43,24 +43,21 @@ return [
     'demo' => (bool) env('OHA_DEMO', false),
 
     /*
-    | On the demo site, each visitor gets a private copy (a "sandbox"): their own tables,
-    | in their own PostgreSQL schema, and their own files, made from scratch when they
-    | click "Start your own demo". What one visitor does, nobody else sees. A copy unused
-    | for sandbox_days is deleted; at most sandbox_max exist (the least recently used goes).
+    | On the demo site, each visitor registers and gets a demo of their own (a
+    | "sandbox"): their own tables, in their own PostgreSQL schema, and their own files.
+    | What one visitor does, nobody else sees. A demo unused for sandbox_days is deleted,
+    | with its visitor's account; at most sandbox_max exist (the least recently used goes).
     */
     'demo_sandboxes' => (bool) env('OHA_DEMO_SANDBOXES', true),
-    'demo_sandbox_days' => (int) env('OHA_DEMO_SANDBOX_DAYS', 14),
+    'demo_sandbox_days' => (int) env('OHA_DEMO_SANDBOX_DAYS', 30),
     'demo_sandbox_max' => (int) env('OHA_DEMO_SANDBOX_MAX', 200),
 
     /*
-    | Whether the demo really sends email (invitations and the other notices to people a
-    | visitor invites), marked "Demo", through the site's mail settings. Off, mail is only
-    | written to the log. Never to the demo people (example.org). Invitations are limited
-    | each day: per private demo and per internet address.
+    | Whether the demo really sends email, through the site's mail settings: only the
+    | visitor's own "choose a new password" link, marked "Demo" (the demo people are at
+    | example.org and are never emailed). Off, mail is only written to the log.
     */
     'demo_mail' => (bool) env('OHA_DEMO_MAIL', false),
-    'demo_invites_per_demo' => (int) env('OHA_DEMO_INVITES_PER_DEMO', 10),
-    'demo_invites_per_address' => (int) env('OHA_DEMO_INVITES_PER_ADDRESS', 20),
 
     /* How many rows a long list shows per page (assessments, users, audit, notifications). */
     'per_page' => (int) env('OHA_PER_PAGE', 25),

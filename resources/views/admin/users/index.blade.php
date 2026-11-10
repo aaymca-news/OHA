@@ -4,7 +4,9 @@
             <x-segmented.link :href="route('admin.users.index')" :active="$filter !== 'boards'">AAYMCA Secretariat</x-segmented.link>
             <x-segmented.link :href="route('admin.users.index', ['show' => 'boards'])" :active="$filter === 'boards'">National Movements</x-segmented.link>
         </x-segmented>
-        <x-button :href="route('admin.users.create')" class="ml-auto">Invite a user</x-button>
+        @unless (config('oha.demo'))
+            <x-button :href="route('admin.users.create')" class="ml-auto">Invite a user</x-button>
+        @endunless
     </div>
 
     <x-table class="min-w-[48rem]">

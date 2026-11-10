@@ -1,12 +1,11 @@
 <?php
 
-use App\Demo\DemoPeople;
 use App\Http\Controllers\Admin\MovementController as AdminMovementController;
 use App\Http\Controllers\Admin\UserController;
 use App\Http\Controllers\ArtefactController;
 use App\Http\Controllers\AssessmentController;
 use App\Http\Controllers\DashboardController;
-use App\Http\Controllers\DemoSandboxController;
+use App\Http\Controllers\DemoAccountController;
 use App\Http\Controllers\DemoSignInController;
 use App\Http\Controllers\DownloadController;
 use App\Http\Controllers\EvidenceController;
@@ -33,17 +32,27 @@ Route::get('/', LandingController::class)->middleware('guest')->name('home');
 
 // Sign-in and password reset routes are registered by Fortify.
 
-// The demo site only: each visitor's own private copy (404 anywhere else, as on live).
-// At most 30 new copies an hour from one address: a workshop room shares one.
-Route::post('demo/start', [DemoSandboxController::class, 'start'])->middleware('throttle:30,60')->name('demo.start');
-Route::get('demo/resume/{key}', [DemoSandboxController::class, 'resume'])->where('key', '[a-z0-9]{24}')->middleware('throttle:30,1')->name('demo.resume');
-Route::post('demo/start-over', [DemoSandboxController::class, 'startOver'])->middleware('throttle:30,60')->name('demo.start-over');
+// The demo site only: a visitor's account and their own demo (404 anywhere else, as on
+// live). At most 30 registrations an hour from one address: a workshop room shares one.
+Route::prefix('demo/account')->name('demo.')->controller(DemoAccountController::class)->group(function () {
+    Route::get('register', 'create')->name('register');
+    Route::post('register', 'store')->middleware('throttle:30,60')->name('register.store');
+    Route::get('sign-in', 'showSignIn')->name('sign-in.show');
+    Route::post('sign-in', 'signIn')->middleware('throttle:10,1')->name('sign-in.store');
+    Route::post('sign-out', 'signOut')->name('sign-out');
+    Route::post('choose', 'choose')->name('choose');
+    Route::post('start-over', 'startOver')->middleware('throttle:30,60')->name('start-over');
+    Route::delete('/', 'destroy')->name('destroy');
+    Route::get('forgot-password', 'forgot')->name('password.request');
+    Route::post('forgot-password', 'sendResetLink')->middleware('throttle:5,1')->name('password.email');
+    Route::get('reset-password/{token}', 'showReset')->name('password.reset');
+    Route::post('reset-password', 'reset')->middleware('throttle:10,1')->name('password.update');
+});
 
 Route::middleware('guest')->group(function () {
-    // The demo site only: one-click sign-in as each role's demo account. Anywhere else
-    // (config oha.demo off, as on the live site) it answers 404.
-    Route::post('demo/sign-in/{role}', DemoSignInController::class)->whereIn('role', array_keys(DemoPeople::ACCOUNTS))
-        ->middleware('throttle:30,1')->name('demo.sign-in');
+    // The demo site only: "Choose who to be", one click per person in the visitor's demo.
+    // Anywhere else (config oha.demo off, as on the live site) it answers 404.
+    Route::post('demo/as', DemoSignInController::class)->middleware('throttle:60,1')->name('demo.sign-in');
 
     Route::get('invitation/{token}', [InvitationController::class, 'show'])->name('invitation.show');
     Route::post('invitation', [InvitationController::class, 'store'])->middleware('throttle:10,1')->name('invitation.store');

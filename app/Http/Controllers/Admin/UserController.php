@@ -47,6 +47,9 @@ class UserController extends Controller
 
     public function create(Request $request): View
     {
+        // The demo has everyone already: no invitations there.
+        abort_if((bool) config('oha.demo'), 404);
+
         return view('admin.users.create', ['movements' => $this->movements(), 'roles' => $this->grantable($request->user())]);
     }
 

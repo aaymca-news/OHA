@@ -47,15 +47,6 @@ return [
             'lock_table' => env('DB_CACHE_LOCK_TABLE'),
         ],
 
-        // The demo site's counts shared by every private demo (in the main schema), such as
-        // its invitation limits per internet address.
-        'demo' => [
-            'driver' => 'database',
-            'connection' => env('DB_CONNECTION', 'pgsql'),
-            'table' => env('DB_CACHE_TABLE', 'cache'),
-            'lock_connection' => env('DB_CONNECTION', 'pgsql'),
-        ],
-
         'file' => [
             'driver' => 'file',
             'path' => storage_path('framework/cache/data'),

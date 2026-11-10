@@ -9,14 +9,18 @@ use Symfony\Component\HttpFoundation\Response;
 
 /**
  * The demo site only (global middleware): every request works in the visitor’s own private copy (their
- * sandbox, named by their cookie), before the session, sign-in or any data is read. A
- * visitor without one sees the landing page and starts one there; anything else sends
- * them to it.
+ * sandbox, named by their cookie, set when they register or sign in to their demo), before
+ * the session, sign-in or any data is read. A visitor without one may open only the front
+ * page and the register, sign-in and password pages; anything else sends them to the front page.
  */
 class UseDemoSandbox
 {
     /** Pages a visitor without a private copy may open. */
-    private const OPEN = ['/', 'demo/start', 'demo/resume/*', 'up'];
+    private const OPEN = [
+        '/', 'up',
+        'demo/account/register', 'demo/account/sign-in',
+        'demo/account/forgot-password', 'demo/account/reset-password', 'demo/account/reset-password/*',
+    ];
 
     /** The session cookie of a visitor without a private copy. */
     private const GUEST_SESSION = 'oha_demo_guest';
@@ -54,7 +58,7 @@ class UseDemoSandbox
             return $next($request);
         }
 
-        // No private copy (or it was deleted after two weeks unused): start one first.
+        // Not signed in to a demo (or it was deleted): register or sign in first.
         return redirect()->route('home')->withCookie(cookie()->forget(Sandboxes::COOKIE));
     }
 }

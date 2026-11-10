@@ -1,5 +1,6 @@
 <?php
 
+use App\Demo\DemoVisitor;
 use App\Models\User;
 
 return [
@@ -67,6 +68,12 @@ return [
             'model' => env('AUTH_MODEL', User::class),
         ],
 
+        // The demo site's visitors (their demo accounts), for choosing a new password.
+        'demo_visitors' => [
+            'driver' => 'eloquent',
+            'model' => DemoVisitor::class,
+        ],
+
         // 'users' => [
         //     'driver' => 'database',
         //     'table' => 'users',
@@ -107,6 +114,16 @@ return [
             'table' => env('AUTH_PASSWORD_RESET_TOKEN_TABLE', 'password_reset_tokens'),
             'expire' => 10080,
             'throttle' => 0,
+        ],
+
+        // The demo site's visitors choosing a new password for their demo account. Always
+        // in the main schema, whatever demo the request is using.
+        'demo_visitors' => [
+            'provider' => 'demo_visitors',
+            'table' => 'demo_visitor_password_resets',
+            'connection' => env('DB_CONNECTION', 'pgsql'),
+            'expire' => 60,
+            'throttle' => 60,
         ],
     ],
 

@@ -71,7 +71,7 @@
         @if ($canAdminister)
             <x-card title="Account" padding="lg">
                 <div class="flex flex-wrap gap-sm">
-                    @if ($target->isInvitationPending() && $target->active)
+                    @if ($target->isInvitationPending() && $target->active && ! config('oha.demo'))
                         <form method="POST" action="{{ route('admin.users.invitation', $target) }}">
                             @csrf
                             <x-button variant="secondary">Send a new invitation</x-button>

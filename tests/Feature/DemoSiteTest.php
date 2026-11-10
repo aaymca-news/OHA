@@ -16,32 +16,36 @@ use Illuminate\Support\Facades\Notification;
 // These check the demo as one shared space; the private copies have their own tests (tests/Sandbox).
 beforeEach(fn () => config(['oha.demo_sandboxes' => false]));
 
-it('starts the demo with the 23 movements, no assessments, and the four demo accounts', function () {
+it('starts the demo with the 23 movements, no assessments, and everyone already there', function () {
     $this->seed(DemoSeeder::class);
 
     expect(Movement::query()->count())->toBe(23)
-        ->and(Assessment::query()->count())->toBe(0);
-    foreach (DemoPeople::ACCOUNTS as $account) {
-        expect(User::query()->where('email', $account['email'])->exists())->toBeTrue();
+        ->and(Assessment::query()->count())->toBe(0)
+        ->and(User::query()->count())->toBe(48);
+    foreach (DemoPeople::STAFF as $person) {
+        expect(User::query()->where('email', $person['email'])->exists())->toBeTrue();
     }
     expect(User::query()->where('email', 'not like', '%@example.org')->exists())->toBeFalse();
-    expect(User::query()->where('email', DemoPeople::ACCOUNTS['chair']['email'])->first()->movement->slug)->toBe(DemoPeople::MOVEMENT);
+    $zambia = Movement::query()->where('slug', 'zambia')->firstOrFail();
+    expect(DemoPeople::find('chair', $zambia)?->movement_id)->toBe($zambia->id)
+        ->and(DemoPeople::find('ngs', $zambia)?->movement_id)->toBe($zambia->id);
 });
 
 it('signs in with one click on the demo site, and nowhere else', function () {
     $this->seed(DemoSeeder::class);
 
-    // Off (as on the live site): no buttons, no banner, and the sign-in answers 404.
+    // Off (as on the live site): no choices, no banner, and the sign-in answers 404.
     config(['oha.demo' => false]);
-    $this->get(route('login'))->assertOk()->assertDontSee('Explore the demo as')->assertDontSee('Demo site, for trying the platform');
-    $this->post(route('demo.sign-in', 'admin'))->assertNotFound();
+    $this->get(route('login'))->assertOk()->assertDontSee('Choose who to be')->assertDontSee('Demo site, for trying the platform');
+    $this->post(route('demo.sign-in'), ['role' => 'admin'])->assertNotFound();
     $this->assertGuest();
 
-    // On: the buttons and the banner, and one click signs in.
+    // On: the choices and the banner, and one click signs in, here as a movement's NGS.
     config(['oha.demo' => true]);
-    $this->get(route('login'))->assertOk()->assertSee('Explore the demo as')->assertSee('Demo site, for trying the platform')->assertSee('National General Secretary');
-    $this->post(route('demo.sign-in', 'ngs'))->assertRedirect(route('dashboard'));
-    $this->assertAuthenticatedAs(User::query()->where('email', DemoPeople::ACCOUNTS['ngs']['email'])->first());
+    $this->get(route('login'))->assertOk()->assertSee('Choose who to be')->assertSee('Demo site, for trying the platform')->assertSee('National General Secretary');
+    $this->post(route('demo.sign-in'), ['role' => 'ngs'])->assertSessionHasErrors('movement');
+    $this->post(route('demo.sign-in'), ['role' => 'ngs', 'movement' => 'ghana'])->assertRedirect(route('dashboard'));
+    $this->assertAuthenticatedAs(DemoPeople::find('ngs', Movement::query()->where('slug', 'ghana')->firstOrFail()));
     $this->get(route('dashboard'))->assertOk()->assertSee('Demo site, for trying the platform');
 });
 
