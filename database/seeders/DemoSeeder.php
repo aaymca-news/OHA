@@ -43,9 +43,12 @@ class DemoSeeder extends Seeder
 
         // An Administrator, not a Super Administrator: the demo's only Super Administrator
         // is the one who prepares the showcase (oha:demo-super-admin).
-        $person(DemoPeople::STAFF['admin']['email'], 'Wanjiru Kamau', Role::Admin, 'Head of Movement Strengthening (demo)');
+        $admin = $person(DemoPeople::STAFF['admin']['email'], 'Wanjiru Kamau', Role::Admin, 'Head of Movement Strengthening (demo)');
         $assessor = $person(DemoPeople::STAFF['assessor']['email'], 'Kofi Asante', Role::Staff, 'Movement Strengthening Officer (demo)');
-        $assessor->assignedMovements()->syncWithoutDetaching($movements->pluck('id')->all());
+        // Both on every movement, so My Work shows them all the work, whoever is chosen.
+        foreach ([$admin, $assessor] as $staff) {
+            $staff->assignedMovements()->syncWithoutDetaching($movements->pluck('id')->all());
+        }
 
         foreach ($movements as $movement) {
             foreach ([[Role::Board, $sample['chairs'], 'Board Chairperson'], [Role::Ngs, $sample['general_secretaries'], 'National General Secretary']] as [$role, $holders, $office]) {

@@ -437,8 +437,11 @@ it('gives every visitor a copy of the showcase’s work: one signs Zambia’s OD
     $as()->post(route('logout'))->assertRedirect(route('login'));
     $as()->post(route('demo.sign-in'), ['role' => 'admin'])->assertRedirect(route('dashboard'));
     $as()->get(route('dashboard'))->assertOk();
+    // The Administrator, on every movement like the assessor, has it among the assessments done.
+    $as()->get(route('my-work', ['group' => 'done']))->assertOk()->assertSee('Zambia YMCA');
     Sandboxes::use($a);
-    expect(BoardSignature::query()->where('signed_by', $chair->id)->exists())->toBeTrue();
+    expect(BoardSignature::query()->where('signed_by', $chair->id)->exists())->toBeTrue()
+        ->and(DemoPeople::find('admin')->assignedMovements()->count())->toBe(23);
 
     // In the showcase and in visitor B's demo, it is still waiting to be signed.
     Sandboxes::use($b);

@@ -2,6 +2,7 @@
 
 namespace App\Demo;
 
+use App\Enums\Role;
 use Carbon\Carbon;
 use Database\Seeders\DemoSeeder;
 use Illuminate\Database\Query\Builder;
@@ -285,6 +286,18 @@ final class Sandboxes
         // Everyone a visitor can choose to be is there to be chosen, even if someone was
         // deactivated in the showcase.
         $db->table("{$to}.users")->where('email', 'like', '%@example.org')->update(['active' => true]);
+
+        // The AAYMCA staff a visitor can be, and the Super Administrator, are on every
+        // movement, so My Work shows each of them all the work.
+        $movements = $db->table("{$to}.movements")->pluck('id');
+        $staff = $db->table("{$to}.users")->where(fn ($q) => $q->whereIn('email', array_column(DemoPeople::STAFF, 'email'))->orWhere('role', Role::SuperAdmin->value))->pluck('id');
+        foreach ($staff as $user) {
+            $have = $db->table("{$to}.movement_user")->where('user_id', $user)->pluck('movement_id')->all();
+            $rows = $movements->diff($have)->map(fn ($m) => ['user_id' => $user, 'movement_id' => $m])->values()->all();
+            if ($rows !== []) {
+                $db->table("{$to}.movement_user")->insert($rows);
+            }
+        }
 
         if (File::isDirectory(self::showcaseFolder())) {
             File::copyDirectory(self::showcaseFolder(), self::folder($key));
