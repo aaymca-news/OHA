@@ -10,6 +10,9 @@
 <div class="flex flex-col gap-md">
     <p class="text-[0.875rem] text-on-surface-variant">
         Everyone is here already, and it is all one demo: what you do as one person, the others see, as on the real platform.
+        @if (\App\Demo\Sandboxes::shared())
+            Other visitors work in it too.
+        @endif
     </p>
 
     <section class="flex flex-col gap-sm" aria-labelledby="demo-staff">

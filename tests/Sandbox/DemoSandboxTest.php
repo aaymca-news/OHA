@@ -32,7 +32,8 @@ use Illuminate\Support\Str;
 
 beforeEach(function () {
     config([
-        'oha.demo' => true, 'oha.demo_sandboxes' => true, 'mail.default' => 'array',
+        // These tests are of private copies; the shared demo has its own, below (they switch it on).
+        'oha.demo' => true, 'oha.demo_sandboxes' => true, 'oha.demo_shared' => false, 'mail.default' => 'array',
         'oha.demo_showcase_folder' => storage_path('framework/testing/demo-showcase'),
     ]);
     // A fresh showcase (the main schema): the movements and the demo people, no work yet.
@@ -622,4 +623,69 @@ it('is off on the live site', function () {
     $this->get(route('home'))->assertOk()->assertSee('Sign in to your dashboard')->assertSee('Access is by invitation only.')
         ->assertDontSee('Start your demo');
     expect(Sandboxes::all())->toBe([]);
+});
+
+/*
+ * One shared demo (config oha.demo_shared, as on the demo site): every visitor works in
+ * the showcase itself, with the Super Administrator: what anyone does, everyone sees.
+ */
+
+it('puts every visitor in one shared demo with the Super Administrator: what one does, all see', function () {
+    config(['oha.demo_shared' => true]);
+    $ray = makeSuperAdmin();
+    $a = register('a@example.com');
+    $b = register('b@example.com');
+    expect(collect(DB::connection('pgsql')->select("select nspname from pg_namespace where nspname like 'demo\_%'")))->toHaveCount(0);
+
+    // Visitor A, as the assessor, opens Zambia's assessment.
+    $this->withUnencryptedCookie(Sandboxes::COOKIE, $a)->post(route('demo.sign-in'), ['role' => 'assessor']);
+    $this->withUnencryptedCookie(Sandboxes::COOKIE, $a)->post(route('assessments.store', Movement::query()->where('slug', 'zambia')->firstOrFail()), ['period_label' => 'Nov 2026', 'period_start' => '2026-11'])
+        ->assertSessionHasNoErrors();
+    $this->withUnencryptedCookie(Sandboxes::COOKIE, $a)->post(route('demo.choose'));
+
+    // It is in the showcase itself: visitor B and the Super Administrator see it.
+    expect(Assessment::query()->count())->toBe(1);
+    $this->withUnencryptedCookie(Sandboxes::COOKIE, $b)->post(route('demo.sign-in'), ['role' => 'admin']);
+    $this->withUnencryptedCookie(Sandboxes::COOKIE, $b)->get(route('assessments.show', Assessment::query()->firstOrFail()))->assertOk()
+        ->assertSee('Everyone shares this demo');
+    $this->withUnencryptedCookie(Sandboxes::COOKIE, $b)->post(route('demo.choose'));
+    $this->withUnencryptedCookie(Sandboxes::COOKIE, Sandboxes::SHOWCASE)->post(route('login'), ['email' => $ray->email, 'password' => 'Showcase-Pass-2026']);
+    // (Opened with nothing uploaded yet: "To be started", as everywhere.)
+    $this->withUnencryptedCookie(Sandboxes::COOKIE, Sandboxes::SHOWCASE)->get(route('my-work', ['group' => 'start']))->assertOk()->assertSee('Zambia YMCA');
+    $this->withUnencryptedCookie(Sandboxes::COOKIE, Sandboxes::SHOWCASE)->get(route('assessments.show', Assessment::query()->firstOrFail()))->assertOk();
+});
+
+it('shows Zambia done on the Super Administrator’s side once a visitor signs its ODP as the Board Chairperson', function () {
+    config(['oha.demo_shared' => true]);
+    $ray = makeSuperAdmin();
+    $odp = prepareInShowcase('zambia', $ray)->odp()->firstOrFail();
+    $key = register();
+    $as = fn () => $this->withUnencryptedCookie(Sandboxes::COOKIE, $key);
+
+    $as()->post(route('demo.sign-in'), ['role' => 'chair', 'movement' => 'zambia']);
+    $as()->post(route('artefacts.sign', $odp), ['signature' => 'Ama Mensah', 'confirm' => '1'])->assertSessionHasNoErrors();
+    $as()->post(route('demo.choose'));
+
+    // The visitor's Administrator, and the Super Administrator in the showcase: done.
+    $as()->post(route('demo.sign-in'), ['role' => 'admin']);
+    $as()->get(route('my-work', ['group' => 'done']))->assertOk()->assertSee('Zambia YMCA');
+    $as()->post(route('demo.choose'));
+    $this->withUnencryptedCookie(Sandboxes::COOKIE, Sandboxes::SHOWCASE)->post(route('login'), ['email' => $ray->email, 'password' => 'Showcase-Pass-2026']);
+    $this->withUnencryptedCookie(Sandboxes::COOKIE, Sandboxes::SHOWCASE)->get(route('my-work', ['group' => 'done']))->assertOk()->assertSee('Zambia YMCA');
+    expect(BoardSignature::query()->count())->toBe(1);
+});
+
+it('has no starting over in the shared demo, and deleting an account keeps the work', function () {
+    config(['oha.demo_shared' => true]);
+    $key = register();
+    $as = fn () => $this->withUnencryptedCookie(Sandboxes::COOKIE, $key);
+    $as()->get(route('login'))->assertOk()->assertDontSee('Start over')->assertSee('Delete my account');
+    $as()->post(route('demo.start-over'))->assertNotFound();
+
+    $as()->post(route('demo.sign-in'), ['role' => 'assessor']);
+    $as()->post(route('assessments.store', Movement::query()->where('slug', 'ghana')->firstOrFail()), ['period_label' => 'Nov 2026', 'period_start' => '2026-11']);
+    $as()->post(route('demo.choose'));
+    $as()->delete(route('demo.destroy'))->assertRedirect(route('home'));
+    expect(DemoVisitor::query()->count())->toBe(0)
+        ->and(Assessment::query()->count())->toBe(1);
 });

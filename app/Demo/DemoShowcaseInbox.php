@@ -27,7 +27,8 @@ final class DemoShowcaseInbox
     {
         $notice = $event->notification;
         $key = Sandboxes::current();
-        if ($key === null || $event->channel !== 'database' || ! $notice instanceof WorkflowNotice || $notice->tone !== 'action'
+        // In one shared demo, the Super Administrator is told directly, like every Administrator.
+        if ($key === null || Sandboxes::shared() || $event->channel !== 'database' || ! $notice instanceof WorkflowNotice || $notice->tone !== 'action'
             || ! $event->notifiable instanceof User || ! $event->notifiable->isAdmin()) {
             return;
         }

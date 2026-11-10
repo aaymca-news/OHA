@@ -51,6 +51,15 @@ final class Sandboxes
         return (bool) config('oha.demo') && (bool) config('oha.demo_sandboxes');
     }
 
+    /**
+     * One shared demo (config oha.demo_shared): every visitor works in the showcase itself.
+     * A visitor's key then only says who they are (no schema, no copy).
+     */
+    public static function shared(): bool
+    {
+        return self::enabled() && (bool) config('oha.demo_shared');
+    }
+
     public static function current(): ?string
     {
         return self::$current;
@@ -76,6 +85,14 @@ final class Sandboxes
         if (! self::exists($key)) {
             return false;
         }
+        // One shared demo: the visitor works in the showcase; the key only says who they are.
+        if (self::shared()) {
+            self::leave();
+            self::$current = $key;
+            self::touch($key);
+
+            return true;
+        }
         config(['database.connections.sandbox' => array_merge((array) config('database.connections.pgsql'), ['search_path' => self::schema($key)])]);
         DB::purge('sandbox');
         DB::setDefaultConnection('sandbox');
@@ -87,14 +104,20 @@ final class Sandboxes
         ]);
         Storage::forgetDisk((string) config('oha.disk'));
         self::$current = $key;
+        self::touch($key);
 
-        // Remember it is in use (at most every ten minutes), so unused ones can be deleted,
-        // and its visitor's account with it.
+        return true;
+    }
+
+    /**
+     * Remembers a key is in use (at most every ten minutes), so unused ones can be deleted,
+     * with their visitor's account.
+     */
+    private static function touch(string $key): void
+    {
         if (self::registry()->where('key', $key)->where('last_used_at', '<', now()->subMinutes(10))->update(['last_used_at' => now()]) > 0) {
             self::visitors()->where('sandbox_key', $key)->update(['updated_at' => now()]);
         }
-
-        return true;
     }
 
     /** Back to the main schema and folder (for commands that go through several). */
@@ -122,13 +145,13 @@ final class Sandboxes
     /** Whether the showcase has new work since this sandbox was copied from it (signing in and out is not work). */
     public static function showcaseChangedSince(string $key): bool
     {
-        return self::since(self::work('public'), $key)?->exists() ?? false;
+        return ! self::shared() && (self::since(self::work('public'), $key)?->exists() ?? false);
     }
 
     /** Whether the visitor has done anything in their copy since it was made (signing in and out as someone is not work). */
     public static function hasOwnWork(string $key): bool
     {
-        return self::since(self::work(self::schema($key)), $key)?->exists() ?? false;
+        return ! self::shared() && (self::since(self::work(self::schema($key)), $key)?->exists() ?? false);
     }
 
     /**
@@ -154,7 +177,7 @@ final class Sandboxes
      */
     public static function refresh(string $key): ?string
     {
-        if (! self::exists($key) || ! self::showcaseChangedSince($key) || self::hasOwnWork($key)) {
+        if (self::shared() || ! self::exists($key) || ! self::showcaseChangedSince($key) || self::hasOwnWork($key)) {
             return null;
         }
         $visitor = self::visitors()->where('sandbox_key', $key)->first();
@@ -201,6 +224,12 @@ final class Sandboxes
         while (! self::valid($key) || self::registry()->where('key', $key)->exists()) {
             $key = Str::lower(Str::random(24));
         }
+        // One shared demo: only the key, which says who the visitor is.
+        if (self::shared()) {
+            self::registry()->insert(['key' => $key, 'created_at' => now(), 'last_used_at' => now()]);
+
+            return $key;
+        }
         DB::connection('pgsql')->statement('CREATE SCHEMA '.self::schema($key));
         self::registry()->insert(['key' => $key, 'created_at' => now(), 'last_used_at' => now()]);
         File::ensureDirectoryExists(self::folder($key));
@@ -231,7 +260,8 @@ final class Sandboxes
      */
     public static function name(string $key, string $name): void
     {
-        if (self::exists($key) && trim($name) !== '') {
+        // (Not in one shared demo: its people are everyone's.)
+        if (! self::shared() && self::exists($key) && trim($name) !== '') {
             DB::connection('pgsql')->table(self::schema($key).'.users')->where('email', 'like', '%@example.org')->update(['name' => trim($name)]);
         }
     }

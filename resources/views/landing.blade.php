@@ -262,7 +262,7 @@
                     <x-landing.sign-in label="Sign in to your dashboard" class="self-start inline-flex items-center gap-sm rounded-lg bg-surface-container-lowest text-primary px-lg py-[0.8rem] text-[1rem] font-semibold hover:bg-surface-container">
                         <x-landing.icon name="arrow-right" class="size-5" />
                     </x-landing.sign-in>
-                    <p class="text-[0.9375rem] text-brand-grey">{{ \App\Demo\Sandboxes::enabled() ? 'Free to try: register in a minute. Your demo is your own: nobody else sees it.' : 'Access is by invitation only.' }}</p>
+                    <p class="text-[0.9375rem] text-brand-grey">{{ \App\Demo\Sandboxes::enabled() ? (\App\Demo\Sandboxes::shared() ? 'Free to try: register in a minute and join the shared demo.' : 'Free to try: register in a minute. Your demo is your own: nobody else sees it.') : 'Access is by invitation only.' }}</p>
                 </div>
             </div>
         </section>

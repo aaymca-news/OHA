@@ -88,6 +88,8 @@ class DemoAccountController extends Controller
     public function startOver(Request $request): RedirectResponse
     {
         $this->demoOnly();
+        // One shared demo is everyone's: nobody starts it over for the others.
+        abort_if(Sandboxes::shared(), 404);
         $visitor = DemoVisitor::forSandbox(Sandboxes::current()) ?? abort(404);
         $this->leaveDemo($request);
         Sandboxes::destroy((string) $visitor->sandbox_key);
@@ -106,7 +108,9 @@ class DemoAccountController extends Controller
         $visitor->delete();
 
         return redirect()->route('home')->withCookie(cookie()->forget(Sandboxes::COOKIE))
-            ->with('status', 'Your demo and your account are deleted.');
+            ->with('status', Sandboxes::shared()
+                ? 'Your account is deleted. The work done in the shared demo stays there.'
+                : 'Your demo and your account are deleted.');
     }
 
     /**

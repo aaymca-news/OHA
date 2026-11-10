@@ -21,7 +21,8 @@ final class DemoApprovals
      */
     public static function waiting(string $key): array
     {
-        if (! Sandboxes::exists($key)) {
+        // In one shared demo, every approval is in the showcase itself (on My Work, as usual).
+        if (Sandboxes::shared() || ! Sandboxes::exists($key)) {
             return [];
         }
         $schema = 'demo_'.$key;

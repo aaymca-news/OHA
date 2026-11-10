@@ -14,17 +14,24 @@
     </div>
 
     @if ($filter === 'visitors')
+        @php($shared = \App\Demo\Sandboxes::shared())
         <p class="text-[0.875rem] text-on-surface-variant">
-            Everyone who has registered for a demo of their own. Each works in a copy of this showcase; a demo unused for {{ (int) config('oha.demo_sandbox_days') }} days is deleted, with its account.
+            @if ($shared)
+                Everyone who has registered for the demo. They all work in this one demo, with you: what they do shows here, on My Work and on the dashboard. An account unused for {{ (int) config('oha.demo_sandbox_days') }} days is deleted (the work stays).
+            @else
+                Everyone who has registered for a demo of their own. Each works in a copy of this showcase; a demo unused for {{ (int) config('oha.demo_sandbox_days') }} days is deleted, with its account.
+            @endif
         </p>
-        <x-table class="min-w-[52rem]">
+        <x-table class="{{ $shared ? 'min-w-[32rem]' : 'min-w-[52rem]' }}">
             <x-slot:head>
                 <tr>
                     <th>Visitor</th>
                     <th>Registered</th>
                     <th>Last active</th>
-                    <th>Waiting for approval</th>
-                    <th>Their demo</th>
+                    @unless ($shared)
+                        <th>Waiting for approval</th>
+                        <th>Their demo</th>
+                    @endunless
                 </tr>
             </x-slot:head>
             @forelse ($visitors as $v)
@@ -35,24 +42,26 @@
                     </td>
                     <td>{{ $v->created_at?->asDay() }}</td>
                     <td>{{ $v->updated_at?->asDay() }}</td>
-                    <td>
-                        @php($waiting = $v->sandbox_key !== null ? \App\Demo\DemoApprovals::waiting($v->sandbox_key) : [])
-                        @forelse ($waiting as $item)
-                            <span class="block font-semibold text-primary">{{ $item }}</span>
-                        @empty
-                            <span class="text-on-surface-variant">Nothing</span>
-                        @endforelse
-                    </td>
-                    <td>
-                        @if ($v->sandbox_key !== null && in_array($v->sandbox_key, $liveDemos, true))
-                            <span class="flex flex-wrap items-center gap-sm">
-                                In use
-                                <x-button size="sm" variant="secondary" :href="route('demo.showcase.open', $v)">Open their demo</x-button>
-                            </span>
-                        @else
-                            None now (a new one on signing in)
-                        @endif
-                    </td>
+                    @unless ($shared)
+                        <td>
+                            @php($waiting = $v->sandbox_key !== null ? \App\Demo\DemoApprovals::waiting($v->sandbox_key) : [])
+                            @forelse ($waiting as $item)
+                                <span class="block font-semibold text-primary">{{ $item }}</span>
+                            @empty
+                                <span class="text-on-surface-variant">Nothing</span>
+                            @endforelse
+                        </td>
+                        <td>
+                            @if ($v->sandbox_key !== null && in_array($v->sandbox_key, $liveDemos, true))
+                                <span class="flex flex-wrap items-center gap-sm">
+                                    In use
+                                    <x-button size="sm" variant="secondary" :href="route('demo.showcase.open', $v)">Open their demo</x-button>
+                                </span>
+                            @else
+                                None now (a new one on signing in)
+                            @endif
+                        </td>
+                    @endunless
                 </tr>
             @empty
                 <tr><td colspan="5"><x-empty-state icon="group">Nobody has registered for a demo yet.</x-empty-state></td></tr>

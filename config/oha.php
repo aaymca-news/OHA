@@ -49,6 +49,9 @@ return [
     | with its visitor's account; at most sandbox_max exist (the least recently used goes).
     */
     'demo_sandboxes' => (bool) env('OHA_DEMO_SANDBOXES', true),
+    // One shared demo: every visitor works in the showcase itself (no private copies), so
+    // what anyone does, everyone sees. Off: each visitor works in a private copy.
+    'demo_shared' => (bool) env('OHA_DEMO_SHARED', true),
     'demo_sandbox_days' => (int) env('OHA_DEMO_SANDBOX_DAYS', 30),
     'demo_sandbox_max' => (int) env('OHA_DEMO_SANDBOX_MAX', 200),
     // The showcase's files (null: the platform's usual folder, storage/app/private/oha).

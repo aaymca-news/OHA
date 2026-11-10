@@ -25,7 +25,7 @@ class DemoShowcaseController extends Controller
     /** In the showcase: into a visitor's demo. */
     public function open(Request $request, DemoVisitor $visitor): RedirectResponse
     {
-        abort_unless(Sandboxes::enabled() && Sandboxes::showcase() && $request->user()?->isSuperAdmin(), 404);
+        abort_unless(Sandboxes::enabled() && ! Sandboxes::shared() && Sandboxes::showcase() && $request->user()?->isSuperAdmin(), 404);
         if ($visitor->sandbox_key === null || ! Sandboxes::exists($visitor->sandbox_key)) {
             return back()->withErrors(['action' => "{$visitor->name} has no demo at the moment (it was unused and deleted). They get a new one when they sign in."]);
         }

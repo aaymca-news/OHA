@@ -1,8 +1,13 @@
 {{-- The demo site only: a visitor registers and gets a demo of their own. --}}
 <x-layouts.guest title="Start your demo">
     <p class="text-[0.875rem] text-on-surface-variant mb-md">
-        Your own demo of the platform: every role is ready for you, and what you do, nobody else sees.
-        Your account keeps it, so you can come back to it on any computer.
+        @if (\App\Demo\Sandboxes::shared())
+            The demo of the platform, with every role ready for you. Everyone who registers works in this same demo, so what you do, others see, and the other way round.
+            Sign in again on any computer to carry on.
+        @else
+            Your own demo of the platform: every role is ready for you, and what you do, nobody else sees.
+            Your account keeps it, so you can come back to it on any computer.
+        @endif
     </p>
 
     <form method="POST" action="{{ route('demo.register.store') }}" class="flex flex-col gap-md">
