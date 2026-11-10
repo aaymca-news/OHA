@@ -43,7 +43,7 @@ class FollowUpDigestNotice extends Notification implements ShouldQueue
             'reassess' => $s['reassess_on'] !== null
                 ? ($s['reassess_on']->isPast() ? 'The next assessment was due on ' : 'The next assessment is due on ').$s['reassess_on']->format(DateFormats::DAY).'.'
                 : null,
-            'review' => ($s['review_due'] ?? false) ? 'The annual review of the ODP is not written yet: write it before the next assessment.' : null,
+            'review' => ($s['review_due'] ?? false) ? 'The overall review of the ODP is not written yet: write it before the next assessment.' : null,
         ], $sections));
     }
 

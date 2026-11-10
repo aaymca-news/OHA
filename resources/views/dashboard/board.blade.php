@@ -1,154 +1,200 @@
 @use('App\Support\Viz')
+@use('App\Support\Bands')
+@use('App\Enums\Stage')
 {{--
     A National Movement's own dashboard, for its Board Chairperson and National General
-    Secretary: their movement at a glance.
+    Secretary (design standard of 10 Nov 2026), laid out like AAYMCA's: a slim banner only
+    when something waits on this person, then four key figures, the health by category and
+    the assessment cycle, the ODP by priority and by deadline, and the movement in numbers,
+    its contacts and its documents. Built from the shared components (x-action-banner,
+    x-kpi, x-category-bars, x-cycle-timeline, x-priority-bars, x-task-deadline).
 --}}
-<x-layouts.app :title="$status->name" subtitle="Your movement at a glance: its organizational health, where its assessment stands, and how its ODP is going.">
-    @php
-        $open = $tasks->where('done', false);
-        $overdue = $tasks->filter(fn ($t) => $t->state() === 'overdue')->count();
-        $holder = $current?->workItem;
-    @endphp
+@php
+    $me = auth()->user();
+    $holder = $current?->workItem;
+    $stage = Stage::of($cycleOf ?? $latest);
+    $firstName = \Illuminate\Support\Str::before($me->name, ' ');
+    $open = $tasks->reject(fn ($t) => $t->isSettled());
+    $deadlines = $open->sortBy(fn ($t) => [$t->due_on === null ? 1 : 0, $t->due_on?->timestamp ?? 0])->take(5);
+    $relative = fn ($date) => $date->isFuture() ? 'In '.$date->copy()->startOfDay()->diffForHumans(today(), ['syntax' => \Carbon\CarbonInterface::DIFF_ABSOLUTE, 'parts' => 1]) : 'Due now';
+@endphp
+<x-layouts.app :title="$status->name" :subtitle="'Welcome back, '.$firstName.' · '.$me->role->label()">
+    <x-slot:actions>
+        <x-status-pill :tone="$stage->tone()" class="self-center">{{ $stage->label() }}</x-status-pill>
+    </x-slot:actions>
 
-    <div class="grid grid-cols-2 lg:grid-cols-4 gap-md">
-        <x-stat-tile label="Health score" :value="$status->pct !== null ? number_format((float) $status->pct, 1) : '—'" :unit="$status->pct !== null ? '%' : null">
-            <x-slot:sub><x-band-chip :band="$status->band" :under-way="$holder !== null" /></x-slot:sub>
-        </x-stat-tile>
-        <x-stat-tile label="Next assessment" :value="$status->next_assessment_on?->asMonth() ?? 'Not scheduled'">
-            <x-slot:sub>{{ $status->reassessment_overdue ? 'Past its date' : ($latest ? 'Last: '.$latest->period_label : 'Not yet assessed') }}</x-slot:sub>
-        </x-stat-tile>
-        <x-stat-tile label="ODP tasks done" :value="$odpAssessment ? $tasks->where('done', true)->count() : '—'" :unit="$odpAssessment ? ' / '.$tasks->count() : null">
-            <x-slot:sub>{{ $odpAssessment ? 'In your ODP for '.$odpAssessment->period_label : 'No approved ODP yet' }}</x-slot:sub>
-        </x-stat-tile>
-        <x-stat-tile label="ODP tasks overdue" :value="$odpAssessment ? $overdue : '—'">
-            <x-slot:sub>{{ $odpAssessment ? $open->count().' still open' : 'Shown once your ODP is approved' }}</x-slot:sub>
-        </x-stat-tile>
-    </div>
-
-    @if ($work->isNotEmpty() || auth()->user()->role === \App\Enums\Role::Board)
-        <x-card title="Waiting on you">
-            <x-slot:actions><a href="{{ route('my-work') }}" class="text-[0.875rem] text-primary underline">Open My Work</a></x-slot:actions>
-            @if ($work->isEmpty())
-                <x-empty-state icon="task_alt">Nothing is waiting on you. When your ODP is approved, it comes here for your signature.</x-empty-state>
-            @else
-                <ul class="flex flex-col gap-sm">
-                    @foreach ($work as $entry)
-                        @include('partials.work-row', ['entry' => $entry])
-                    @endforeach
-                </ul>
-            @endif
-        </x-card>
+    {{-- Only when something waits on this person: one line, one button. Otherwise straight to the figures. --}}
+    @if ($action)
+        <x-action-banner :title="$action['title']" :href="$action['href']" :button="$action['button']" />
     @endif
 
-    <x-card title="Where your assessment stands" :subtitle="$current ? $current->period_label.($holder ? ' · '.$holder->holder_role->label() : '') : null">
-        @if ($current && $milestones->isNotEmpty())
-            <x-gate-stepper :milestones="$milestones" :current="$holder?->holder_role->value === 'board' ? 'board' : $holder?->artefact_kind->value" />
-            <p class="text-[0.8125rem] text-on-surface-variant">AAYMCA checks your OHA form, writes the report and agrees the ODP with you; the Board Chairperson then signs the ODP.</p>
-        @elseif ($lastDone)
-            {{-- Stage 1 done: the ODP is signed; the follow-ups are what is under way now. --}}
-            <div class="flex flex-wrap items-center gap-sm">
-                <x-chip tone="good" icon="verified">Stage 1 done</x-chip>
-                <x-chip tone="info" icon="autorenew">Follow-ups ongoing</x-chip>
-            </div>
-            <p class="text-[0.875rem]">
-                Your {{ $lastDone->period_label }} assessment is done: the ODP is signed by the board, and its follow-ups are under way.
-                {{ $status->next_assessment_on ? 'The next assessment is due in '.$status->next_assessment_on->format('F Y').'.' : '' }}
-            </p>
-        @else
-            <x-empty-state icon="event_available">
-                No assessment is under way.
-                {{ $status->next_assessment_on ? 'The next one is due in '.$status->next_assessment_on->format('F Y').'.' : '' }}
-            </x-empty-state>
-        @endif
-    </x-card>
+    {{-- Key figures --}}
+    <section aria-label="Key figures" class="grid gap-md sm:grid-cols-2 xl:grid-cols-[1.35fr_1fr_1fr_1fr]">
+        <x-kpi label="Health score" :value="$status->pct !== null ? number_format((float) $status->pct, 1) : '—'" :unit="$status->pct !== null ? '%' : null">
+            <x-slot:badge>
+                @if ($status->band && $status->pct !== null)
+                    <x-status-pill :tone="Bands::tone($status->band_code)">{{ $status->band->label }}</x-status-pill>
+                @elseif ($holder)
+                    <x-status-pill tone="info">Assessment started</x-status-pill>
+                @else
+                    <x-status-pill>Not yet assessed</x-status-pill>
+                @endif
+            </x-slot:badge>
+            @if ($status->pct !== null)
+                <x-band-scale :pct="$status->pct" class="mt-1" />
+            @else
+                Your score appears once your OHA form is approved.
+            @endif
+        </x-kpi>
 
-    <div class="grid lg:grid-cols-2 gap-md items-start">
-        <x-card title="Scores by category" :subtitle="$latest ? 'From your approved OHA form, '.$latest->period_label.'.' : null">
+        <x-kpi label="ODP done" :value="$odp ? $odp['done'] : '—'" :unit="$odp ? ' / '.$odp['total'].' '.\Illuminate\Support\Str::plural('task', $odp['total']) : null">
+            @if ($odp && $odp['total'] > 0)
+                <x-slot:visual><x-progress-ring :value="$odp['done']" :max="$odp['total']" :size="72" /></x-slot:visual>
+                Confirmed by your assessors
+            @else
+                {{ $odpAssessment ? 'Its tasks are not entered yet' : 'No approved ODP yet' }}
+            @endif
+        </x-kpi>
+
+        <x-kpi label="Overdue" :value="$odp ? $odp['overdue'] : '—'" :tone="($odp['overdue'] ?? 0) > 0 ? 'critical' : null">
+            @if (! $odp)
+                Shown once your ODP is approved
+            @elseif ($odp['overdue'] > 0)
+                of {{ $open->count() }} {{ \Illuminate\Support\Str::plural('task', $open->count()) }} still open
+            @else
+                Nothing overdue{{ $open->isNotEmpty() ? ' · '.$open->count().' still open' : '' }}
+            @endif
+        </x-kpi>
+
+        <x-kpi label="Next assessment" :value="$status->next_assessment_on?->asMonth() ?? 'Not scheduled'">
+            @if ($status->reassessment_overdue)
+                <span class="text-critical-ink font-semibold">Past its date</span>
+            @elseif ($status->next_assessment_on)
+                {{ $relative($status->next_assessment_on) }}{{ $latest ? ' · last '.$latest->period_label : '' }}
+            @else
+                {{ $latest ? 'Last: '.$latest->period_label : 'Not yet assessed' }}
+            @endif
+        </x-kpi>
+    </section>
+
+    {{-- Health by category | the assessment cycle --}}
+    <div class="grid gap-md lg:grid-cols-[1.55fr_1fr] items-start">
+        <x-panel title="Health by category" :subtitle="$latest ? 'From your approved OHA form, '.$latest->period_label.' · weakest first' : null">
+            @if ($latest && $me->can('view', $latest))
+                <x-slot:actions><x-more-link :href="route('assessments.show', $latest)">Full scores</x-more-link></x-slot:actions>
+            @endif
             @if ($latest)
-                <x-score-table :rows="$rows" :total="$latest->score" />
+                <x-category-bars :rows="$rows" />
             @else
                 <x-empty-state icon="insights">Your scores appear here once your OHA form is approved.</x-empty-state>
             @endif
-        </x-card>
+        </x-panel>
 
-        <x-card title="Your ODP" :subtitle="$odpAssessment ? 'Its tasks and their deadlines, and where each stands.' : null">
-            @if ($odpAssessment && auth()->user()->can('viewFollowUp', $odpAssessment))
-                <x-slot:actions>
-                    <x-button :href="route('follow-up.show', $odpAssessment)" size="sm" icon="checklist">{{ auth()->user()->isGeneralSecretaryOf($odpAssessment->movement) ? 'Report progress' : 'ODP follow-up' }}</x-button>
-                </x-slot:actions>
-            @endif
-            @if (! $odpAssessment)
-                <x-empty-state icon="checklist">Your ODP’s tasks appear here once it is approved.</x-empty-state>
-            @elseif ($tasks->isEmpty())
-                <x-empty-state icon="checklist">Your ODP’s tasks have not been entered yet.</x-empty-state>
-            @else
-                @include('follow-up._progress', ['progress' => ['summary' => \App\Queries\OdpProgress::summary($tasks), 'priorities' => \App\Queries\OdpProgress::byPriority($tasks)]])
-                @php($next = $open->sortBy(fn ($t) => [$t->due_on === null ? 1 : 0, $t->due_on?->timestamp ?? 0])->take(5))
-                @if ($next->isEmpty())
-                    <x-empty-state icon="task_alt">Every task is done.</x-empty-state>
-                @else
-                    <p class="text-[0.8125rem] font-semibold">Coming up</p>
-                    <ul class="flex flex-col">
-                        @foreach ($next as $task)
-                            @include('timelines._task', ['task' => $task])
-                        @endforeach
-                    </ul>
-                @endif
-                @if ($tasks->count() > $next->count())
-                    <details class="text-[0.875rem]">
-                        <summary class="cursor-pointer text-primary underline w-fit">Every task ({{ $tasks->count() }})</summary>
-                        <ul class="flex flex-col mt-xs">
-                            @foreach ($tasks as $task)
-                                @include('timelines._task', ['task' => $task])
-                            @endforeach
-                        </ul>
-                    </details>
-                @endif
-            @endif
-        </x-card>
+        <x-panel title="Your assessment cycle" :subtitle="$cycleOf ? $cycleOf->period_label.' assessment' : 'No assessment yet'">
+            <x-cycle-timeline :steps="$cycle" />
+        </x-panel>
     </div>
 
-    <div class="grid lg:grid-cols-2 gap-md items-start">
-        <x-card title="Your movement in numbers" :subtitle="$profile ? 'As given in your approved OHA form.' : null">
+    {{-- The ODP --}}
+    <x-panel title="Your ODP" :subtitle="$odp && $odp['total'] > 0 ? $odp['done'].' of '.$odp['total'].' tasks done · '.$odpAssessment->period_label.' · across '.count($priorities).' '.\Illuminate\Support\Str::plural('priority', count($priorities)) : ($odpAssessment ? $odpAssessment->period_label : null)">
+        @if ($canFollowUp)
+            <x-slot:actions>
+                <a href="{{ route('follow-up.show', $odpAssessment) }}" class="inline-flex items-center gap-sm min-h-10 px-[14px] rounded-[10px] border border-[#d9d7d1] bg-surface-container-lowest text-[0.84375rem] font-semibold text-on-surface hover:bg-[#f2f1ee]">
+                    {{ $canReport ? 'Report progress' : 'Open the follow-up' }}
+                </a>
+            </x-slot:actions>
+        @endif
+        @if (! $odpAssessment)
+            <x-empty-state icon="checklist">Your ODP’s tasks appear here once it is approved.</x-empty-state>
+        @elseif ($tasks->isEmpty())
+            <x-empty-state icon="checklist">Your ODP’s tasks have not been entered yet.</x-empty-state>
+        @else
+            <div class="grid gap-x-xl gap-y-lg lg:grid-cols-2">
+                <x-priority-bars :priorities="$priorities" />
+                <div class="flex flex-col">
+                    <p class="text-[0.75rem] font-semibold uppercase tracking-[0.06em] text-on-surface-variant">Deadlines</p>
+                    @if ($deadlines->isEmpty())
+                        <p class="mt-sm"><x-status-pill tone="good">Every task is done</x-status-pill></p>
+                    @else
+                        <ul class="mt-1">
+                            @foreach ($deadlines as $task)
+                                <x-task-deadline :task="$task" />
+                            @endforeach
+                        </ul>
+                    @endif
+                    @if ($canFollowUp)
+                        <x-more-link :href="route('follow-up.show', $odpAssessment)" class="self-start mt-sm -ml-[10px]">All {{ $tasks->count() }} tasks</x-more-link>
+                    @elseif ($tasks->count() > $deadlines->count())
+                        <details class="text-[0.875rem] mt-sm">
+                            <summary class="cursor-pointer font-semibold w-fit">All {{ $tasks->count() }} tasks</summary>
+                            <ul class="flex flex-col mt-xs">
+                                @foreach ($tasks as $task)
+                                    @include('timelines._task', ['task' => $task])
+                                @endforeach
+                            </ul>
+                        </details>
+                    @endif
+                </div>
+            </div>
+        @endif
+    </x-panel>
+
+    {{-- In numbers · contacts · documents --}}
+    <div class="grid gap-md lg:grid-cols-[1.1fr_1fr_1fr] items-stretch">
+        <x-panel title="In numbers" :subtitle="$profile ? 'From your approved OHA form' : null">
             @if ($profile)
-                <dl class="grid grid-cols-2 sm:grid-cols-3 gap-md">
-                    @foreach ([[$profile['people']['staff'] ?? null, 'Staff'], [$profile['people']['volunteers'] ?? null, 'Volunteers'], [$profile['beneficiaries'] ?? null, 'People reached a year'], [$profile['identity']['branches'] ?? null, 'Branches'], [$profile['board']['size'] ?? null, 'Board members']] as [$value, $label])
+                <dl class="grid grid-cols-2 sm:grid-cols-3 gap-x-sm gap-y-[18px]">
+                    @foreach ([[$profile['people']['staff'] ?? null, 'Staff'], [$profile['board']['size'] ?? null, 'Board members'], [$profile['beneficiaries'] ?? null, 'People reached a year'], [$profile['people']['volunteers'] ?? null, 'Volunteers'], [$profile['identity']['branches'] ?? null, 'Branches'], [$profile['people']['staff_under_30'] ?? null, 'Staff under 30']] as [$value, $label])
                         <div>
-                            <dt class="text-[0.8125rem] text-on-surface-variant">{{ $label }}</dt>
-                            <dd class="text-[1.5rem] font-bold text-primary leading-tight">{{ $value !== null ? Viz::number($value) : '—' }}</dd>
+                            <dt class="text-[0.78125rem] text-on-surface-variant">{{ $label }}</dt>
+                            <dd @class(['mt-0.5 text-[1.375rem] font-bold tabular-nums', 'text-on-surface' => $value !== null, 'text-[#8a8880]' => $value === null])>{{ $value !== null ? Viz::number($value) : '—' }}</dd>
                         </div>
                     @endforeach
                 </dl>
             @else
                 <x-empty-state icon="groups">These appear once your OHA form is approved.</x-empty-state>
             @endif
-        </x-card>
+        </x-panel>
 
-        <x-card title="Your contacts at AAYMCA" subtitle="The staff assessing your movement.">
+        <x-panel title="Your contacts at AAYMCA" subtitle="The staff assessing your movement">
             @forelse ($assessors as $person)
-                <div class="flex items-center gap-sm text-[0.875rem]">
-                    <x-avatar :user="$person" />
-                    <span class="min-w-0">
-                        <span class="block font-semibold">{{ $person->name }}</span>
-                        <span class="block text-[0.8125rem] text-on-surface-variant">{{ $person->title ?? $person->role->label() }} · <a href="mailto:{{ $person->email }}" class="text-primary underline break-all">{{ $person->email }}</a></span>
+                <div class="flex items-center gap-[14px] py-[12px] border-t border-[#f0eeea] first:border-t-0 first:pt-0">
+                    <x-avatar :user="$person" class="!size-[38px]" />
+                    <span class="flex-1 min-w-0">
+                        <span class="block text-[0.875rem] font-semibold">{{ $person->name }}</span>
+                        <span class="block text-[0.78125rem] text-on-surface-variant truncate">{{ $person->title ?? $person->role->label() }}</span>
                     </span>
+                    <a href="mailto:{{ $person->email }}" title="{{ $person->email }}" aria-label="Email {{ $person->name }} ({{ $person->email }})"
+                       class="flex-none size-9 rounded-full border border-[#e4e1db] grid place-items-center text-[#4a4950] hover:bg-[#f2f1ee] hover:text-on-surface">
+                        <svg class="size-[17px]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 6h16v12H4zM4 7l8 6 8-6"/></svg>
+                    </a>
                 </div>
             @empty
                 <x-empty-state icon="support_agent">AAYMCA has not yet named who assesses your movement.</x-empty-state>
             @endforelse
-        </x-card>
-    </div>
+        </x-panel>
 
-    <x-card title="Your reports and ODPs" subtitle="Each assessment with something approved: open it for the report, the ODP and the scores.">
-        @forelse ($assessments as $assessment)
-            <a href="{{ route('assessments.show', $assessment) }}" class="flex flex-wrap items-center gap-sm text-[0.875rem]">
-                <span class="text-primary underline">{{ $status->name }} · {{ $assessment->period_label }}</span>
-                @if ($assessment->score)
-                    <x-band-chip :band="$assessment->score->band" />
-                @endif
-            </a>
-        @empty
-            <x-empty-state icon="folder_open">No report or ODP has been approved for your movement yet.</x-empty-state>
-        @endforelse
-    </x-card>
+        <x-panel title="Reports and ODPs" subtitle="Everything approved for your movement">
+            @forelse ($assessments as $assessment)
+                <a href="{{ route('assessments.show', $assessment) }}" class="flex items-center gap-[14px] py-[12px] border-t border-[#f0eeea] first:border-t-0 first:pt-0 rounded-lg text-on-surface no-underline group">
+                    <span class="flex-none size-[38px] rounded-[10px] bg-[#f2f1ee] grid place-items-center text-[#4a4950]">
+                        <svg class="size-[18px]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 3h7l5 5v13H7zM14 3v5h5M10 13h6M10 17h6"/></svg>
+                    </span>
+                    <span class="flex-1 min-w-0">
+                        <span class="block text-[0.875rem] font-semibold group-hover:underline">{{ $assessment->period_label }} assessment</span>
+                        <span class="block text-[0.78125rem] text-on-surface-variant truncate">
+                            @if ($assessment->score)
+                                Report, ODP and scores · {{ $assessment->score->band?->label }}, {{ number_format((float) $assessment->score->pct, 1) }}%
+                            @else
+                                {{ Stage::of($assessment)->label() }}
+                            @endif
+                        </span>
+                    </span>
+                    <svg class="size-4 flex-none text-[#8a8880]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg>
+                </a>
+            @empty
+                <x-empty-state icon="folder_open">No report or ODP has been approved for your movement yet.</x-empty-state>
+            @endforelse
+        </x-panel>
+    </div>
 </x-layouts.app>

@@ -26,11 +26,16 @@ beforeEach(function () {
 });
 
 it('gives each role its own menu', function () {
-    expect(($this->menu)($this->j->admin))->toBe(['Dashboard', 'My Work', 'National Movements', 'Assessments', 'Resources', 'Timelines', 'Users & Roles'])
-        ->and(($this->menu)($this->j->superAdmin))->toBe(['Dashboard', 'My Work', 'National Movements', 'Assessments', 'Resources', 'Timelines', 'Users & Roles'])
-        ->and(($this->menu)($this->j->assessor))->toBe(['Dashboard', 'My Work', 'National Movements', 'Resources', 'Timelines'])
+    expect(($this->menu)($this->j->admin))->toBe(['Dashboard', 'My Work', 'National Movements', 'Assessments', 'Timelines', 'Resources', 'Users & Roles'])
+        ->and(($this->menu)($this->j->superAdmin))->toBe(['Dashboard', 'My Work', 'National Movements', 'Assessments', 'Timelines', 'Resources', 'Users & Roles'])
+        ->and(($this->menu)($this->j->assessor))->toBe(['Dashboard', 'My Work', 'National Movements', 'Timelines', 'Resources'])
         ->and(($this->menu)($this->j->chair))->toBe(['Dashboard', 'My Work', 'Our Movement', 'Resources'])
         ->and(($this->menu)($this->ngs))->toBe(['Dashboard', 'Our Movement', 'Resources']);
+
+    // AAYMCA staff see the menu in captioned groups; a movement's own short menu has none.
+    $this->actingAs($this->j->admin)->get(route('dashboard'))->assertOk()
+        ->assertSeeInOrder(['Movements', 'National Movements', 'Timelines', 'Library', 'Resources', 'Administration', 'Users &amp; Roles'], false);
+    $this->actingAs($this->j->chair)->get(route('dashboard'))->assertOk()->assertDontSee('Administration')->assertDontSee('>Library<', false);
 });
 
 it('shows the movement’s own users its approved form, report and ODP; the ODP from its approval, to sign and to read', function () {
@@ -117,11 +122,11 @@ it('shows AAYMCA the region, and the movement its own dashboard', function () {
         ->assertSee('Stage 1 across the region')->assertSee('How the ODPs are being carried out')->assertSee('By zone');
 
     $this->actingAs($this->j->chair)->get(route('dashboard'))->assertOk()
-        ->assertSee('Your movement at a glance')->assertSee('Where your assessment stands')->assertSee('Your ODP')
-        ->assertSee('Your contacts at AAYMCA')->assertSee('Tendai Moyo')->assertSee('Waiting on you')->assertDontSee('By zone');
+        ->assertSee('Welcome back')->assertSee('Your assessment cycle')->assertSee('Your ODP')
+        ->assertSee('Your contacts at AAYMCA')->assertSee('Tendai Moyo')->assertSee('ODP is ready for your signature')->assertSee('Review and sign')->assertDontSee('By zone');
 
     $this->actingAs($this->ngs)->get(route('dashboard'))->assertOk()
-        ->assertSee('Your movement at a glance')->assertDontSee('Waiting on you')->assertDontSee('Ghana YMCA');
+        ->assertSee('Welcome back')->assertDontSee('ready for your signature')->assertDontSee('Review and sign')->assertDontSee('Ghana YMCA');
 });
 
 it('keeps the job title of a National Movement’s users as the Administrators set it', function () {
@@ -154,4 +159,15 @@ it('signs out one other device, after checking the password, and leaves the rest
 
     expect(DB::table('sessions')->where('user_id', $user->id)->pluck('id')->all())->toBe(['laptop'])
         ->and($user->refresh()->getRememberToken())->not->toBe($token);
+});
+
+it('keeps AAYMCA’s dashboard to analytics, the same for every staff role: their work stays in My Work', function () {
+    $this->j->assessmentAt('form_submitted');   // the Administrators have the form to approve
+    expect(app(MyWork::class)->actionableCount($this->j->admin))->toBeGreaterThan(0);
+
+    foreach ([$this->j->assessor, $this->j->admin, $this->j->superAdmin] as $staff) {
+        $this->actingAs($staff)->get(route('dashboard'))->assertOk()
+            ->assertSee('Movements rated')->assertSee('Stage 1 across the region')
+            ->assertDontSee('Outstanding actions')->assertDontSee('Open My Work')->assertDontSee('Approve the OHA form');
+    }
 });

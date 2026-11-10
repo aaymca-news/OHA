@@ -129,7 +129,7 @@ it('shows a signed assessment as Stage 1 done, its follow-ups ongoing, until the
         ->assertSee('Stage 1 done')->assertSee('Follow-ups ongoing')->assertSee('Start the next assessment early');
     // The movement's own dashboard.
     $this->actingAs($this->j->chair)->get(route('dashboard'))->assertOk()
-        ->assertSee('Stage 1 done')->assertSee('Follow-ups ongoing')->assertDontSee('No assessment is under way');
+        ->assertSee('Stage 1 done · follow-ups ongoing')->assertSee('Follow-up meetings')->assertDontSee('No assessment is under way');
     // The National Movements table.
     $this->actingAs($this->j->admin)->get(route('movements.index', ['view' => 'table']))->assertOk()->assertSee('Stage 1 done · follow-ups ongoing');
 

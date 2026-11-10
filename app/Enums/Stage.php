@@ -18,11 +18,18 @@ enum Stage: string
     case Odp = 'odp';
     case Sign = 'sign';
     case Complete = 'complete';
+    /** Stage 2 done too: the ODP follow-up cycle is closed, ready for the next assessment. */
+    case Closed = 'closed';
 
     /** The stage of a movement whose latest assessment is $latest (null: never assessed). */
     public static function of(?Assessment $latest): self
     {
-        return $latest === null ? self::NotAssessed : self::ofWork($latest->workItem);
+        if ($latest === null) {
+            return self::NotAssessed;
+        }
+        $stage = self::ofWork($latest->workItem);
+
+        return $stage === self::Complete && $latest->isFollowUpClosed() ? self::Closed : $stage;
     }
 
     /** The stage of an assessment from its work item (none: its ODP is signed, so done). */
@@ -45,6 +52,7 @@ enum Stage: string
             self::Odp => 'ODP under way',
             self::Sign => 'Awaiting signature',
             self::Complete => 'Stage 1 done · follow-ups ongoing',
+            self::Closed => 'Cycle complete · ready for the next assessment',
         };
     }
 
@@ -58,6 +66,7 @@ enum Stage: string
             self::Odp => 'ODP',
             self::Sign => 'Awaiting signature',
             self::Complete => 'Stage 1 done',
+            self::Closed => 'Cycle complete',
         };
     }
 
@@ -70,6 +79,7 @@ enum Stage: string
             self::Odp => 'checklist',
             self::Sign => 'draw',
             self::Complete => 'verified',
+            self::Closed => 'task_alt',
         };
     }
 
@@ -80,7 +90,7 @@ enum Stage: string
             self::NotAssessed => 'neutral',
             self::Form, self::Report, self::Odp => 'info',
             self::Sign => 'warning',
-            self::Complete => 'good',
+            self::Complete, self::Closed => 'good',
         };
     }
 
@@ -94,6 +104,7 @@ enum Stage: string
             self::Odp => 'bg-heat-3',
             self::Sign => 'bg-heat-4',
             self::Complete => 'bg-heat-5',
+            self::Closed => 'bg-primary',
         };
     }
 }

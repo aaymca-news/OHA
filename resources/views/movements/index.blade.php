@@ -1,7 +1,7 @@
 <x-layouts.app :title="__('oha.nav.movements')" :subtitle="'All '.$pipeline['total'].' National Movements. A movement is rated once one of its OHA forms is approved.'">
     @php
         // $stage($status) gives an App\Enums\Stage: its label, icon and tone.
-        $started = fn ($status) => ! in_array($stage($status), [\App\Enums\Stage::NotAssessed, \App\Enums\Stage::Complete], true);
+        $started = fn ($status) => ! in_array($stage($status), [\App\Enums\Stage::NotAssessed, \App\Enums\Stage::Complete, \App\Enums\Stage::Closed], true);
         $short = ['financial' => 'Financial', 'governance' => 'Governance', 'constitution' => 'Constitution', 'me' => 'M&E', 'strategy' => 'Strategy',
             'diversity' => 'Diversity & youth', 'comms' => 'Comms', 'staff' => 'Staff & volunteers'];
         $query = fn (array $change) => route('movements.index', array_filter(array_merge($filters, $change), fn ($v) => $v !== null && $v !== ''));

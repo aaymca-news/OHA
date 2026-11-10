@@ -164,6 +164,9 @@ Route::middleware('auth')->group(function () {
     Route::put('assessments/{assessment}/follow-up/pause', [FollowUpController::class, 'pause'])->name('follow-up.pause');
     Route::post('assessments/{assessment}/follow-up/review', [FollowUpController::class, 'review'])->name('follow-up.review');
     Route::post('assessments/{assessment}/follow-up/carry', [FollowUpController::class, 'carry'])->name('follow-up.carry');
+    Route::post('odp-tasks/{odpTask}/evidence', [FollowUpController::class, 'evidence'])->middleware('throttle:30,1')->name('follow-up.evidence');
+    Route::post('odp-tasks/{odpTask}/drop', [FollowUpController::class, 'drop'])->name('follow-up.drop');
+    Route::post('assessments/{assessment}/follow-up/close', [FollowUpController::class, 'close'])->name('follow-up.close');
 
     Route::prefix('downloads')->name('downloads.')->group(function () {
         Route::get('blank-oha-form', [DownloadController::class, 'blankForm'])->name('blank-form');
@@ -187,6 +190,7 @@ Route::middleware('auth')->group(function () {
         Route::put('{user}/role', [UserController::class, 'updateRole'])->name('role');
         Route::post('{user}/deactivate', [UserController::class, 'deactivate'])->name('deactivate');
         Route::post('{user}/reactivate', [UserController::class, 'reactivate'])->name('reactivate');
+        Route::delete('{user}', [UserController::class, 'destroy'])->name('destroy');
         Route::post('{user}/invitation', [UserController::class, 'resendInvitation'])->name('invitation');
     });
 

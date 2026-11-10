@@ -147,7 +147,7 @@
                 @if ($assessment->score)
                     <x-band-chip :band="$assessment->score->band" />
                 @endif
-                {{-- A signed ODP: its follow-up (tasks, meetings, the annual review and carry-over). --}}
+                {{-- A signed ODP: its follow-up (tasks, meetings, the overall review and carry-over). --}}
                 @if ($assessment->workItem === null && auth()->user()->can('viewFollowUp', $assessment))
                     <x-button :href="route('follow-up.show', $assessment)" variant="link" icon="checklist" class="text-[0.8125rem]">Follow-up</x-button>
                 @endif

@@ -1,4 +1,4 @@
-{{-- The annual review form (write, or correct). Expects $assessment, $review (or null), $control. --}}
+{{-- The overall review form (write, or correct). Expects $assessment, $review (or null), $control. --}}
 <form method="POST" action="{{ route('follow-up.review', $assessment) }}" class="flex flex-col gap-sm p-sm rounded bg-surface-container-low">
     @csrf
     <x-field label="What was achieved" size="sm">

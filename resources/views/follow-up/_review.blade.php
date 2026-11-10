@@ -1,14 +1,14 @@
 {{--
-    Stage 2, step 5: the annual review of the ODP (what was achieved, what was not and
+    Stage 2, step 5: the overall review of the ODP (what was achieved, what was not and
     why, the lessons), and carrying unfinished tasks into the movement's next assessment.
-    Expects $assessment, $review, $next, $canReview, $tasks.
+    Expects $assessment, $review, $next, $canReview, $canCarry, $tasks.
 --}}
 @php
     $control = \App\Support\Ui::control(false, 'sm');
-    $carriable = $tasks->filter(fn ($t) => ! $t->done && $t->carried_to_assessment_id === null);
+    $carriable = $tasks->filter(fn ($t) => ! $t->done && $t->carried_to_assessment_id === null && ! $t->isDropped());
     $carried = $tasks->filter(fn ($t) => $t->carried_to_assessment_id !== null);
 @endphp
-<x-card id="review" title="Annual review" subtitle="Before the next assessment: what the ODP achieved, what it did not and why, and what was learned. Unfinished tasks can be carried into the next assessment.">
+<x-panel id="review" title="Overall review" subtitle="What the ODP achieved, what it did not and why, and what was learned: written once the follow-up has gone as far as it will. It is what closing the cycle needs; unfinished tasks can be carried into the next assessment.">
     @if ($review)
         <div class="flex flex-col gap-sm text-[0.875rem]" x-data="{ edit: false }">
             <p class="text-[0.8125rem] text-on-surface-variant">
@@ -27,7 +27,7 @@
     @elseif ($canReview)
         @include('follow-up._review-form')
     @else
-        <x-empty-state icon="rate_review">The assessors write the review before the next assessment.</x-empty-state>
+        <x-empty-state icon="rate_review">The assessors or an Administrator write the review before the next assessment.</x-empty-state>
     @endif
 
     @if ($carried->isNotEmpty())
@@ -40,7 +40,7 @@
         </x-callout>
     @endif
 
-    @if ($canReview && $carriable->isNotEmpty())
+    @if ($canCarry && $carriable->isNotEmpty())
         @if ($next)
             <form method="POST" action="{{ route('follow-up.carry', $assessment) }}" class="flex flex-col gap-sm p-sm rounded bg-surface-container-low">
                 @csrf
@@ -58,4 +58,4 @@
             <p class="text-[0.8125rem] text-on-surface-variant">Once the movement’s next assessment is opened, the {{ $carriable->count() }} unfinished {{ $carriable->count() === 1 ? 'task' : 'tasks' }} can be carried into it from here.</p>
         @endif
     @endif
-</x-card>
+</x-panel>

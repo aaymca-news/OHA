@@ -15,7 +15,7 @@ use Illuminate\Support\Facades\Notification;
 use Tests\Support\Journey;
 
 /*
- * Stage 2, step 5: the annual review of the ODP before the next assessment, and carrying
+ * Stage 2, step 5: the overall review of the ODP before the next assessment, and carrying
  * unfinished tasks into the next assessment so they are not lost.
  */
 
@@ -79,7 +79,7 @@ it('carries chosen unfinished tasks into the next assessment, once it is opened'
 
 it('shows the review and the carry-over on the follow-up page', function () {
     $page = route('follow-up.show', $this->assessment);
-    $this->actingAs($this->j->assessor)->get($page)->assertOk()->assertSee('Annual review')->assertSee('Save the review')
+    $this->actingAs($this->j->assessor)->get($page)->assertOk()->assertSee('Overall review')->assertSee('Save the review')
         ->assertSee('can be carried into it from here');
 
     app(RecordOdpReview::class)->handle($this->assessment, $this->j->assessor, 'The board was trained.', 'No donor yet.');
@@ -87,7 +87,7 @@ it('shows the review and the carry-over on the follow-up page', function () {
     $this->actingAs($this->j->assessor)->get($page)->assertSee('Carry unfinished tasks into the Mar 2028 assessment');
     $this->actingAs($this->j->assessor)->post(route('follow-up.carry', $this->assessment), ['tasks' => [$this->open->id]])->assertSessionHasNoErrors();
 
-    $this->actingAs($this->ngs)->get($page)->assertOk()->assertSee('The board was trained.')->assertSee('Carried into Mar 2028')->assertDontSee('Save the review');
+    $this->actingAs($this->ngs)->get($page)->assertOk()->assertSee('The board was trained.')->assertSee('Carried over')->assertSee('Mar 2028')->assertDontSee('Save the review');
 });
 
 it('reminds the assessors in the digest to write the review as the next assessment nears', function () {

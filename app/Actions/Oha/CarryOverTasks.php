@@ -27,7 +27,7 @@ final class CarryOverTasks
      */
     public function handle(Assessment $from, User $by, array $taskIds): int
     {
-        $this->ensure($by, 'reviewOdp', $from);
+        $this->ensure($by, 'carryOdpTasks', $from);
         $to = $from->nextAssessment()
             ?? throw new WorkflowRuleBroken('Unfinished tasks can be carried over once the movement’s next assessment is opened.');
         $tasks = $from->odpTasks()->whereIn('id', $taskIds)->where('done', false)->whereNull('carried_to_assessment_id')->get();

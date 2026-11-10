@@ -3,18 +3,24 @@
 namespace App\Http\Controllers;
 
 use App\Actions\Movements\PauseFollowUp;
+use App\Actions\Oha\AttachTaskEvidence;
 use App\Actions\Oha\CarryOverTasks;
+use App\Actions\Oha\CloseFollowUp;
 use App\Actions\Oha\ConfirmTask;
+use App\Actions\Oha\DropTask;
 use App\Actions\Oha\RecordFollowUp;
 use App\Actions\Oha\RecordOdpReview;
 use App\Actions\Oha\ReportTaskProgress;
 use App\Enums\TaskProgress;
 use App\Models\Assessment;
 use App\Models\Evidence;
+use App\Models\MovementStatus;
 use App\Models\OdpTask;
 use App\Oha\FollowUpSchedule;
+use App\Support\UploadLimit;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Validation\Rule;
 use Illuminate\View\View;
@@ -50,13 +56,59 @@ class FollowUpController extends Controller
             // The follow-up meetings: 3 a year from the signing, each with its record if held.
             'meetings' => FollowUpSchedule::for($assessment),
             'canRecord' => $gate->allows('recordFollowUp', $assessment),
-            // Step 5: the annual review, and the next assessment unfinished tasks can be carried into.
+            // Step 5: the overall review, and the next assessment unfinished tasks can be carried into.
             'review' => $assessment->odpReview()->with('recorder')->first(),
             'next' => $assessment->nextAssessment(),
             'canReview' => $gate->allows('reviewOdp', $assessment),
+            'canCarry' => $gate->allows('carryOdpTasks', $assessment),
             'tasks' => $tasks,
             'evidence' => Evidence::query()->where('assessment_id', $assessment->id)->orderBy('title')->pluck('title', 'id')->all(),
+            // The year's timeline: from the signing to the next assessment.
+            'signedOn' => ($signed = $assessment->odp()->first()?->signature()->value('signed_at')) !== null ? Carbon::parse($signed) : null,
+            'nextAssessmentOn' => ($nextOn = MovementStatus::query()->whereKey($assessment->movement_id)->value('next_assessment_on')) !== null ? Carbon::parse($nextOn) : null,
+            // Closing the cycle: what still stands in the way, and who may close it.
+            'closing' => CloseFollowUp::missing($assessment),
+            'leftOpen' => CloseFollowUp::leftOpen($assessment),
+            'canClose' => $gate->allows('closeFollowUp', $assessment),
+            'canDrop' => $user->canAssess($assessment->movement) && ! $assessment->isFollowUpClosed(),
         ]);
+    }
+
+    /** Evidence added right on a task (a file or a link): into Resources, and onto the task. */
+    public function evidence(Request $request, OdpTask $odpTask, AttachTaskEvidence $attach): RedirectResponse
+    {
+        $data = $request->validate([
+            'kind' => ['required', 'in:file,link'],
+            'file' => ['required_if:kind,file', ...UploadLimit::rule(required: false)],
+            'url' => ['required_if:kind,link', 'nullable', 'string', 'max:2000'],
+            'title' => ['nullable', 'string', 'max:200'],
+        ], ['file.required_if' => 'Choose the file to add.', 'url.required_if' => 'Paste the link to add.'] + UploadLimit::messages('file'));
+        $file = $data['kind'] === 'file' ? $request->file('file') : null;
+
+        $evidence = $attach->handle($odpTask, $request->user(),
+            $file !== null ? (string) $file->getRealPath() : null, $file?->getClientOriginalName(),
+            $data['kind'] === 'link' ? ($data['url'] ?? null) : null, $data['title'] ?? null);
+
+        return $this->back($odpTask, "Evidence added: “{$evidence->title}”. It is in Resources too, backing this task.");
+    }
+
+    /** An assessor drops an unfinished task with a reason (or, with ?undo, restores it). */
+    public function drop(Request $request, OdpTask $odpTask, DropTask $drop): RedirectResponse
+    {
+        $data = $request->validate(['reason' => ['nullable', 'string', 'max:2000']]);
+        $undo = $request->boolean('undo');
+        $task = $drop->handle($odpTask, $request->user(), $data['reason'] ?? null, $undo);
+
+        return $this->back($task, $undo ? 'The task is back in the follow-up.' : 'Dropped from the follow-up. The reason is kept with it.');
+    }
+
+    /** An assessor or an Administrator closes the follow-up cycle (Stage 2 done). */
+    public function close(Request $request, Assessment $assessment, CloseFollowUp $close): RedirectResponse
+    {
+        $close->handle($assessment, $request->user());
+
+        return redirect()->route('follow-up.show', $assessment)
+            ->with('status', 'The cycle is closed: the follow-up is kept as a record, and the movement is ready for its next assessment.');
     }
 
     public function progress(Request $request, OdpTask $odpTask, ReportTaskProgress $report): RedirectResponse
@@ -101,7 +153,7 @@ class FollowUpController extends Controller
             ->with('status', "Follow-up meeting {$meeting->number} recorded. The movement and the other assessors are told.");
     }
 
-    /** An assessor writes (or corrects) the annual review of the ODP. */
+    /** An assessor writes (or corrects) the overall review of the ODP. */
     public function review(Request $request, Assessment $assessment, RecordOdpReview $review): RedirectResponse
     {
         $data = $request->validate([

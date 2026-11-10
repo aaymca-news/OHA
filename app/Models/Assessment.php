@@ -62,6 +62,22 @@ class Assessment extends Model
         return route('assessments.show', array_filter(['assessment' => $id, 'tab' => $tab]), $absolute);
     }
 
+    /** Whether its ODP follow-up cycle is closed (Stage 2 done): kept as read-only history. */
+    public function isFollowUpClosed(): bool
+    {
+        return $this->follow_up_closed_at !== null;
+    }
+
+    /**
+     * Who closed the follow-up cycle.
+     *
+     * @return BelongsTo<User, $this>
+     */
+    public function followUpCloser(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'follow_up_closed_by');
+    }
+
     /** Whether it is under way (see scopeUnderWay), from the loaded work item if there is one. */
     public function isUnderWay(): bool
     {
@@ -191,7 +207,7 @@ class Assessment extends Model
     }
 
     /**
-     * The annual review of its signed ODP (Stage 2), once written.
+     * The overall review of its signed ODP (Stage 2), once written.
      *
      * @return HasOne<OdpReview, $this>
      */
@@ -229,6 +245,7 @@ class Assessment extends Model
         return [
             'assessed_on' => 'date',
             'opened_at' => 'datetime',
+            'follow_up_closed_at' => 'datetime',
         ];
     }
 }

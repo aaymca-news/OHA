@@ -25,7 +25,7 @@ final class Navigation
      * kept for oha.badge_cache_seconds (a minute) and worked out afresh as soon as anything
      * is recorded in the audit trail (every change of work is): see forget().
      *
-     * @return list<array{label: string, route: string, params: array<string, mixed>, icon: string, badge: int, tone: string, active: string}>
+     * @return list<array{label: string, route: string, params: array<string, mixed>, icon: string, badge: int, tone: string, active: string, group: ?string}>
      */
     public function for(User $user): array
     {
@@ -35,7 +35,7 @@ final class Navigation
         }
 
         // "v2": entries cached before the sidebar held only plain values are never read back.
-        return Cache::remember('nav:v2:'.Cache::get('nav:version', 0).':'.$user->id, $seconds, fn () => $this->build($user));
+        return Cache::remember('nav:v3:'.Cache::get('nav:version', 0).':'.$user->id, $seconds, fn () => $this->build($user));
     }
 
     /** Every sidebar is worked out afresh on its next page: something changed. */
@@ -46,13 +46,13 @@ final class Navigation
     }
 
     /**
-     * @return list<array{label: string, route: string, params: array<string, mixed>, icon: string, badge: int, tone: string, active: string}>
+     * @return list<array{label: string, route: string, params: array<string, mixed>, icon: string, badge: int, tone: string, active: string, group: ?string}>
      */
     private function build(User $user): array
     {
-        $item = fn (string $key, string $route, string $icon, int $badge = 0, string $tone = 'critical', array $params = [], ?string $active = null) => [
+        $item = fn (string $key, string $route, string $icon, int $badge = 0, string $tone = 'critical', array $params = [], ?string $active = null, ?string $group = null) => [
             'label' => __('oha.nav.'.$key), 'route' => $route, 'params' => $params, 'icon' => $icon,
-            'badge' => $badge, 'tone' => $tone, 'active' => $active ?? $route.'*',
+            'badge' => $badge, 'tone' => $tone, 'active' => $active ?? $route.'*', 'group' => $group,
         ];
 
         $items = [$item('dashboard', 'dashboard', 'dashboard')];
@@ -79,16 +79,16 @@ final class Navigation
             // Reassessments overdue, apart from movements whose follow-up is paused.
             MovementStatus::query()->where('reassessment_overdue', true)
                 ->whereHas('movement', fn ($m) => $m->where(fn ($q) => $q->whereNull('follow_up_paused_until')->orWhere('follow_up_paused_until', '<', today())))
-                ->count(), 'warning', active: 'movements.*');
+                ->count(), 'warning', active: 'movements.*', group: 'movements');
         if ($user->isAdmin()) {
             $items[] = $item('assessments', 'assessments.index', 'fact_check',
-                $this->unassigned(), 'warning', active: 'assessments.*');
+                $this->unassigned(), 'warning', active: 'assessments.*', group: 'movements');
         }
-        $items[] = $item('resources', 'resources', 'folder_open');
-        $items[] = $item('timelines', 'timelines', 'event_note', $this->overdue($user));
+        $items[] = $item('timelines', 'timelines', 'event_note', $this->overdue($user), group: 'movements');
+        $items[] = $item('resources', 'resources', 'folder_open', group: 'library');
 
         if (Gate::forUser($user)->allows('manage', User::class)) {
-            $items[] = $item('users', 'admin.users.index', 'manage_accounts', active: 'admin.users.*');
+            $items[] = $item('users', 'admin.users.index', 'manage_accounts', active: 'admin.users.*', group: 'admin');
         }
 
         return $items;

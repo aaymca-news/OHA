@@ -13,7 +13,7 @@ use App\Support\Notify;
 use Illuminate\Support\Facades\DB;
 
 /**
- * Stage 2, step 5: an assessor writes the annual review of a signed ODP, before the next
+ * Stage 2, step 5: an assessor writes the overall review of a signed ODP, before the next
  * assessment: what was achieved, what was not and why, and the lessons. The task counts
  * are kept as they stand now. Writing it again corrects it. The movement is told.
  */

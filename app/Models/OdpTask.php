@@ -23,7 +23,7 @@ use Illuminate\Support\Carbon;
  */
 #[Fillable(['assessment_id', 'document_id', 'source', 'ref', 'priority', 'task', 'deadline_text', 'due_on', 'date_guessed', 'responsible', 'done', 'sort_order', 'edited_by', 'edited_at',
     'progress', 'progress_note', 'evidence_id', 'reported_by', 'reported_at', 'confirmed_by', 'confirmed_at', 'returned_reason',
-    'carried_from_task_id', 'carried_to_assessment_id'])]
+    'carried_from_task_id', 'carried_to_assessment_id', 'dropped_at', 'dropped_by', 'dropped_reason'])]
 class OdpTask extends Model
 {
     public const FROM_ODP = 'odp';
@@ -93,6 +93,48 @@ class OdpTask extends Model
         return $this->belongsTo(Assessment::class, 'carried_to_assessment_id');
     }
 
+    /** Dropped from the follow-up, with a reason, instead of being carried over. */
+    public function isDropped(): bool
+    {
+        return $this->dropped_at !== null;
+    }
+
+    /** Nothing more to do on it before the cycle closes: done, carried over, or dropped. */
+    public function isSettled(): bool
+    {
+        return $this->done || $this->carried_to_assessment_id !== null || $this->isDropped();
+    }
+
+    /**
+     * Who dropped it from the follow-up.
+     *
+     * @return BelongsTo<User, $this>
+     */
+    public function dropper(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'dropped_by');
+    }
+
+    /**
+     * Where it stands on the follow-up page, in the site's one status language: the filter
+     * it falls under (overdue, waiting, progress, done, other), its words and its tone.
+     *
+     * @return array{key: string, label: string, tone: string}
+     */
+    public function followUpStatus(): array
+    {
+        return match (true) {
+            $this->isDropped() => ['key' => 'other', 'label' => 'Dropped', 'tone' => 'neutral'],
+            $this->carried_to_assessment_id !== null => ['key' => 'other', 'label' => 'Carried over', 'tone' => 'info'],
+            $this->done => ['key' => 'done', 'label' => 'Done', 'tone' => 'good'],
+            $this->awaitsConfirmation() => ['key' => 'waiting', 'label' => 'Waiting to confirm', 'tone' => 'info'],
+            $this->state() === 'overdue' => ['key' => 'overdue', 'label' => 'Overdue', 'tone' => 'critical'],
+            $this->progress === TaskProgress::Blocked => ['key' => 'overdue', 'label' => 'Blocked', 'tone' => 'critical'],
+            $this->progress === TaskProgress::InProgress => ['key' => 'progress', 'label' => 'In progress', 'tone' => 'warning'],
+            default => ['key' => 'progress', 'label' => 'Not started', 'tone' => 'neutral'],
+        };
+    }
+
     /** Reported Done, and waiting for an assessor to confirm it. */
     public function awaitsConfirmation(): bool
     {
@@ -121,6 +163,7 @@ class OdpTask extends Model
             'progress' => TaskProgress::class,
             'reported_at' => 'datetime',
             'confirmed_at' => 'datetime',
+            'dropped_at' => 'datetime',
         ];
     }
 }

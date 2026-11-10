@@ -6,7 +6,7 @@
 @php
     $control = \App\Support\Ui::control(false, 'sm');
 @endphp
-<x-card title="Follow-up meetings" subtitle="Three a year, as in the ODP template: about every four months from the signing. Each records what was agreed and where every task stood.">
+<x-panel title="Meetings" subtitle="Three a year, as in the ODP template: about every four months from the signing. Each keeps what was agreed and where every task stood that day.">
     @if ($meetings === [])
         <x-empty-state icon="event">The follow-up meetings are planned once the ODP is signed.</x-empty-state>
     @else
@@ -17,20 +17,20 @@
                     $due = $slot['due_on'];
                     $updates = $meeting?->tasks->pluck('update', 'odp_task_id') ?? collect();
                 @endphp
-                <li id="meeting-{{ $slot['number'] }}" class="flex flex-col gap-sm py-sm border-t border-surface-container first:border-0" x-data="{ record: false }">
+                <li id="meeting-{{ $slot['number'] }}" class="flex flex-col gap-sm py-md border-t border-[#f2f1ec] first:border-0" x-data="{ record: false }">
                     <div class="flex flex-wrap items-center gap-sm">
                         <p class="flex-1 min-w-[min(14rem,100%)] text-[0.875rem]">
                             <span class="font-semibold">Follow-up {{ $slot['number'] }}</span>
                             <span class="text-on-surface-variant">· due {{ $due->asDay() }}</span>
                         </p>
                         @if ($meeting)
-                            <x-chip tone="good" icon="event_available">Held {{ $meeting->held_on->asDay() }}</x-chip>
+                            <x-status-pill tone="good">Held {{ $meeting->held_on->asDay() }}</x-status-pill>
                         @elseif ($due->isPast())
-                            <x-chip tone="critical" icon="alarm">Overdue</x-chip>
+                            <x-status-pill tone="critical">Overdue</x-status-pill>
                         @elseif ($due->lte(today()->addDays(config('oha.due_soon_days.odp_tasks'))))
-                            <x-chip tone="warning" icon="schedule">Due soon</x-chip>
+                            <x-status-pill tone="warning">Due soon</x-status-pill>
                         @else
-                            <x-chip icon="event">Upcoming</x-chip>
+                            <x-status-pill>Upcoming</x-status-pill>
                         @endif
                         @if ($canRecord)
                             <x-button type="button" :variant="$meeting ? 'link' : 'outline'" size="sm" icon="edit_note" x-on:click="record = ! record">{{ $meeting ? 'Correct' : 'Record this meeting' }}</x-button>
@@ -52,9 +52,9 @@
                                             <td>@if ($row->ref)<span class="text-on-surface-variant">{{ $row->ref }} · </span>@endif{{ $row->task }}</td>
                                             <td>
                                                 @if ($row->done)
-                                                    <x-chip tone="good" icon="verified">Done</x-chip>
+                                                    <x-status-pill tone="good">Done</x-status-pill>
                                                 @else
-                                                    <x-chip :tone="$row->progress->tone()" :icon="$row->progress->icon()">{{ $row->progress->label() }}</x-chip>
+                                                    <x-status-pill :tone="$row->progress->tone()">{{ $row->progress->label() }}</x-status-pill>
                                                 @endif
                                             </td>
                                             <td class="text-[0.8125rem]">{{ $row->update ?? '—' }}</td>
@@ -102,4 +102,4 @@
             @endforeach
         </ol>
     @endif
-</x-card>
+</x-panel>

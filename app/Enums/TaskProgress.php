@@ -38,7 +38,8 @@ enum TaskProgress: string
     {
         return match ($this) {
             self::NotStarted => 'neutral',
-            self::InProgress => 'info',
+            // The site's status language: amber in progress (blue is "waiting to confirm").
+            self::InProgress => 'warning',
             self::Done => 'good',
             self::Blocked => 'serious',
         };

@@ -6,6 +6,7 @@ use App\Models\Concerns\IsDatabaseView;
 use Illuminate\Database\Eloquent\Attributes\Table;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Support\Carbon;
 
 /**
  * One of an assessment's four gate milestones (view v_assessment_milestones):
@@ -14,6 +15,9 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  *
  * @property int $assessment_id
  * @property string $gate_code
+ * @property string $milestone_label
+ * @property Carbon $due_on
+ * @property Carbon|null $done_at
  * @property bool $set_by_hand
  * @property bool $completed_late
  * @property bool $overdue

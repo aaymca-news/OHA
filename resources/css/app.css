@@ -184,7 +184,7 @@
  */
 @media (min-width: 64rem) {
     .sidebar-shell {
-        width: clamp(13rem, var(--sidebar-w, 15rem), 25vw);
+        width: clamp(13rem, var(--sidebar-w, 16.5rem), 25vw);
     }
     html[data-sidebar='collapsed'] .sidebar-shell {
         display: none;

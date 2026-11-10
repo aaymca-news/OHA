@@ -17,7 +17,7 @@ use Illuminate\Support\Collection;
  * (a General Secretary's own; an assessor's assigned ones), in follow-up and not paused:
  * the ODP tasks due in the next 30 days and overdue, the tasks waiting for an assessor's
  * confirmation (assessors only), a follow-up meeting due within two weeks or overdue, the
- * annual ODP review not yet written (assessors, from 90 days before the next assessment),
+ * overall ODP review not yet written (assessors, from 90 days before the next assessment),
  * and the next assessment when it is 90 days away or less. Movements with nothing to say
  * are left out.
  */
@@ -41,7 +41,8 @@ final class FollowUpDigest
         $sections = [];
         foreach ($movements as $movement) {
             /** @var Movement $movement */
-            if ($movement->followUpPaused() || ($assessment = $movement->lastAssessmentDone()) === null) {
+            // Not while paused, nor once the cycle is closed (the reassessment reminders carry on).
+            if ($movement->followUpPaused() || ($assessment = $movement->lastAssessmentDone()) === null || $assessment->isFollowUpClosed()) {
                 continue;
             }
             $open = $assessment->odpTasks()->where('done', false)->get();
@@ -58,7 +59,7 @@ final class FollowUpDigest
                 'waiting' => $assessor ? $open->filter(fn (OdpTask $t) => $t->awaitsConfirmation())->values() : collect(),
                 'meeting' => $next !== null && $next['due_on']->lte(today()->addDays(14)) ? ['number' => $next['number'], 'due_on' => $next['due_on']] : null,
                 'reassess_on' => $reassessOn !== null && $reassessOn->lte(today()->addDays(90)) ? $reassessOn : null,
-                // The annual review, for the assessors, once the next assessment is near and it is not written.
+                // The overall review, for the assessors, once the next assessment is near and it is not written.
                 'review_due' => $assessor && $reassessOn !== null && $reassessOn->lte(today()->addDays(90)) && ! $assessment->odpReview()->exists(),
             ];
             if ($section['overdue']->isEmpty() && $section['due_soon']->isEmpty() && $section['waiting']->isEmpty()

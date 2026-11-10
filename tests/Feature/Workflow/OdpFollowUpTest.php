@@ -77,8 +77,8 @@ it('keeps follow-up to the movement and its assessors, and only after signing', 
 
     // The page: the General Secretary reports, the Chairperson reads, others are kept out.
     $page = route('follow-up.show', $this->assessment);
-    $this->actingAs($this->ngs)->get($page)->assertOk()->assertSee('Approve a resource mobilisation plan')->assertSee('Update progress');
-    $this->actingAs($chair)->get($page)->assertOk()->assertSee('Approve a resource mobilisation plan')->assertDontSee('Update progress');
+    $this->actingAs($this->ngs)->get($page)->assertOk()->assertSee('Approve a resource mobilisation plan')->assertSee('Where it stands');
+    $this->actingAs($chair)->get($page)->assertOk()->assertSee('Approve a resource mobilisation plan')->assertDontSee('Where it stands');
     $this->actingAs($this->j->otherStaff)->get($page)->assertForbidden();
 
     // Before signing there is no follow-up.
@@ -90,11 +90,11 @@ it('reports and confirms through the page', function () {
     $this->actingAs($this->ngs)->post(route('follow-up.progress', $this->task), ['progress' => 'done', 'note' => 'Done in June.'])
         ->assertRedirect()->assertSessionHasNoErrors();
     $this->actingAs($this->j->assessor)->get(route('follow-up.show', $this->assessment))->assertOk()
-        ->assertSee('Done · waiting for confirmation')->assertSee('Confirm done');
+        ->assertSee('Waiting to confirm')->assertSee('Confirm done');
     $this->actingAs($this->j->assessor)->post(route('follow-up.confirm', $this->task), ['confirmed' => 1])->assertSessionHasNoErrors();
 
     expect($this->task->refresh()->done)->toBeTrue();
-    $this->actingAs($this->ngs)->get(route('follow-up.show', $this->assessment))->assertSee('Done · confirmed');
+    $this->actingAs($this->ngs)->get(route('follow-up.show', $this->assessment))->assertSee('Confirmed done by '.$this->j->assessor->name);
 });
 
 it('keeps each task’s progress when a newer ODP version is read', function () {
@@ -152,7 +152,7 @@ it('lets only the assessors record a meeting, once held, and only for a planned 
 
 it('records a meeting through the page, and shows it to the movement', function () {
     $this->actingAs($this->j->assessor)->get(route('follow-up.show', $this->assessment))->assertOk()
-        ->assertSee('Follow-up meetings')->assertSee('Record this meeting');
+        ->assertSee('Meetings')->assertSee('Record this meeting');
 
     $this->actingAs($this->j->assessor)->post(route('follow-up.meetings.store', $this->assessment), [
         'number' => 1, 'held_on' => today()->toDateString(), 'attendees' => 'Mwila Banda', 'summary' => 'All priorities reviewed.',

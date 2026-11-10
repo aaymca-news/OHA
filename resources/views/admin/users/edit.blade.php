@@ -1,7 +1,7 @@
 <x-layouts.app :title="$target->name">
     <p class="text-[0.875rem] text-on-surface-variant -mt-sm">
         {{ $target->role->label() }}{{ $target->movement ? ' · '.$target->movement->name : '' }}
-        · @if (! $target->active) Deactivated @elseif ($target->isInvitationPending()) Invitation pending @else Active @endif
+        · @if ($target->isDeleted()) Deleted {{ $target->deleted_at->asDay() }} @elseif (! $target->active) Deactivated @elseif ($target->isInvitationPending()) Invitation pending @else Active @endif
     </p>
 
     @unless ($canAdminister)
@@ -89,10 +89,14 @@
                                 @csrf
                                 <x-button variant="secondary">Reactivate</x-button>
                             </form>
+                            <x-confirm-form :action="route('admin.users.destroy', $target)" method="DELETE"
+                                            :confirm="'Delete '.$target->name.'’s account? It leaves Users & Roles for good and its email is freed. Their name stays in the audit trail, on what they did.'">
+                                <x-button variant="danger" icon="delete">Delete the account</x-button>
+                            </x-confirm-form>
                         @endif
                     @endif
                 </div>
-                <p class="text-[0.8125rem] text-on-surface-variant">Accounts are never deleted, because the audit trail refers to them. A deactivated user is signed out at once.</p>
+                <p class="text-[0.8125rem] text-on-surface-variant">A deactivated user is signed out at once and can be reactivated. Deleting a deactivated account removes it from Users & Roles and frees its email; its name stays in the audit trail.</p>
             </x-card>
         @endif
     </div>

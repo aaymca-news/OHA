@@ -202,7 +202,7 @@
     "src": "node_modules/material-symbols/material-symbols-outlined.woff2"
   },
   "resources/css/app.css": {
-    "file": "assets/app--O_ynufY.css",
+    "file": "assets/app-BRCzd_Bn.css",
     "name": "app",
     "names": [
       "app.css"
@@ -262,7 +262,7 @@
     ]
   },
   "resources/js/app.js": {
-    "file": "assets/app-wTLHGRy3.js",
+    "file": "assets/app-C-l9N5Pw.js",
     "name": "app",
     "src": "resources/js/app.js",
     "isEntry": true,

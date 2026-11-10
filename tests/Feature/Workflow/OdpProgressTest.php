@@ -1,6 +1,7 @@
 <?php
 
 use App\Actions\Movements\PauseFollowUp;
+use App\Actions\Oha\ConfirmTask;
 use App\Actions\Oha\ReportTaskProgress;
 use App\Enums\TaskProgress;
 use App\Models\OdpTask;
@@ -61,6 +62,20 @@ it('shows the progress on the movement page, its dashboard and the Administrator
         ->assertSee('0 of 4 tasks done')->assertSee('Financial Stability')->assertSee('Governance');
     $this->actingAs($this->j->admin)->get(route('dashboard'))->assertOk()
         ->assertSee('Falling behind')->assertSee(route('follow-up.show', $this->assessment), false);
+
+    // The movement's dashboard: a slim banner only for what waits on this person. The
+    // General Secretary reports the overdue task; the Board Chairperson, who only follows
+    // it, gets no banner (the Overdue figure and the ODP already show it).
+    $this->actingAs($this->ngs)->get(route('dashboard'))->assertOk()
+        ->assertSee('1 ODP task is overdue: report its progress')->assertSee('Your assessment cycle')->assertSee('Follow-up meetings')
+        ->assertSee(route('follow-up.show', $this->assessment), false);
+    $this->actingAs($this->j->chair)->get(route('dashboard'))->assertOk()
+        ->assertDontSee('ODP task is overdue')->assertDontSee('report its progress')->assertSee('Open the follow-up');
+
+    // A task sent back by an assessor joins the banner.
+    app(ReportTaskProgress::class)->handle($this->b, $this->ngs, TaskProgress::Done);
+    app(ConfirmTask::class)->handle($this->b->refresh(), $this->j->assessor, false, 'The plan is not yet approved.');
+    $this->actingAs($this->ngs)->get(route('dashboard'))->assertOk()->assertSee('1 ODP task is overdue and 1 sent back: report their progress');
 
     // Other staff, not following this movement up, see no follow-up card.
     $this->actingAs($this->j->otherStaff)->get(route('movements.show', $this->j->zambia))->assertOk()->assertDontSee('Open the follow-up');

@@ -126,6 +126,9 @@ class AssessmentPolicy
         if ($assessment->isUnderWay()) {
             return Response::deny('Follow-up meetings start once the Board Chairperson has signed the ODP.');
         }
+        if ($assessment->isFollowUpClosed()) {
+            return Response::deny('This ODP’s follow-up cycle is closed: it is kept as a record.');
+        }
 
         return $user->canAssess($assessment->movement)
             ? Response::allow()
@@ -133,18 +136,52 @@ class AssessmentPolicy
     }
 
     /**
-     * The annual review of a signed ODP, and carrying its unfinished tasks into the next
-     * assessment: the movement's assessors.
+     * Closing the follow-up cycle (Stage 2 done): an assessor on the movement, or an
+     * Administrator. Whether it is ready to close is CloseFollowUp's to say.
      */
+    public function closeFollowUp(User $user, Assessment $assessment): Response
+    {
+        if ($assessment->isUnderWay()) {
+            return Response::deny('The follow-up starts once the Board Chairperson has signed the ODP.');
+        }
+        if ($assessment->isFollowUpClosed()) {
+            return Response::deny('This ODP’s follow-up cycle is already closed.');
+        }
+
+        return $user->active && ($user->canAssess($assessment->movement) || $user->isAdmin())
+            ? Response::allow()
+            : Response::deny('The cycle is closed by the movement’s assessors or an Administrator.');
+    }
+
+    /**
+     * Carrying a signed ODP's unfinished tasks into the movement's next assessment: its
+     * assessors, before or after the follow-up cycle is closed (closing may leave tasks open).
+     */
+    public function carryOdpTasks(User $user, Assessment $assessment): Response
+    {
+        if ($assessment->isUnderWay()) {
+            return Response::deny('Tasks are carried over once the Board Chairperson has signed the ODP.');
+        }
+
+        return $user->canAssess($assessment->movement)
+            ? Response::allow()
+            : Response::deny('Unfinished tasks are carried over by the movement’s assessors.');
+    }
+
+    /** The overall review of a signed ODP: the movement's assessors. */
     public function reviewOdp(User $user, Assessment $assessment): Response
     {
         if ($assessment->isUnderWay()) {
             return Response::deny('The ODP is reviewed once the Board Chairperson has signed it.');
         }
+        if ($assessment->isFollowUpClosed()) {
+            return Response::deny('This ODP’s follow-up cycle is closed: it is kept as a record.');
+        }
 
-        return $user->canAssess($assessment->movement)
+        // Its assessors, or an Administrator (who may also close the cycle, which needs it).
+        return $user->canAssess($assessment->movement) || ($user->active && $user->isAdmin())
             ? Response::allow()
-            : Response::deny('The ODP review is written by the movement’s assessors.');
+            : Response::deny('The ODP review is written by the movement’s assessors or an Administrator.');
     }
 
     /**

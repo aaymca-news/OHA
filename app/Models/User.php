@@ -140,6 +140,12 @@ class User extends Authenticatable
         return $this->role->isMovementRole() && $this->movement_id === $movement->id;
     }
 
+    /** Deleted (DeleteUser): gone from Users & Roles; the row stays for the audit trail. */
+    public function isDeleted(): bool
+    {
+        return $this->deleted_at !== null;
+    }
+
     /** An invited user who has not yet set a password. */
     public function isInvitationPending(): bool
     {
@@ -173,6 +179,7 @@ class User extends Authenticatable
             'password' => 'hashed',
             'role' => Role::class,
             'active' => 'boolean',
+            'deleted_at' => 'datetime',
         ];
     }
 }

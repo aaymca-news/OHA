@@ -25,6 +25,12 @@ return [
         'notifications' => 'Notifications',
         'profile' => 'My profile',
         'security' => 'Security',
+        // The captions over the groups in the menu (AAYMCA staff only).
+        'group' => [
+            'movements' => 'Movements',
+            'library' => 'Library',
+            'admin' => 'Administration',
+        ],
     ],
 
     'artefact' => [

@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Actions\Users\ChangeUserRole;
+use App\Actions\Users\DeleteUser;
 use App\Actions\Users\InviteUser;
 use App\Actions\Users\SetUserActive;
 use App\Actions\Users\UpdateUser;
@@ -49,6 +50,8 @@ class UserController extends Controller
 
         $users = User::query()
             ->with(['assignedMovements:id,name', 'movement:id,name'])
+            // Deleted accounts are gone from here (their rows stay for the audit trail).
+            ->whereNull('deleted_at')
             // "boards": each National Movement's own users, its Board Chairperson and National General Secretary.
             ->when($filter === 'boards', fn ($q) => $q->whereIn('role', [Role::Board, Role::Ngs]), fn ($q) => $q->whereNotIn('role', [Role::Board, Role::Ngs]))
             ->orderByDesc('active')->orderBy('name')->orderBy('id')
@@ -121,6 +124,16 @@ class UserController extends Controller
             (bool) ($data['confirm_replace'] ?? false));
 
         return back()->with('status', "{$user->name} is now {$user->refresh()->role->label()}.");
+    }
+
+    /** Deletes a deactivated account; its name stays in the audit trail. */
+    public function destroy(Request $request, User $user, DeleteUser $delete): RedirectResponse
+    {
+        $name = $user->name;
+        $delete->handle($request->user(), $user);
+
+        return redirect()->route('admin.users.index')
+            ->with('status', "{$name}’s account is deleted. Their name stays in the audit trail, on what they did.");
     }
 
     public function deactivate(Request $request, User $user, SetUserActive $setActive): RedirectResponse

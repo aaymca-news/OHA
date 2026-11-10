@@ -22,39 +22,46 @@
         --}}
         {{-- On small screens the open menu floats over the page; tapping outside or Escape closes it. --}}
         <div x-show="menu" x-cloak x-on:click="menu = false" class="lg:hidden fixed inset-0 z-30 bg-primary/40" aria-hidden="true"></div>
-        <div id="sidebar" class="sidebar-shell w-60 max-w-[85vw] shrink-0 lg:relative bg-surface-container-lowest border-r-[1.5px] border-outline-variant hidden lg:block"
+        <div id="sidebar" class="sidebar-shell w-[16.5rem] max-w-[85vw] shrink-0 lg:relative bg-[#faf9f7] border-r border-[#eceae5] hidden lg:block"
              :class="menu ? '!block fixed inset-y-0 left-0 z-40 shadow-lg' : ''" x-on:keydown.escape.window="menu = false">
-            <aside class="bg-surface-container-lowest text-on-surface flex flex-col sticky top-0 h-visible-screen" aria-label="Main menu">
+            <aside class="bg-[#faf9f7] text-on-surface flex flex-col sticky top-0 h-visible-screen" aria-label="Main menu">
                 {{-- The menu's own header: the logo, and the button that hides the menu (closes it on phones). --}}
-                <div class="flex items-start gap-xs px-md pt-md pb-sm border-b border-surface-container">
+                <div class="flex items-start gap-xs pl-[18px] pr-md pt-[20px] pb-[14px]">
                     <a href="{{ route('dashboard') }}" class="block flex-1 min-w-0">
-                        <img src="{{ asset('images/aaymca-logo.png') }}" alt="{{ __('oha.app.org') }}" width="1200" height="452" class="w-full max-w-[12rem] h-auto">
-                        <span class="block mt-sm text-[0.875rem] font-semibold text-on-surface-variant leading-tight">{{ __('oha.app.title') }}</span>
+                        <img src="{{ asset('images/aaymca-logo.png') }}" alt="{{ __('oha.app.org') }}" width="1200" height="452" class="w-[150px] max-w-full h-auto">
                     </a>
                     <button type="button" x-on:click="toggleSidebar()" aria-controls="sidebar"
                             aria-label="Hide the menu" title="Hide the menu"
-                            class="-mr-1.5 shrink-0 w-9 h-9 grid place-items-center rounded-full text-on-surface-variant hover:bg-surface-container hover:text-primary">
+                            class="-mt-0.5 -mr-1 shrink-0 w-8 h-8 grid place-items-center rounded-full bg-surface-container-lowest border border-[#e4e1db] shadow-[0_1px_2px_rgba(20,20,20,0.05)] text-[#6b6a70] transition-colors hover:text-on-surface hover:border-[#cfcbc3] hover:shadow-[0_1px_3px_rgba(20,20,20,0.10)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary">
                         {{-- The icon font sets its own display, so showing or hiding goes on a wrapper. --}}
-                        <span class="lg:hidden"><span class="material-symbols-outlined text-[1.375rem] align-middle" aria-hidden="true">close</span></span>
-                        <span class="hidden lg:inline"><span class="material-symbols-outlined text-[1.375rem] align-middle" aria-hidden="true">left_panel_close</span></span>
+                        <span class="lg:hidden"><span class="material-symbols-outlined text-[1.25rem] align-middle" aria-hidden="true">close</span></span>
+                        <span class="hidden lg:inline-grid place-items-center"><x-panel-icon /></span>
                     </button>
                 </div>
-                <nav class="p-sm flex flex-col gap-0.5 flex-1 overflow-y-auto" aria-label="Main">
+                <nav class="px-[12px] pt-1 pb-[12px] flex flex-col gap-0.5 flex-1 overflow-y-auto" aria-label="Main">
+                    @php($group = null)
                     @foreach ($navigation as $item)
+                        {{-- AAYMCA staff see the menu in groups, each under a small caption. --}}
+                        @if (($item['group'] ?? null) !== $group)
+                            @php($group = $item['group'] ?? null)
+                            @if ($group)
+                                <p class="mt-[18px] mb-1.5 mx-[12px] text-[0.6875rem] font-semibold uppercase tracking-[0.08em] text-[#8a8880]">{{ __('oha.nav.group.'.$group) }}</p>
+                            @endif
+                        @endif
                         @php($isActive = request()->routeIs($item['active']))
                         <a href="{{ route($item['route'], $item['params']) }}" @if ($isActive) aria-current="page" @endif
                            @class([
-                               'flex items-center gap-sm px-md py-2.5 rounded text-[0.9375rem] border-l-[3px]',
-                               'border-brand-red bg-brand-red-wash text-primary font-semibold' => $isActive,
-                               'border-transparent text-on-surface hover:bg-surface-container-low' => ! $isActive,
+                               'flex items-center gap-[12px] min-h-10 px-[12px] py-1.5 rounded-[10px] text-[0.90625rem]',
+                               'bg-surface-container-lowest text-on-surface font-semibold shadow-[0_1px_2px_rgba(20,20,20,0.06),0_0_0_1px_#eceae5]' => $isActive,
+                               'text-[#2b2a2e] font-medium hover:bg-[#f0eeea]' => ! $isActive,
                            ])>
-                            <span @class(['material-symbols-outlined text-[1.25rem]', 'text-brand-red-ink' => $isActive]) aria-hidden="true">{{ $item['icon'] }}</span>
+                            <span @class(['material-symbols-outlined text-[1.25rem]', 'text-brand-red-ink' => $isActive, 'text-[#6b6a70]' => ! $isActive]) aria-hidden="true">{{ $item['icon'] }}</span>
                             <span class="flex-1 min-w-0 truncate">{{ $item['label'] }}</span>
                             @if ($item['badge'] > 0)
                                 <span @class([
-                                    'min-w-6 px-1.5 rounded-full text-[0.8125rem] font-bold text-center',
-                                    'bg-brand-red-ink text-white' => $item['tone'] === 'critical',
-                                    'bg-secondary-container text-primary' => $item['tone'] !== 'critical',
+                                    'inline-flex items-center justify-center h-[22px] min-w-[22px] px-2 rounded-full text-[0.75rem] font-bold',
+                                    'bg-critical-wash text-critical-ink' => $item['tone'] === 'critical',
+                                    'bg-warning-wash text-warning-ink' => $item['tone'] !== 'critical',
                                 ])>{{ $item['badge'] }}<span class="sr-only"> waiting</span></span>
                             @endif
                         </a>
@@ -85,9 +92,9 @@
                     --}}
                     <button type="button" x-on:click="toggleSidebar()" aria-controls="sidebar" :aria-expanded="sidebarOpen()"
                             aria-label="Show the menu" title="Show the menu"
-                            class="topbar-expand shrink-0 w-9 h-9 grid place-items-center rounded-full text-on-surface-variant hover:bg-surface-container hover:text-primary">
+                            class="topbar-expand shrink-0 w-9 h-9 lg:w-8 lg:h-8 grid place-items-center rounded-full text-[#6b6a70] transition-colors hover:text-on-surface hover:bg-[#f0eeea] lg:bg-surface-container-lowest lg:border lg:border-[#e4e1db] lg:shadow-[0_1px_2px_rgba(20,20,20,0.05)] lg:hover:bg-surface-container-lowest lg:hover:border-[#cfcbc3]">
                         <span class="lg:hidden"><span class="material-symbols-outlined text-[1.5rem] align-middle" aria-hidden="true">menu</span></span>
-                        <span class="hidden lg:inline"><span class="material-symbols-outlined text-[1.375rem] align-middle" aria-hidden="true">left_panel_open</span></span>
+                        <span class="hidden lg:inline-grid place-items-center"><x-panel-icon open /></span>
                     </button>
                     <a href="{{ route('dashboard') }}" class="topbar-logo shrink min-w-0">
                         <img src="{{ asset('images/aaymca-logo.png') }}" alt="{{ __('oha.app.org') }}" width="1200" height="452" class="h-8 w-auto max-w-full">

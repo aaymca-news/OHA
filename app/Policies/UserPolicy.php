@@ -29,6 +29,9 @@ class UserPolicy
         if (($manage = $this->manage($actor))->denied()) {
             return $manage;
         }
+        if ($target->isDeleted()) {
+            return Response::deny('This account was deleted. It is kept only so the audit trail still names who did what.');
+        }
 
         return ! $target->isAdmin() || $actor->isSuperAdmin() || $actor->id === $target->id
             ? Response::allow()

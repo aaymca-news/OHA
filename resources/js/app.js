@@ -183,7 +183,7 @@ const store = {
 Alpine.data('layout', () => ({
     menu: false,
     collapsed: document.documentElement.dataset.sidebar === 'collapsed',
-    width: parseInt(getComputedStyle(document.documentElement).getPropertyValue('--sidebar-w'), 10) || 240,
+    width: parseInt(getComputedStyle(document.documentElement).getPropertyValue('--sidebar-w'), 10) || 264,
     textScale: parseInt(document.documentElement.style.fontSize, 10) || 100,
 
     wide() {
@@ -219,7 +219,7 @@ Alpine.data('layout', () => ({
     },
 
     resetWidth() {
-        this.width = 240;
+        this.width = 264;
         document.documentElement.style.removeProperty('--sidebar-w');
         store.set('oha.sidebarWidth', null);
     },

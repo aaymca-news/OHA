@@ -61,11 +61,15 @@
         <div class="flex-1 min-w-[min(14rem,100%)]">
             <a href="{{ $url }}" class="text-[0.875rem] font-semibold text-primary underline">{{ $m->name }} · {{ $done->period_label }}</a>
             <p class="text-[0.8125rem] text-on-surface-variant">
-                ODP signed by the board · follow-ups ongoing{{ $next ? ' · next assessment due '.$next->asMonth() : '' }}
+                {{ $done->isFollowUpClosed() ? 'Cycle complete · ready for the next assessment' : 'ODP signed by the board · follow-ups ongoing' }}{{ $next ? ' · next assessment due '.$next->asMonth() : '' }}
             </p>
         </div>
         <x-chip tone="good" icon="verified">Stage 1 done</x-chip>
-        <x-chip tone="info" icon="autorenew">Follow-ups ongoing</x-chip>
+        @if ($done->isFollowUpClosed())
+            <x-chip tone="good" icon="task_alt">Cycle complete</x-chip>
+        @else
+            <x-chip tone="info" icon="autorenew">Follow-ups ongoing</x-chip>
+        @endif
         @if ($waiting > 0)
             <x-chip tone="warning" icon="hourglass_top">{{ $waiting }} to confirm</x-chip>
         @endif

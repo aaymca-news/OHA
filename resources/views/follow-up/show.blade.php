@@ -1,35 +1,71 @@
 {{--
-    Stage 2, ODP follow-up for one signed assessment: each ODP task, where it stands, and
-    reporting and confirming progress. Expects $assessment, $priorities (tasks by
-    priority), $counts, $canReport, $canConfirm and $evidence (id => title).
+    Stage 2, ODP follow-up for one signed assessment, in the site's newer style (design
+    standard of 10 Nov 2026): where the ODP stands at a glance, the follow-up year as a
+    timeline, the tasks (each updated in a side panel, evidence included), the meetings,
+    the overall review, and closing the cycle. Expects what FollowUpController::show gives.
 --}}
-<x-layouts.app title="ODP follow-up" :subtitle="$assessment->movement->name.' · '.$assessment->period_label.'. Stage 2: carrying out the signed ODP, task by task.'">
-    <x-button variant="link" icon="arrow_back" :href="route('movements.show', $assessment->movement)" class="self-start">Back to {{ $assessment->movement->name }}</x-button>
+@php
+    $movement = $assessment->movement;
+    $me = auth()->user();
+    $closed = $assessment->isFollowUpClosed();
+    $canPause = ! $closed && $me->can('pauseFollowUp', $movement);
+    $allTasks = $tasks;
+    $statuses = $allTasks->mapWithKeys(fn ($t) => [$t->id => $t->followUpStatus()]);
+    $tabCount = fn (string $key) => $statuses->where('key', $key)->count();
+    $nextMeeting = collect($meetings)->first(fn ($m) => $m['meeting'] === null);
+    $relative = fn ($date) => $date->isToday() ? 'today' : $date->copy()->startOfDay()->diffForHumans(today(), ['syntax' => \Carbon\CarbonInterface::DIFF_RELATIVE_TO_NOW, 'parts' => 1]);
 
-    <div class="grid grid-cols-2 lg:grid-cols-4 gap-md">
-        <x-stat-tile label="Tasks done" :value="$counts['done']" :unit="' / '.$counts['total']">
-            <x-slot:sub>Confirmed by an assessor</x-slot:sub>
-        </x-stat-tile>
-        <x-stat-tile label="Waiting for confirmation" :value="$counts['waiting']">
-            <x-slot:sub>Reported done by the movement</x-slot:sub>
-        </x-stat-tile>
-        <x-stat-tile label="Overdue" :value="$counts['overdue']">
-            <x-slot:sub>Past their deadline, not done</x-slot:sub>
-        </x-stat-tile>
-        <x-stat-tile label="Blocked" :value="$counts['blocked']">
-            <x-slot:sub>Something is in the way</x-slot:sub>
-        </x-stat-tile>
-    </div>
+    // The one next step, as the "Next" card says it.
+    $nextStep = match (true) {
+        $closed => ['title' => 'Cycle complete', 'sub' => 'Closed '.$assessment->follow_up_closed_at->asDay().($assessment->followUpCloser ? ' by '.$assessment->followUpCloser->name : '').'. The movement is ready for its next assessment.'],
+        // The overall review written: the cycle can close now, or after the meetings still to come.
+        $review !== null => ['title' => 'Close this cycle', 'sub' => 'The overall review is written: close now'.($nextMeeting !== null ? ', or after Follow-up '.$nextMeeting['number'].' on '.$nextMeeting['due_on']->asDay() : '').'. What is still open goes to the next assessment.'],
+        $nextMeeting !== null => ['title' => 'Follow-up '.$nextMeeting['number'].' · '.$nextMeeting['due_on']->asDay(), 'sub' => ucfirst($relative($nextMeeting['due_on'])).'. Agree where each task stands with the General Secretary.'],
+        default => ['title' => 'Overall review', 'sub' => 'What the ODP achieved, what it did not and why, and the lessons. Then the cycle can close.'],
+    };
+@endphp
+<x-layouts.app title="ODP follow-up" :subtitle="$movement->name.' · '.$assessment->period_label.($signedOn ? ' · ODP signed by the Board Chairperson on '.$signedOn->asDay() : '')">
+    <x-button variant="link" icon="arrow_back" :href="route('movements.show', $movement)" class="self-start">Back to {{ $movement->name }}</x-button>
 
-    @if ($counts['total'] > 0)
-        <x-bar wide :value="$counts['done']" :max="$counts['total']" tone="good" :label="$counts['done'].' of '.$counts['total'].' done'" />
+    @if ($closed)
+        <x-callout tone="good" icon="task_alt" title="Cycle complete">
+            This ODP’s follow-up was closed on {{ $assessment->follow_up_closed_at->asDay() }}{{ $assessment->followUpCloser ? ' by '.$assessment->followUpCloser->name : '' }}. It is kept as a record, as it stood then.
+        </x-callout>
     @endif
 
-    @php
-        $movement = $assessment->movement;
-        $canPause = auth()->user()->can('pauseFollowUp', $movement);
-        $allTasks = $tasks; // $tasks is reused below for each priority's tasks
-    @endphp
+    {{-- At a glance --}}
+    <section aria-label="At a glance" class="grid gap-md [grid-template-columns:repeat(auto-fit,minmax(16rem,1fr))]">
+        <x-panel class="flex items-center gap-lg">
+            <x-progress-ring :value="$counts['done']" :max="$counts['total']" />
+            <div class="flex flex-col gap-xs">
+                <span class="text-[0.75rem] font-semibold uppercase tracking-[0.06em] text-on-surface-variant">Tasks done</span>
+                <span class="text-[1.375rem] font-bold">{{ $counts['done'] }} of {{ $counts['total'] }}</span>
+                <span class="text-[0.84375rem] text-on-surface-variant">Done counts once an assessor confirms it</span>
+            </div>
+        </x-panel>
+        <x-panel class="flex flex-col gap-sm !border-on-surface">
+            <span class="text-[0.75rem] font-semibold uppercase tracking-[0.06em] text-on-surface-variant">Next</span>
+            <span class="text-[1.25rem] font-bold">{{ $nextStep['title'] }}</span>
+            <span class="text-[0.875rem] text-on-surface-variant">{{ $nextStep['sub'] }}</span>
+        </x-panel>
+        <x-panel class="flex flex-col gap-sm">
+            <span class="text-[0.75rem] font-semibold uppercase tracking-[0.06em] text-on-surface-variant">Needs attention</span>
+            @if ($counts['overdue'] + $counts['blocked'] + $counts['waiting'] > 0)
+                <div class="flex flex-wrap gap-sm">
+                    @if ($counts['overdue'] > 0)<x-status-pill tone="critical">{{ $counts['overdue'] }} overdue</x-status-pill>@endif
+                    @if ($counts['blocked'] > 0)<x-status-pill tone="critical">{{ $counts['blocked'] }} blocked</x-status-pill>@endif
+                    @if ($counts['waiting'] > 0)<x-status-pill tone="info">{{ $counts['waiting'] }} waiting for an assessor</x-status-pill>@endif
+                </div>
+                <span class="text-[0.84375rem] text-on-surface-variant">Reminders go out in the weekly digest.</span>
+            @else
+                <x-status-pill tone="good" class="self-start">Nothing needs attention</x-status-pill>
+            @endif
+        </x-panel>
+    </section>
+
+    @include('follow-up._timeline')
+
+    {{-- Pausing the follow-up (Administrators) --}}
     @if ($movement->followUpPaused())
         <x-callout tone="warning" icon="pause_circle" :title="'Follow-up paused until '.$movement->follow_up_paused_until->asDay()">
             <p>{{ $movement->follow_up_pause_reason }}@if ($movement->pausedBy) <span class="text-[0.8125rem]">(agreed by {{ $movement->pausedBy->name }})</span>@endif</p>
@@ -57,23 +93,40 @@
         </x-card.details>
     @endif
 
-    <x-callout tone="info" title="How progress is reported">
-        <p>The movement’s National General Secretary and its AAYMCA assessors say where each task stands. A task reported done by the General Secretary counts once an assessor has confirmed it; link the evidence that shows it done.</p>
-    </x-callout>
+    {{-- The tasks --}}
+    <section aria-label="ODP tasks" class="flex flex-col gap-md" x-data="{ filter: 'all' }">
+        <div class="flex flex-wrap items-center justify-between gap-sm">
+            <h2 class="text-[1.125rem] font-bold">ODP tasks</h2>
+            @if ($allTasks->isNotEmpty())
+                <div role="group" aria-label="Show tasks" class="flex flex-wrap gap-sm">
+                    @foreach (['all' => 'All', 'overdue' => 'Overdue or blocked', 'waiting' => 'Waiting to confirm', 'progress' => 'Not done yet', 'done' => 'Done'] as $key => $label)
+                        <button type="button" x-on:click="filter = '{{ $key }}'" x-bind:aria-pressed="filter === '{{ $key }}'"
+                                class="min-h-[40px] rounded-full border px-[14px] text-[0.84375rem] font-semibold"
+                                x-bind:class="filter === '{{ $key }}' ? 'bg-on-surface text-surface-container-lowest border-on-surface' : 'bg-surface-container-lowest text-on-surface-variant border-[#e7e5e0] hover:bg-surface-container-low'">
+                            {{ $label }} · {{ $key === 'all' ? $allTasks->count() : $tabCount($key) }}
+                        </button>
+                    @endforeach
+                </div>
+            @endif
+        </div>
 
-    @include('follow-up._meetings')
+        @forelse ($priorities as $priority => $group)
+            <x-panel flush :title="\Illuminate\Support\Str::title(mb_strtolower($priority))" :subtitle="$group->where('done', true)->count().' of '.$group->count().' done'">
+                <ul class="flex flex-col">
+                    @foreach ($group as $task)
+                        @include('follow-up._task', ['task' => $task, 'status' => $statuses[$task->id]])
+                    @endforeach
+                </ul>
+            </x-panel>
+        @empty
+            <x-empty-state icon="checklist">This ODP has no tasks in the platform yet. Its assessors can add them on Timelines.</x-empty-state>
+        @endforelse
+    </section>
 
-    @forelse ($priorities as $priority => $tasks)
-        <x-card :title="\Illuminate\Support\Str::title(mb_strtolower($priority))" :subtitle="$tasks->where('done', true)->count().' of '.$tasks->count().' done'">
-            <ul class="flex flex-col">
-                @foreach ($tasks as $task)
-                    @include('follow-up._task', ['task' => $task])
-                @endforeach
-            </ul>
-        </x-card>
-    @empty
-        <x-empty-state icon="checklist">This ODP has no tasks in the platform yet. Its assessors can add them on Timelines.</x-empty-state>
-    @endforelse
+    @include('follow-up._meetings', ['tasks' => $allTasks])
 
     @include('follow-up._review', ['tasks' => $allTasks])
+
+    @include('follow-up._close')
+
 </x-layouts.app>

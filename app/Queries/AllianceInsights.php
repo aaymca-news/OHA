@@ -60,17 +60,20 @@ final class AllianceInsights
     /**
      * Where every movement is in Stage 1: not assessed, which step is under way, or complete.
      *
-     * @return array{not_assessed: int, form: int, report: int, odp: int, sign: int, complete: int, total: int}
+     * @return array{not_assessed: int, form: int, report: int, odp: int, sign: int, complete: int, closed: int, total: int}
      */
     public function pipeline(): array
     {
         $latest = Assessment::query()->latestPerMovement()->pluck('id', 'movement_id');
         $work = WorkItem::query()->whereIn('assessment_id', $latest->values())->get()->keyBy('assessment_id');
+        // Stage 2 done too: the follow-up cycle closed.
+        $closed = Assessment::query()->whereIn('id', $latest->values())->whereNotNull('follow_up_closed_at')->pluck('id')->flip();
         $total = Movement::query()->count();
-        $counts = ['not_assessed' => $total - $latest->count(), 'form' => 0, 'report' => 0, 'odp' => 0, 'sign' => 0, 'complete' => 0, 'total' => $total];
+        $counts = ['not_assessed' => $total - $latest->count(), 'form' => 0, 'report' => 0, 'odp' => 0, 'sign' => 0, 'complete' => 0, 'closed' => 0, 'total' => $total];
 
         foreach ($latest as $assessmentId) {
-            $counts[Stage::ofWork($work[$assessmentId] ?? null)->value]++;
+            $stage = Stage::ofWork($work[$assessmentId] ?? null);
+            $counts[($stage === Stage::Complete && isset($closed[$assessmentId]) ? Stage::Closed : $stage)->value]++;
         }
 
         return $counts;
