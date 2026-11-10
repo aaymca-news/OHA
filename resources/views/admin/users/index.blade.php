@@ -1,59 +1,93 @@
 <x-layouts.app title="Users & Roles" subtitle="Everyone who signs in: their role, and for AAYMCA staff, the assessments they are assigned. Assessments are handed out on the Assessments page.">
     <div class="flex flex-wrap items-center gap-sm">
         <x-segmented label="Which users">
-            <x-segmented.link :href="route('admin.users.index')" :active="$filter !== 'boards'">AAYMCA Secretariat</x-segmented.link>
+            <x-segmented.link :href="route('admin.users.index')" :active="$filter !== 'boards' && $filter !== 'visitors'">AAYMCA Secretariat</x-segmented.link>
             <x-segmented.link :href="route('admin.users.index', ['show' => 'boards'])" :active="$filter === 'boards'">National Movements</x-segmented.link>
+            @if ($seesVisitors ?? false)
+                {{-- The demo's showcase only: who has registered for a demo of their own. --}}
+                <x-segmented.link :href="route('admin.users.index', ['show' => 'visitors'])" :active="$filter === 'visitors'">Demo visitors</x-segmented.link>
+            @endif
         </x-segmented>
         @unless (config('oha.demo'))
             <x-button :href="route('admin.users.create')" class="ml-auto">Invite a user</x-button>
         @endunless
     </div>
 
-    <x-table class="min-w-[48rem]">
-        <x-slot:head>
-            <tr>
-                <th>Name</th>
-                <th>Role</th>
-                <th>{{ $filter === 'boards' ? 'Movement' : 'Assigned assessments' }}</th>
-                <th>Status</th>
-            </tr>
-        </x-slot:head>
-        @forelse ($users as $u)
-            <tr class="border-b border-surface-container last:border-0 {{ $u->active ? '' : 'text-on-surface-variant' }}">
-                <td>
-                    <span class="flex items-center gap-sm">
-                        <x-avatar :user="$u" />
-                        <span class="min-w-0">
-                            <a href="{{ route('admin.users.edit', $u) }}" class="font-semibold text-primary underline">{{ $u->name }}</a>
-                            <span class="block text-[0.8125rem] text-on-surface-variant">{{ $u->email }}{{ $u->title ? ' · '.$u->title : '' }}</span>
+    @if ($filter === 'visitors')
+        <p class="text-[0.875rem] text-on-surface-variant">
+            Everyone who has registered for a demo of their own. Each works in a copy of this showcase; a demo unused for {{ (int) config('oha.demo_sandbox_days') }} days is deleted, with its account.
+        </p>
+        <x-table class="min-w-[40rem]">
+            <x-slot:head>
+                <tr>
+                    <th>Visitor</th>
+                    <th>Registered</th>
+                    <th>Last active</th>
+                    <th>Their demo</th>
+                </tr>
+            </x-slot:head>
+            @forelse ($visitors as $v)
+                <tr class="border-b border-surface-container last:border-0">
+                    <td>
+                        <span class="font-semibold">{{ $v->name }}</span>
+                        <span class="block text-[0.8125rem] text-on-surface-variant">{{ $v->email }}</span>
+                    </td>
+                    <td>{{ $v->created_at?->asDay() }}</td>
+                    <td>{{ $v->updated_at?->asDay() }}</td>
+                    <td>{{ $v->sandbox_key !== null && in_array($v->sandbox_key, $liveDemos, true) ? 'In use' : 'None now (a new one on signing in)' }}</td>
+                </tr>
+            @empty
+                <tr><td colspan="4"><x-empty-state icon="group">Nobody has registered for a demo yet.</x-empty-state></td></tr>
+            @endforelse
+        </x-table>
+        <x-pagination :paginator="$visitors" />
+    @else
+        <x-table class="min-w-[48rem]">
+            <x-slot:head>
+                <tr>
+                    <th>Name</th>
+                    <th>Role</th>
+                    <th>{{ $filter === 'boards' ? 'Movement' : 'Assigned assessments' }}</th>
+                    <th>Status</th>
+                </tr>
+            </x-slot:head>
+            @forelse ($users as $u)
+                <tr class="border-b border-surface-container last:border-0 {{ $u->active ? '' : 'text-on-surface-variant' }}">
+                    <td>
+                        <span class="flex items-center gap-sm">
+                            <x-avatar :user="$u" />
+                            <span class="min-w-0">
+                                <a href="{{ route('admin.users.edit', $u) }}" class="font-semibold text-primary underline">{{ $u->name }}</a>
+                                <span class="block text-[0.8125rem] text-on-surface-variant">{{ $u->email }}{{ $u->title ? ' · '.$u->title : '' }}</span>
+                            </span>
                         </span>
-                    </span>
-                </td>
-                <td>
-                    {{ $u->role->label() }}
-                </td>
-                <td>
-                    @if ($filter === 'boards')
-                        {{ $u->movement?->name }}
-                    @elseif ($u->assignedMovements->isEmpty())
-                        <x-chip tone="neutral" icon="assignment_late">No assessment assigned</x-chip>
-                    @else
-                        {{ $u->assignedMovements->sortBy('name')->pluck('name')->join(', ') }}
-                    @endif
-                </td>
-                <td>
-                    @if (! $u->active)
-                        Deactivated
-                    @elseif ($u->isInvitationPending())
-                        Invitation pending
-                    @else
-                        Active
-                    @endif
-                </td>
-            </tr>
-        @empty
-            <tr><td colspan="4"><x-empty-state icon="group">No users yet.</x-empty-state></td></tr>
-        @endforelse
-    </x-table>
-    <x-pagination :paginator="$users" />
+                    </td>
+                    <td>
+                        {{ $u->role->label() }}
+                    </td>
+                    <td>
+                        @if ($filter === 'boards')
+                            {{ $u->movement?->name }}
+                        @elseif ($u->assignedMovements->isEmpty())
+                            <x-chip tone="neutral" icon="assignment_late">No assessment assigned</x-chip>
+                        @else
+                            {{ $u->assignedMovements->sortBy('name')->pluck('name')->join(', ') }}
+                        @endif
+                    </td>
+                    <td>
+                        @if (! $u->active)
+                            Deactivated
+                        @elseif ($u->isInvitationPending())
+                            Invitation pending
+                        @else
+                            Active
+                        @endif
+                    </td>
+                </tr>
+            @empty
+                <tr><td colspan="4"><x-empty-state icon="group">No users yet.</x-empty-state></td></tr>
+            @endforelse
+        </x-table>
+        <x-pagination :paginator="$users" />
+    @endif
 </x-layouts.app>

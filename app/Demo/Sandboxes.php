@@ -225,6 +225,10 @@ final class Sandboxes
             }
         });
 
+        // Everyone a visitor can choose to be is there to be chosen, even if someone was
+        // deactivated in the showcase.
+        $db->table("{$to}.users")->where('email', 'like', '%@example.org')->update(['active' => true]);
+
         if (File::isDirectory(self::showcaseFolder())) {
             File::copyDirectory(self::showcaseFolder(), self::folder($key));
         }

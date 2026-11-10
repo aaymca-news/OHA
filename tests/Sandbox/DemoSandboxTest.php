@@ -92,6 +92,16 @@ it('registers a visitor into a demo of their own, with everyone already in it', 
         ->and(DemoPeople::find('chair', Movement::query()->where('slug', 'zambia')->firstOrFail())->title)->toBe('Board Chairperson, Zambia YMCA (demo)');
 });
 
+it('lets a visitor be the Administrator and the assessor even if they were deactivated in the showcase', function () {
+    User::query()->whereIn('email', array_column(DemoPeople::STAFF, 'email'))->update(['active' => false]);
+    $key = register();
+
+    foreach (array_keys(DemoPeople::STAFF) as $role) {
+        $this->withUnencryptedCookie(Sandboxes::COOKIE, $key)->post(route('demo.sign-in'), ['role' => $role])->assertRedirect(route('dashboard'));
+        $this->withUnencryptedCookie(Sandboxes::COOKIE, $key)->post(route('demo.choose'))->assertRedirect(route('login'));
+    }
+});
+
 it('keeps each visitor’s demo to themselves', function () {
     $a = register('a@example.com');
     $b = register('b@example.com');
@@ -204,6 +214,24 @@ it('lets the Super Administrator, and only them, sign in to the showcase with th
     Sandboxes::use($key);
     expect(DemoPeople::find('admin')->role)->toBe(Role::Admin)
         ->and(User::query()->where('email', 'superadmin.demo@africaymca.org')->value('name'))->toBe('Ray');
+});
+
+it('shows the Super Administrator, in the showcase, everyone who registered for a demo; nobody else sees them', function () {
+    $ray = makeSuperAdmin();
+    $key = register('ama@example.com');
+    register('kwame@example.com');
+
+    $showcase = fn () => $this->withUnencryptedCookie(Sandboxes::COOKIE, Sandboxes::SHOWCASE);
+    $showcase()->post(route('login'), ['email' => $ray->email, 'password' => 'Showcase-Pass-2026']);
+    $showcase()->get(route('admin.users.index'))->assertOk()->assertSee('Demo visitors')->assertSee('Wanjiru Kamau');
+    $showcase()->get(route('admin.users.index', ['show' => 'visitors']))->assertOk()
+        ->assertSee('ama@example.com')->assertSee('kwame@example.com')->assertSee('In use');
+    $showcase()->post(route('logout'));
+
+    // A visitor's own Administrator: no such tab, and the list answers 404.
+    $this->withUnencryptedCookie(Sandboxes::COOKIE, $key)->post(route('demo.sign-in'), ['role' => 'admin']);
+    $this->withUnencryptedCookie(Sandboxes::COOKIE, $key)->get(route('admin.users.index'))->assertOk()->assertDontSee('Demo visitors');
+    $this->withUnencryptedCookie(Sandboxes::COOKIE, $key)->get(route('admin.users.index', ['show' => 'visitors']))->assertNotFound();
 });
 
 it('gives every visitor a copy of the showcase’s work: one signs Zambia’s ODP as its Board Chairperson, and it stays waiting for everyone else', function () {

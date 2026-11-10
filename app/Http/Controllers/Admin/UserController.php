@@ -6,6 +6,8 @@ use App\Actions\Users\ChangeUserRole;
 use App\Actions\Users\InviteUser;
 use App\Actions\Users\SetUserActive;
 use App\Actions\Users\UpdateUser;
+use App\Demo\DemoVisitor;
+use App\Demo\Sandboxes;
 use App\Enums\Role;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\InviteUserRequest;
@@ -31,6 +33,20 @@ class UserController extends Controller
     {
         $filter = $request->query('show', 'secretariat');
 
+        // The demo's showcase: its Super Administrator also sees who has registered for a demo.
+        $seesVisitors = Sandboxes::showcase() && $request->user()?->isSuperAdmin();
+        if ($filter === 'visitors') {
+            abort_unless($seesVisitors, 404);
+
+            return view('admin.users.index', [
+                'filter' => $filter,
+                'seesVisitors' => true,
+                'visitors' => DemoVisitor::query()->orderByDesc('created_at')->paginate(config('oha.per_page'))->withQueryString(),
+                'liveDemos' => Sandboxes::all(),
+                'health' => SystemHealth::check(),
+            ]);
+        }
+
         $users = User::query()
             ->with(['assignedMovements:id,name', 'movement:id,name'])
             // "boards": each National Movement's own users, its Board Chairperson and National General Secretary.
@@ -41,6 +57,7 @@ class UserController extends Controller
         return view('admin.users.index', [
             'users' => $users,
             'filter' => $filter,
+            'seesVisitors' => $seesVisitors,
             'health' => SystemHealth::check(),
         ]);
     }
