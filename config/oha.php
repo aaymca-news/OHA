@@ -37,8 +37,8 @@ return [
 
     /*
     | The demo site (demo.oha.africaymca.org): the same platform, for trying it with made-up
-    | data. On, it shows a "Demo" banner, offers one-click sign-in for each role and never
-    | sends email; oha:demo-reset starts it again by hand. Never on the live site.
+    | data. On, it shows a "Demo" banner and offers one-click sign-in for each role;
+    | oha:demo-reset starts it again by hand. Never on the live site.
     */
     'demo' => (bool) env('OHA_DEMO', false),
 
@@ -51,6 +51,16 @@ return [
     'demo_sandboxes' => (bool) env('OHA_DEMO_SANDBOXES', true),
     'demo_sandbox_days' => (int) env('OHA_DEMO_SANDBOX_DAYS', 14),
     'demo_sandbox_max' => (int) env('OHA_DEMO_SANDBOX_MAX', 200),
+
+    /*
+    | Whether the demo really sends email (invitations and the other notices to people a
+    | visitor invites), marked "Demo", through the site's mail settings. Off, mail is only
+    | written to the log. Never to the demo people (example.org). Invitations are limited
+    | each day: per private demo and per internet address.
+    */
+    'demo_mail' => (bool) env('OHA_DEMO_MAIL', false),
+    'demo_invites_per_demo' => (int) env('OHA_DEMO_INVITES_PER_DEMO', 10),
+    'demo_invites_per_address' => (int) env('OHA_DEMO_INVITES_PER_ADDRESS', 20),
 
     /* How many rows a long list shows per page (assessments, users, audit, notifications). */
     'per_page' => (int) env('OHA_PER_PAGE', 25),

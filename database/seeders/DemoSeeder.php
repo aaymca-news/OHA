@@ -12,12 +12,13 @@ use Illuminate\Support\Str;
 use RuntimeException;
 
 /**
- * What the demo site (demo.oha.africaymca.org) starts with: the 23 National Movements
- * (no assessments), the four one-click demo accounts, and invented AAYMCA staff, Board
- * Chairpersons and General Secretaries, all at example.org (which never receives mail).
- * People then try the platform by uploading made-up forms, reports and ODPs.
+ * What a new demo (demo.oha.africaymca.org) starts with: the 23 National Movements (no
+ * assessments) and the four one-click demo people, at example.org (which never receives
+ * mail), the assessor assigned to nothing yet. Nobody else: the visitor invites and
+ * assigns people, as on the live site, and uploads made-up forms, reports and ODPs.
  *
- * For a ready-made story with invented data at every stage, run DemoStorySeeder after it.
+ * For a ready-made story with invented people and data at every stage, run
+ * DemoStorySeeder after it.
  */
 class DemoSeeder extends Seeder
 {
@@ -29,37 +30,18 @@ class DemoSeeder extends Seeder
 
         $this->call(MovementsSeeder::class);
 
-        /** @var array{secretariat: list<array{name: string, role: string, title: string, movements: list<string>}>, chairs: array<string, array{name: string, title: string}>, general_secretaries: array<string, array{name: string, title: string}>} $sample */
-        $sample = require database_path('data/sample_people.php');
-        $movements = Movement::query()->pluck('id', 'slug');
-        // Nobody signs in with a password here: the demo accounts are one click away. One
-        // random, unknown password for all (hashed once: a private copy is made on a click).
+        $ghana = Movement::query()->where('slug', DemoPeople::MOVEMENT)->value('id');
+        // Nobody signs in to these with a password: they are one click away. One random,
+        // unknown password for all (hashed once: a private demo is made on a click).
         $password = Hash::make(Str::random(40));
-        $person = fn (string $name, string $email, Role $role, ?string $title = null, ?int $movement = null) => User::query()->firstOrCreate(['email' => $email], [
+        $person = fn (string $key, string $name, Role $role, string $title, ?int $movement = null) => User::query()->firstOrCreate(['email' => DemoPeople::ACCOUNTS[$key]['email']], [
             'name' => $name, 'password' => $password, 'email_verified_at' => now(),
             'role' => $role, 'title' => $title, 'movement_id' => $movement,
         ]);
 
-        $accounts = DemoPeople::ACCOUNTS;
-        $person('Wanjiru Kamau', $accounts['admin']['email'], Role::SuperAdmin, 'Head of Movement Strengthening (demo)');
-        $assessor = $person('Kofi Asante', $accounts['assessor']['email'], Role::Staff, 'Zonal Coordinator, West Africa (demo)');
-        $assessor->assignedMovements()->syncWithoutDetaching($movements->only(['ghana', 'togo', 'nigeria', 'liberia', 'sierra-leone', 'benin', 'senegal'])->values()->all());
-        $person('Abena Owusu', $accounts['chair']['email'], Role::Board, 'Board Chairperson (demo)', $movements[DemoPeople::MOVEMENT]);
-        $person('Yaw Boateng', $accounts['ngs']['email'], Role::Ngs, 'National General Secretary (demo)', $movements[DemoPeople::MOVEMENT]);
-
-        foreach ($sample['secretariat'] as $s) {
-            if ($s['role'] === 'super_admin') {
-                continue;
-            }
-            $user = $person($s['name'], Str::slug($s['name'], '.').'@example.org', Role::from($s['role']), $s['title']);
-            $user->assignedMovements()->syncWithoutDetaching($movements->only($s['movements'])->values()->all());
-        }
-        foreach ([[Role::Board, $sample['chairs']], [Role::Ngs, $sample['general_secretaries']]] as [$role, $holders]) {
-            foreach ($holders as $slug => $h) {
-                if ($slug !== DemoPeople::MOVEMENT && isset($movements[$slug])) {
-                    $person($h['name'], Str::slug($h['name'], '.').'.'.$slug.'@example.org', $role, $h['title'], $movements[$slug]);
-                }
-            }
-        }
+        $person('admin', 'Wanjiru Kamau', Role::SuperAdmin, 'Head of Movement Strengthening (demo)');
+        $person('assessor', 'Kofi Asante', Role::Staff, 'Zonal Coordinator, West Africa (demo)');
+        $person('chair', 'Abena Owusu', Role::Board, 'Board Chairperson (demo)', $ghana);
+        $person('ngs', 'Yaw Boateng', Role::Ngs, 'National General Secretary (demo)', $ghana);
     }
 }

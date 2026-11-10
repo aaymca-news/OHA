@@ -2,6 +2,7 @@
 
 namespace App\Actions\Users;
 
+use App\Demo\DemoInvitations;
 use App\Enums\Role;
 use App\Exceptions\WorkflowRuleBroken;
 use App\Models\Movement;
@@ -93,6 +94,9 @@ final class InviteUser
 
     private function sendInvitation(User $user, User $admin): void
     {
+        // The demo site sends real invitations, so many a day (nothing anywhere else).
+        DemoInvitations::allow();
+
         /** @var PasswordBroker $broker */
         $broker = Password::broker('invites');
         $user->notify(new InvitationNotice(

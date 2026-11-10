@@ -88,8 +88,8 @@ class DemoStorySeeder extends Seeder
         // Everything happens at once while seeding: notices are stored straight away.
         config(['queue.default' => 'sync', 'mail.default' => 'log']);
 
-        // The movements and the demo people come first (DemoSeeder; safe to run again).
-        $this->call(DemoSeeder::class);
+        // The movements, the demo people and the invented people come first (safe to run again).
+        $this->call([DemoSeeder::class, DemoSamplePeopleSeeder::class]);
         $this->admin = User::query()->where('email', DemoPeople::ACCOUNTS['admin']['email'])->firstOrFail();
 
         try {

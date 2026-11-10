@@ -6,7 +6,9 @@ use App\Models\Assessment;
 use App\Models\Movement;
 use App\Models\User;
 use Illuminate\Auth\SessionGuard;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Str;
 
 /*
@@ -43,9 +45,13 @@ it('gives each visitor a private copy: what one does, the other never sees', fun
     $b = startDemo();
     expect($a)->not->toBe($b);
 
-    // Visitor A, as the assessor, starts Ghana's assessment in their copy.
-    $this->withUnencryptedCookie(Sandboxes::COOKIE, $a)->post(route('demo.sign-in', 'assessor'))->assertRedirect(route('dashboard'));
+    // Visitor A gives the assessor Ghana (as their Administrator would), then, as the
+    // assessor, starts Ghana's assessment in their copy.
+    Sandboxes::use($a);
     $ghana = Movement::query()->where('slug', 'ghana')->firstOrFail();
+    User::query()->where('email', DemoPeople::ACCOUNTS['assessor']['email'])->firstOrFail()->assignedMovements()->attach($ghana->id);
+    Sandboxes::leave();
+    $this->withUnencryptedCookie(Sandboxes::COOKIE, $a)->post(route('demo.sign-in', 'assessor'))->assertRedirect(route('dashboard'));
     $this->withUnencryptedCookie(Sandboxes::COOKIE, $a)->post(route('assessments.store', $ghana), ['period_label' => 'Nov 2026', 'period_start' => '2026-11'])->assertRedirect();
     expect(Assessment::query()->count())->toBe(1);
 
@@ -155,4 +161,86 @@ it('is off on the live site', function () {
     $this->get(route('home'))->assertOk()->assertSee('Sign in to your dashboard')->assertSee('Access is by invitation only.')
         ->assertDontSee('Start your own demo')->assertDontSee('Continue your demo');
     expect(Sandboxes::all())->toBe([]);
+});
+
+/** The emails the demo sent (to the "array" mailer). @return list<Symfony\Component\Mime\Email> */
+function demoMails(): array
+{
+    return collect(app('mail.manager')->mailer('array')->getSymfonyTransport()->messages())
+        ->map(fn ($sent) => $sent->getOriginalMessage())->values()->all();
+}
+
+it('starts a demo with only the four demo people, the assessor assigned to nothing', function () {
+    $a = startDemo();
+    Sandboxes::use($a);
+
+    expect(User::query()->count())->toBe(4)
+        ->and(User::query()->where('email', DemoPeople::ACCOUNTS['assessor']['email'])->first()->assignedMovements()->count())->toBe(0);
+});
+
+it('invites people like the live site: a real email marked Demo, whose link opens the inviter’s demo', function () {
+    config(['mail.default' => 'array']);
+    Cache::store('demo')->flush();
+    $a = startDemo();
+    $this->withUnencryptedCookie(Sandboxes::COOKIE, $a)->post(route('demo.sign-in', 'admin'));
+    $this->withUnencryptedCookie(Sandboxes::COOKIE, $a)->post(route('admin.users.store'), [
+        'name' => 'Ama Mensah', 'email' => 'ama@example.com', 'role' => 'staff',
+    ])->assertSessionHasNoErrors()->assertRedirect();
+
+    // One email, to the invited person, marked as the demo's.
+    $mails = demoMails();
+    expect($mails)->toHaveCount(1);
+    $mail = $mails[0];
+    expect($mail->getTo()[0]->getAddress())->toBe('ama@example.com')
+        ->and($mail->getSubject())->toStartWith('[Demo] ')
+        ->and($mail->getHtmlBody())->toContain('It is not from the live platform')
+        ->and($mail->getTextBody())->toContain('It is not from the live platform');
+
+    // Its link goes through the inviter's demo, then on to setting a password.
+    preg_match('#'.preg_quote(route('demo.resume', $a), '#').'\?next=%2Finvitation[^\s\]]+#', (string) $mail->getTextBody(), $m);
+    expect($m)->not->toBeEmpty();
+    // The invited person is someone else, in another browser: nobody signed in.
+    $this->withUnencryptedCookie(Sandboxes::COOKIE, $a)->post(route('logout'));
+    Sandboxes::leave();
+    $response = $this->get($m[0]);
+    $response->assertCookie(Sandboxes::COOKIE, $a, false);
+    $next = $response->headers->get('Location');
+    expect(parse_url((string) $next, PHP_URL_PATH))->toStartWith('/invitation/');
+
+    // The invited person sets a password and carries on, in that demo.
+    parse_str((string) parse_url((string) $next, PHP_URL_QUERY), $query);
+    $this->withUnencryptedCookie(Sandboxes::COOKIE, $a)->get($next)->assertOk();
+    $this->withUnencryptedCookie(Sandboxes::COOKIE, $a)->post(route('invitation.store'), [
+        'token' => basename((string) parse_url((string) $next, PHP_URL_PATH)), 'email' => $query['email'],
+        'password' => 'Demo-Password-2026', 'password_confirmation' => 'Demo-Password-2026',
+    ])->assertRedirect(route('dashboard'));
+    Sandboxes::use($a);
+    expect(User::query()->where('email', 'ama@example.com')->first()->isInvitationPending())->toBeFalse();
+});
+
+it('never emails the demo people, and limits invitations a day', function () {
+    config(['mail.default' => 'array', 'oha.demo_invites_per_demo' => 1]);
+    Cache::store('demo')->flush();
+    $a = startDemo();
+
+    Sandboxes::use($a);
+    Mail::raw('A notice.', fn ($m) => $m->to(DemoPeople::ACCOUNTS['ngs']['email'])->subject('Notice'));
+    expect(demoMails())->toBe([]);
+    Sandboxes::leave();
+
+    $this->withUnencryptedCookie(Sandboxes::COOKIE, $a)->post(route('demo.sign-in', 'admin'));
+    $this->withUnencryptedCookie(Sandboxes::COOKIE, $a)->post(route('admin.users.store'), ['name' => 'One', 'email' => 'one@example.com', 'role' => 'staff'])
+        ->assertSessionHasNoErrors();
+    $this->withUnencryptedCookie(Sandboxes::COOKIE, $a)->post(route('admin.users.store'), ['name' => 'Two', 'email' => 'two@example.com', 'role' => 'staff'])
+        ->assertSessionHasErrors('action');
+    Sandboxes::use($a);
+    expect(User::query()->where('email', 'two@example.com')->exists())->toBeFalse()
+        ->and(demoMails())->toHaveCount(1);
+});
+
+it('opens only pages on this site from a private link', function () {
+    $a = startDemo();
+    $this->get(route('demo.resume', ['key' => $a, 'next' => '//elsewhere.example/x']))->assertRedirect(route('login'));
+    $this->get(route('demo.resume', ['key' => $a, 'next' => '/\elsewhere.example']))->assertRedirect(route('login'));
+    $this->get(route('demo.resume', ['key' => $a, 'next' => '/dashboard']))->assertRedirect(url('/dashboard'));
 });

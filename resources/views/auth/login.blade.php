@@ -15,7 +15,7 @@
                     </button>
                 </form>
             @endforeach
-            <p class="text-[0.8125rem] text-on-surface-variant mt-sm">Or sign in with an email and password below.</p>
+            <p class="text-[0.8125rem] text-on-surface-variant mt-sm">People invited in this demo sign in below, with their email and the password they set.</p>
         </div>
     @endif
     <form method="POST" action="{{ route('login') }}" class="flex flex-col gap-md">

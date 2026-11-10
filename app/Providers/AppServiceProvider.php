@@ -2,6 +2,7 @@
 
 namespace App\Providers;
 
+use App\Demo\DemoMail;
 use App\Models\User;
 use App\Support\Audit;
 use App\Support\DateFormats;
@@ -14,6 +15,7 @@ use Illuminate\Auth\Events\Login;
 use Illuminate\Auth\Events\Logout;
 use Illuminate\Auth\Events\PasswordReset;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Mail\Events\MessageSending;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\View;
@@ -43,12 +45,18 @@ class AppServiceProvider extends ServiceProvider
 
         Password::defaults(fn () => Password::min(12)->letters()->mixedCase()->numbers());
 
-        // The demo site never sends email, whatever its mail settings say: mail is written to the log.
         if (config('oha.demo')) {
             // Notices are handled at once, in the visitor's own private copy (a queued job
             // would run later, outside it).
-            config(['mail.default' => 'log', 'queue.default' => 'sync']);
+            config(['queue.default' => 'sync']);
+            // Real email only when switched on (config oha.demo_mail); otherwise to the log.
+            if (! config('oha.demo_mail')) {
+                config(['mail.default' => 'log']);
+            }
         }
+        // On the demo, email is marked "Demo", never sent to the demo people, and its links
+        // open the sender's demo (it does nothing anywhere else).
+        Event::listen(MessageSending::class, [DemoMail::class, 'handle']);
 
         // $date->asDay(), ->asStamp(), ->asMonth(): the platform's date formats, in one place.
         Carbon::mixin(new DateFormats);

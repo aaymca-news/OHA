@@ -26,15 +26,22 @@ class DemoSandboxController extends Controller
             ->with('status', 'Your private demo is ready. Choose who to be.');
     }
 
-    /** Opens the visitor's own copy from its private link. */
-    public function resume(string $key): RedirectResponse
+    /**
+     * Opens the visitor's own copy from its private link; from a demo email, straight on
+     * to the page the email points to ("next", a path on this site).
+     */
+    public function resume(Request $request, string $key): RedirectResponse
     {
         abort_unless(Sandboxes::enabled(), 404);
         if (! Sandboxes::exists($key)) {
             return redirect()->route('home')->with('status', 'That demo no longer exists (a demo unused for two weeks is deleted). Start a new one.');
         }
 
-        return redirect()->route('login')->withCookie($this->cookie($key));
+        $next = $request->query('next');
+        // Only a path on this site (never "//elsewhere" or "/\elsewhere").
+        $onSite = is_string($next) && preg_match('#^/(?![/\\\\])#', $next) === 1;
+
+        return ($onSite ? redirect()->to($next) : redirect()->route('login'))->withCookie($this->cookie($key));
     }
 
     /** Throws the visitor's copy away and gives them a clean one. */
