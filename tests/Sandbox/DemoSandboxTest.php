@@ -357,7 +357,10 @@ it('tells the Super Administrator what a visitor sends for approval, and lets th
     $showcase = fn () => $this->withUnencryptedCookie(Sandboxes::COOKIE, Sandboxes::SHOWCASE);
     $showcase()->post(route('login'), ['email' => $ray->email, 'password' => 'Showcase-Pass-2026'])->assertRedirect(route('dashboard'));
     $this->assertAuthenticatedAs($ray);
-    $showcase()->get(route('admin.users.index', ['show' => 'visitors']))->assertOk()->assertSee('Open their demo');
+    // What waits for approval in the visitors' demos: counted in the banner, listed per visitor.
+    $showcase()->get(route('dashboard'))->assertOk()->assertSee('1 item is waiting for approval in visitors’ demos', false);
+    $showcase()->get(route('admin.users.index', ['show' => 'visitors']))->assertOk()
+        ->assertSee('Zambia YMCA: OHA form')->assertSee('Open their demo');
 
     // "Open their demo": a one-minute signed link, and this browser in the visitor's demo.
     $open = $showcase()->get(route('demo.showcase.open', $visitor));
@@ -378,6 +381,25 @@ it('tells the Super Administrator what a visitor sends for approval, and lets th
     expect(Artefact::query()->findOrFail($form->id)->approved_by)->toBe($me->id);
     Sandboxes::leave();
     expect(Artefact::query()->findOrFail($form->id)->approved_by)->toBeNull();
+});
+
+it('greys out the Super Administrator role on the demo: nobody is given it, in a visitor’s demo or the showcase', function () {
+    $ray = makeSuperAdmin();
+    $key = register();
+    $kofi = DemoPeople::find('assessor');
+    $as = fn () => $this->withUnencryptedCookie(Sandboxes::COOKIE, $key);
+
+    $as()->post(route('demo.sign-in'), ['role' => 'admin']);
+    $as()->get(route('admin.users.edit', $kofi))->assertOk()
+        ->assertSee('Super Administrator (not given here)')->assertSee('value="super_admin" disabled', false);
+    $as()->put(route('admin.users.role', $kofi), ['role' => 'super_admin'])->assertSessionHasErrors();
+    $as()->post(route('demo.choose'));
+
+    // In the showcase too, the one Super Administrator stays the only one.
+    $showcase = fn () => $this->withUnencryptedCookie(Sandboxes::COOKIE, Sandboxes::SHOWCASE);
+    $showcase()->post(route('login'), ['email' => $ray->email, 'password' => 'Showcase-Pass-2026']);
+    $showcase()->put(route('admin.users.role', DemoPeople::find('admin')), ['role' => 'super_admin'])->assertSessionHasErrors();
+    expect(User::query()->where('role', Role::SuperAdmin)->count())->toBe(1);
 });
 
 it('lets nobody else into a visitor’s demo as the Super Administrator', function () {

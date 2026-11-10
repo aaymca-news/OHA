@@ -17,12 +17,13 @@
         <p class="text-[0.875rem] text-on-surface-variant">
             Everyone who has registered for a demo of their own. Each works in a copy of this showcase; a demo unused for {{ (int) config('oha.demo_sandbox_days') }} days is deleted, with its account.
         </p>
-        <x-table class="min-w-[40rem]">
+        <x-table class="min-w-[52rem]">
             <x-slot:head>
                 <tr>
                     <th>Visitor</th>
                     <th>Registered</th>
                     <th>Last active</th>
+                    <th>Waiting for approval</th>
                     <th>Their demo</th>
                 </tr>
             </x-slot:head>
@@ -35,6 +36,14 @@
                     <td>{{ $v->created_at?->asDay() }}</td>
                     <td>{{ $v->updated_at?->asDay() }}</td>
                     <td>
+                        @php($waiting = $v->sandbox_key !== null ? \App\Demo\DemoApprovals::waiting($v->sandbox_key) : [])
+                        @forelse ($waiting as $item)
+                            <span class="block font-semibold text-primary">{{ $item }}</span>
+                        @empty
+                            <span class="text-on-surface-variant">Nothing</span>
+                        @endforelse
+                    </td>
+                    <td>
                         @if ($v->sandbox_key !== null && in_array($v->sandbox_key, $liveDemos, true))
                             <span class="flex flex-wrap items-center gap-sm">
                                 In use
@@ -46,7 +55,7 @@
                     </td>
                 </tr>
             @empty
-                <tr><td colspan="4"><x-empty-state icon="group">Nobody has registered for a demo yet.</x-empty-state></td></tr>
+                <tr><td colspan="5"><x-empty-state icon="group">Nobody has registered for a demo yet.</x-empty-state></td></tr>
             @endforelse
         </x-table>
         <x-pagination :paginator="$visitors" />

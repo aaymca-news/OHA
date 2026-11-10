@@ -16,6 +16,11 @@
             </span>
             @if (\App\Demo\Sandboxes::showcase())
                 <span><strong>Showcase:</strong> what you do here, every visitor gets a copy of when they register or start over.</span>
+                @if (auth()->user()?->isSuperAdmin() && ($waiting = \App\Demo\DemoApprovals::count()) > 0)
+                    <a href="{{ route('admin.users.index', ['show' => 'visitors']) }}" class="underline font-semibold">
+                        {{ $waiting }} {{ $waiting === 1 ? 'item is' : 'items are' }} waiting for approval in visitors’ demos
+                    </a>
+                @endif
                 <form method="POST" action="{{ route('demo.showcase.leave') }}" class="inline">
                     @csrf
                     <button type="submit" class="underline">Leave the showcase</button>

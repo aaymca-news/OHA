@@ -42,6 +42,11 @@ class UserPolicy
             return $manage;
         }
 
+        // The demo site has one Super Administrator (the showcase's), given by nobody there.
+        if ($role === Role::SuperAdmin && config('oha.demo')) {
+            return Response::deny('The demo has one Super Administrator, the showcase’s own: nobody is given that role here.');
+        }
+
         return ! $role->isAdministrator() || $actor->isSuperAdmin()
             ? Response::allow()
             : Response::deny('Only the Super Administrator gives the Administrator roles.');
