@@ -56,6 +56,9 @@ return [
     'demo_sandbox_max' => (int) env('OHA_DEMO_SANDBOX_MAX', 200),
     // The showcase's files (null: the platform's usual folder, storage/app/private/oha).
     'demo_showcase_folder' => env('OHA_DEMO_SHOWCASE_FOLDER'),
+    // The demo's movements go by "Sample YMCA 1" to "Sample YMCA 23", never their real
+    // names (App\Demo\DemoMovements). Off only in the tests written with the real names.
+    'demo_sample_names' => (bool) env('OHA_DEMO_SAMPLE_NAMES', true),
 
     /*
     | Whether the demo really sends email, through the site's mail settings: only the

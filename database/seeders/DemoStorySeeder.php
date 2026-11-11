@@ -17,6 +17,7 @@ use App\Actions\Oha\UploadForm;
 use App\Actions\Oha\UploadOdpVersion;
 use App\Actions\Oha\UploadReportVersion;
 use App\Demo\DemoForm;
+use App\Demo\DemoMovements;
 use App\Demo\DemoOdp;
 use App\Demo\DemoPeople;
 use App\Enums\Role;
@@ -94,7 +95,7 @@ class DemoStorySeeder extends Seeder
 
         try {
             foreach (self::STORIES as $slug => $story) {
-                $this->story(Movement::query()->where('slug', $slug)->firstOrFail(), $story);
+                $this->story(DemoMovements::find($slug) ?? throw new RuntimeException("No movement {$slug}"), $story);
             }
         } finally {
             Carbon::setTestNow();

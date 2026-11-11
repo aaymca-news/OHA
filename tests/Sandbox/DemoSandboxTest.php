@@ -39,6 +39,8 @@ beforeEach(function () {
         // These tests are of private copies; the shared demo has its own, below (they switch it on).
         'oha.demo' => true, 'oha.demo_sandboxes' => true, 'oha.demo_shared' => false, 'mail.default' => 'array',
         'oha.demo_showcase_folder' => storage_path('framework/testing/demo-showcase'),
+        // These tests are written with the movements' real names; the sample names have their own, below.
+        'oha.demo_sample_names' => false,
     ]);
     // A fresh showcase (the main schema): the movements and the demo people, no work yet.
     $this->artisan('migrate:fresh', ['--force' => true]);

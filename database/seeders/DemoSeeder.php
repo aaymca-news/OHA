@@ -2,6 +2,7 @@
 
 namespace Database\Seeders;
 
+use App\Demo\DemoMovements;
 use App\Demo\DemoPeople;
 use App\Enums\Role;
 use App\Models\Movement;
@@ -28,7 +29,11 @@ class DemoSeeder extends Seeder
             throw new RuntimeException('DemoSeeder creates the demo accounts: it runs only on the demo site (OHA_DEMO=true).');
         }
 
-        $this->call(MovementsSeeder::class);
+        // The 23 movements, once (run again, after they took their sample names, it would
+        // otherwise load them a second time under their real names).
+        if (! Movement::query()->exists()) {
+            $this->call(MovementsSeeder::class);
+        }
 
         /** @var array{chairs: array<string, array{name: string, title: string}>, general_secretaries: array<string, array{name: string, title: string}>} $sample */
         $sample = require database_path('data/sample_people.php');
@@ -52,9 +57,12 @@ class DemoSeeder extends Seeder
 
         foreach ($movements as $movement) {
             foreach ([[Role::Board, $sample['chairs'], 'Board Chairperson'], [Role::Ngs, $sample['general_secretaries'], 'National General Secretary']] as [$role, $holders, $office]) {
-                $name = $holders[$movement->slug]['name'] ?? "{$movement->name} {$office}";
+                $name = $holders[DemoMovements::realSlug($movement->slug)]['name'] ?? "{$movement->name} {$office}";
                 $person(Str::slug($name, '.').'.'.$movement->slug.'@example.org', $name, $role, "{$office}, {$movement->name} (demo)", $movement->id);
             }
         }
+
+        // The movements by made-up names, "Sample YMCA 1" to "Sample YMCA 23" (their people too).
+        DemoMovements::anonymise();
     }
 }
