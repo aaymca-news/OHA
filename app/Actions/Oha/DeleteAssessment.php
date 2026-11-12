@@ -5,10 +5,12 @@ namespace App\Actions\Oha;
 use App\Actions\Concerns\EnforcesPolicy;
 use App\Exceptions\WorkflowRuleBroken;
 use App\Models\Assessment;
+use App\Models\Baseline;
 use App\Models\BoardSignature;
 use App\Models\Document;
 use App\Models\Evidence;
 use App\Models\FormUpload;
+use App\Models\RescoreUpload;
 use App\Models\User;
 use App\Notifications\WorkflowNotice;
 use App\Support\Audit;
@@ -50,6 +52,7 @@ final class DeleteAssessment
                 ->merge(BoardSignature::query()->whereIn('artefact_id', $artefactIds)->get(['signature_disk', 'signature_path'])
                     ->map(fn ($s) => ['disk' => $s->signature_disk, 'path' => $s->signature_path]))
                 ->merge(Evidence::query()->where('assessment_id', $assessment->id)->whereNull('url')->get(['disk', 'path'])->map(fn ($f) => ['disk' => $f->disk, 'path' => $f->path]))
+                ->merge(RescoreUpload::query()->where('assessment_id', $assessment->id)->get(['disk', 'path'])->map(fn ($f) => ['disk' => $f->disk, 'path' => $f->path]))
                 ->values()->all();
 
             Audit::record($superAdmin, 'assessment.deleted', $movement, $assessment, payload: array_filter([
@@ -63,6 +66,7 @@ final class DeleteAssessment
 
             // Scores point at the form upload they were frozen from, so they go first.
             $assessment->categoryScores()->delete();
+            Baseline::query()->where('assessment_id', $assessment->id)->delete();
             $assessment->delete();
 
             // Notices that link to it would lead nowhere.
@@ -94,7 +98,8 @@ final class DeleteAssessment
             $stillUsed = FormUpload::query()->where('disk', $file['disk'])->where('path', $file['path'])->exists()
                 || Document::query()->where('disk', $file['disk'])->where('path', $file['path'])->exists()
                 || BoardSignature::query()->where('signature_disk', $file['disk'])->where('signature_path', $file['path'])->exists()
-                || Evidence::query()->where('disk', $file['disk'])->where('path', $file['path'])->exists();
+                || Evidence::query()->where('disk', $file['disk'])->where('path', $file['path'])->exists()
+                || RescoreUpload::query()->where('disk', $file['disk'])->where('path', $file['path'])->exists();
 
             if (! $stillUsed) {
                 Storage::disk($file['disk'])->delete($file['path']);

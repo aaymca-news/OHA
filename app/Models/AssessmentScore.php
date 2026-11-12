@@ -16,6 +16,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * @property int $points_available
  * @property string $pct
  * @property string $band_code
+ * @property int $baseline the baseline it is: 1 until a follow-up is closed
  */
 #[Table(name: 'v_assessment_scores', key: 'assessment_id', incrementing: false, timestamps: false)]
 class AssessmentScore extends Model
@@ -45,6 +46,7 @@ class AssessmentScore extends Model
             'points_achieved' => 'decimal:2',
             'points_available' => 'integer',
             'pct' => 'decimal:1',
+            'baseline' => 'integer',
         ];
     }
 }

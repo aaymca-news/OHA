@@ -42,7 +42,8 @@ return [
         // the download routes, which check who is asking. Files are never overwritten.
         'oha' => [
             'driver' => 'local',
-            'root' => storage_path('app/private/oha'),
+            // Another folder only for a second site on the same machine (a local demo).
+            'root' => env('OHA_DISK_ROOT', storage_path('app/private/oha')),
             'visibility' => 'private',
             'serve' => false,
             'throw' => true,

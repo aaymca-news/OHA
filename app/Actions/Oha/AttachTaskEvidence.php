@@ -24,7 +24,7 @@ final class AttachTaskEvidence
     /** Give either a file ($sourcePath and $originalName) or a $url. */
     public function handle(OdpTask $task, User $by, ?string $sourcePath, ?string $originalName, ?string $url, ?string $title = null): Evidence
     {
-        $this->ensure($by, 'report', $task);
+        $this->ensure($by, 'note', $task);
         $ref = trim((string) $task->ref);
         $evidence = $this->upload->handle(
             $by, $task->assessment, $sourcePath, $originalName,

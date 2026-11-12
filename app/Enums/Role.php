@@ -8,7 +8,7 @@ namespace App\Enums;
  * AAYMCA: Staff, Administrator and Super Administrator. Both kinds of Administrator
  * approve and manage users alike; only a Super Administrator gives or takes away an
  * Administrator role. A National Movement has two users: its Board Chairperson, who
- * signs the ODP, and its National General Secretary, who supplies its evidence.
+ * may sign the ODP (optional), and its National General Secretary, who supplies its evidence.
  */
 enum Role: string
 {

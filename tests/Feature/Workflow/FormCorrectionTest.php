@@ -222,7 +222,7 @@ it('takes a corrected file after approval, and a new report version, and tells t
 });
 
 it('freezes the form, the report and the ODP once the Board Chairperson signs the ODP', function () {
-    $assessment = $this->j->assessmentAt('odp_signed');
+    $assessment = $this->j->assessmentAt('closed');
 
     expect($assessment->isFrozen())->toBeTrue()
         ->and(fn () => app(UploadForm::class)->handle($this->j->form($assessment), zambiaFormPath(), 'ZAM26.xlsx', $this->j->assessor))->toThrow(WorkflowRuleBroken::class, 'frozen')
@@ -302,7 +302,7 @@ it('guides each box with the kind of answer it takes', function () {
         ->assertSee('Mark as reviewed');
 });
 
-it('keeps only what was approved when the ODP is signed: work on the form and report since is removed', function () {
+it('keeps only what was approved when the assessment is closed: work on the form and report since is removed', function () {
     $assessment = $this->j->assessmentAt('odp_approved');
     // An answer typed in, approved with the form.
     ($this->supply)(($this->gap)($assessment, 'q:Q246'), '12500');
@@ -311,17 +311,16 @@ it('keeps only what was approved when the ODP is signed: work on the form and re
     $approved = ($this->upload)($assessment);
     $approvedReport = $this->j->report($assessment)->approvedVersion()->value('id');
 
-    // Since approval: an answer typed into the approved form, then a newer form submitted;
-    // a newer report version.
+    // Since approval: an answer typed into the approved form, then a newer form uploaded (not
+    // submitted: closing waits while anything is with the Administrators); a newer report version.
     ($this->supply)(($this->gap)($assessment, 'q:Q911'), 'Plot 12, Lusaka');
     $copy = ($this->upload)($assessment)->edited_path;
     app(UploadForm::class)->handle($this->j->form($assessment), zambiaFormWith(['Q201' => 'No']), 'ZAM26 v2.xlsx', $this->j->assessor);
-    app(SubmitForApproval::class)->handle($this->j->form($assessment), $this->j->assessor, acknowledgeGaps: true);
     $this->j->uploadReport($assessment, 'Zambia OHA report, not approved');
-    expect($this->j->form($assessment)->state)->toBe(ArtefactState::PendingApproval)
+    expect($this->j->form($assessment)->state)->not->toBe(ArtefactState::Approved)
         ->and($this->j->report($assessment)->state)->toBe(ArtefactState::Drafted);
 
-    $this->j->sign($this->j->odp($assessment));
+    $this->j->close($assessment);
 
     $form = $this->j->form($assessment);
     $report = $this->j->report($assessment);
@@ -336,6 +335,6 @@ it('keeps only what was approved when the ODP is signed: work on the form and re
         ->and(Storage::disk('oha')->exists($copy))->toBeFalse()
         ->and($report->state)->toBe(ArtefactState::Approved)
         ->and($report->versions()->pluck('id')->all())->toBe([$approvedReport])
-        ->and(AuditEvent::query()->where('action', 'odp.signed_by_board')->value('payload'))
+        ->and(AuditEvent::query()->where('action', 'assessment.closed')->value('payload'))
         ->toMatchArray(['unapproved_work_removed' => 2, 'typed_answers_since_approval_dropped' => true]);
 });

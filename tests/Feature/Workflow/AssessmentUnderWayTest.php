@@ -1,6 +1,8 @@
 <?php
 
+use App\Actions\Oha\CloseFollowUp;
 use App\Actions\Oha\OpenAssessment;
+use App\Actions\Oha\RecordOdpReview;
 use App\Actions\Oha\SubmitForApproval;
 use App\Actions\Oha\UploadForm;
 use App\Exceptions\WorkflowRuleBroken;
@@ -14,7 +16,7 @@ use Tests\Support\Journey;
 /*
  * A movement whose assessment has started says so everywhere its health band is shown,
  * instead of "Not started", and offers no "Start new assessment" until that assessment
- * is finished (its ODP signed by the board): one assessment at a time.
+ * is finished (closed): one assessment at a time.
  */
 
 beforeEach(function () {
@@ -33,19 +35,30 @@ it('offers to start an assessment only while none is under way', function () {
         ->assertSee(route('assessments.show', $assessment), false);
 });
 
-it('offers the next assessment once the last one is finished, and shows its band', function () {
-    $this->j->assessmentAt('odp_signed');
+it('offers the next assessment once the last cycle is closed, not before (no band-based date)', function () {
+    $assessment = $this->j->assessmentAt('closed');
 
     expect($this->j->zambia->assessmentUnderWay())->toBeNull();
     $this->actingAs($this->j->assessor)->get(route('movements.show', $this->j->zambia))->assertOk()
-        ->assertSee('Start new assessment')->assertDontSee('Assessment started');
+        ->assertDontSee('Start new assessment')->assertSee('After this cycle closes');
+    $this->actingAs($this->j->assessor)->post(route('assessments.store', $this->j->zambia), ['period_label' => 'Mar 2027', 'period_start' => '2027-03'])
+        ->assertSessionHasErrors(['action' => 'Zambia YMCA’s Feb 2026 cycle is still in follow-up. The next assessment can start once that cycle is closed.']);
+
+    app(RecordOdpReview::class)->handle($assessment, $this->j->assessor, 'Achieved.', 'Not achieved.');
+    app(CloseFollowUp::class)->handle($assessment, $this->j->admin, 'Closed early for the test.');
+
+    $this->actingAs($this->j->assessor)->get(route('movements.show', $this->j->zambia))->assertOk()
+        ->assertSee('Start new assessment')->assertSee('ready for its next assessment')->assertSee('Ready to start')->assertDontSee('Assessment started');
+    // An Administrator may start it too, assigned or not.
+    expect($this->j->secondAdmin->can('openAssessment', $this->j->zambia))->toBeTrue()
+        ->and($this->j->otherStaff->can('openAssessment', $this->j->zambia))->toBeFalse();
 });
 
 it('refuses a second assessment while one is under way', function () {
     $this->j->assessmentAt('opened');
 
     $this->actingAs($this->j->assessor)->post(route('assessments.store', $this->j->zambia), ['period_label' => 'Mar 2026', 'period_start' => '2026-03'])
-        ->assertSessionHasErrors(['action' => 'Zambia YMCA’s Feb 2026 assessment has already started. A new one can start once it is finished (its ODP signed by the board).']);
+        ->assertSessionHasErrors(['action' => 'Zambia YMCA’s Feb 2026 assessment has already started. A new one can start once it is finished (closed).']);
     expect($this->j->zambia->assessments()->count())->toBe(1);
 
     expect(fn () => app(OpenAssessment::class)->handle($this->j->admin, $this->j->zambia, 'Mar 2026', Carbon::parse('2026-03-01')))
@@ -102,17 +115,17 @@ it('lists the ongoing assessments, marking the ones waiting on the assessor', fu
     expect(collect(app(MyWork::class)->for($this->j->secondAdmin))->keyBy('key')['started']['items'])->toBe([]);
 });
 
-it('leaves an assessment out of Missing information once its ODP is signed', function () {
+it('leaves an assessment out of Missing information once it is closed', function () {
     $this->j->assessmentAt('odp_approved');
     $gaps = fn () => collect(app(MyWork::class)->for($this->j->assessor))->keyBy('key')['gaps']['items'];
     expect($gaps())->toHaveCount(1); // the form went forward with gaps acknowledged
 
-    $this->j->sign($this->j->odp($this->j->zambia->assessments()->firstOrFail()));
+    $this->j->close($this->j->zambia->assessments()->firstOrFail());
     expect($gaps())->toBe([]);
 });
 
-it('shows a signed assessment as Stage 1 done, its follow-ups ongoing, until the next one is due', function () {
-    $this->j->assessmentAt('odp_signed');
+it('shows a closed assessment as Stage 1 done, its follow-ups ongoing, until its cycle is closed', function () {
+    $assessment = $this->j->assessmentAt('closed');
     $groups = fn () => collect(app(MyWork::class)->for($this->j->assessor))->keyBy('key');
 
     // My Work: under "Assessments done", not "started" nor "to start".
@@ -124,20 +137,23 @@ it('shows a signed assessment as Stage 1 done, its follow-ups ongoing, until the
         ->assertSee('Assessments done')->assertSee('Zambia YMCA · Feb 2026')->assertSee('Stage 1 done')->assertSee('Follow-ups ongoing')
         ->assertDontSee('Not started');
 
-    // The movement page: the label, and starting the next one early tucked away.
+    // The movement page: the label; no starting the next one while the cycle runs.
     $this->actingAs($this->j->assessor)->get(route('movements.show', $this->j->zambia))->assertOk()
-        ->assertSee('Stage 1 done')->assertSee('Follow-ups ongoing')->assertSee('Start the next assessment early');
+        ->assertSee('Stage 1 done')->assertSee('Follow-ups ongoing')->assertDontSee('Start new assessment');
     // The movement's own dashboard.
     $this->actingAs($this->j->chair)->get(route('dashboard'))->assertOk()
-        ->assertSee('Stage 1 done · follow-ups ongoing')->assertSee('Follow-up meetings')->assertDontSee('No assessment is under way');
+        ->assertSee('Stage 1 done · follow-ups ongoing')->assertSee('Follow-ups')->assertDontSee('No assessment is under way');
     // The National Movements table.
     $this->actingAs($this->j->admin)->get(route('movements.index', ['view' => 'table']))->assertOk()->assertSee('Stage 1 done · follow-ups ongoing');
 
-    // Once the next assessment is due, it is back among the movements to start.
+    // Time alone changes nothing (no band-based date); once the cycle is closed, it is back among the movements to start.
     $this->travelTo(now()->addYears(3));
+    expect($groups()['start']['items'])->toBe([]);
+    app(RecordOdpReview::class)->handle($assessment, $this->j->assessor, 'Achieved.', 'Not achieved.');
+    app(CloseFollowUp::class)->handle($assessment, $this->j->admin, 'Closed early for the test.');
     expect($groups()['done']['items'])->toBe([])
         ->and(collect($groups()['start']['items'])->pluck('movement.slug')->all())->toBe(['zambia']);
-    $this->actingAs($this->j->assessor)->get(route('my-work', ['group' => 'start']))->assertOk()->assertSee('Next assessment due');
+    $this->actingAs($this->j->assessor)->get(route('my-work', ['group' => 'start']))->assertOk()->assertSee('Ready for the next assessment');
 });
 
 it('keeps an assessment opened with nothing uploaded under "To be started", until the OHA form is uploaded', function () {

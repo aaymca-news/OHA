@@ -3,6 +3,7 @@
 namespace App\Actions\Oha;
 
 use App\Actions\Concerns\EnforcesPolicy;
+use App\Enums\TaskProgress;
 use App\Exceptions\WorkflowRuleBroken;
 use App\Models\Assessment;
 use App\Models\OdpFollowUp;
@@ -17,10 +18,12 @@ use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 
 /**
- * Stage 2, ODP follow-up: an assessor records a follow-up meeting on the signed ODP
- * (the 1st, 2nd or 3rd of the year): when it was held, who came, what was said, and
- * an update on each task. Every task is copied as it stands now, so the meeting shows
- * where things stood then. Recording it again corrects it. The movement is told.
+ * Stage 2, ODP follow-up: an assessor records a follow-up meeting (the 1st, 2nd or 3rd),
+ * in order, while that follow-up is open: when it was held, who came, what was said, and
+ * for every task where it stands now and an update (decided 12 Nov 2026: tasks are updated
+ * together, here, not one by one in between). Every task is then copied as it stands, so
+ * the meeting shows where things stood then. Recording it again corrects it (until the
+ * follow-up is closed). The General Secretary and the other assessors are told.
  */
 final class RecordFollowUp
 {
@@ -28,12 +31,23 @@ final class RecordFollowUp
 
     /**
      * @param  array<int, string|null>  $updates  what was said about each task, by its id
+     * @param  array<int, string>  $statuses  where each task stands now (a TaskProgress value), by its id: set for all together
      */
-    public function handle(Assessment $assessment, User $by, int $number, string $heldOn, ?string $attendees, string $summary, array $updates = []): OdpFollowUp
+    public function handle(Assessment $assessment, User $by, int $number, string $heldOn, ?string $attendees, string $summary, array $updates = [], array $statuses = []): OdpFollowUp
     {
         $this->ensure($by, 'recordFollowUp', $assessment);
         $slot = collect(FollowUpSchedule::for($assessment))->firstWhere('number', $number)
             ?? throw new WorkflowRuleBroken('There is no follow-up meeting '.$number.' in this year’s plan.');
+        // In order, while it is open: the follow-up under way, once its assessors or an Administrator opened it.
+        if ($slot['state'] === FollowUpSchedule::LOCKED) {
+            throw new WorkflowRuleBroken('Follow-up '.$number.' is closed and locked. An Administrator can reopen it.');
+        }
+        if ((FollowUpSchedule::next($assessment)['number'] ?? null) !== $number) {
+            throw new WorkflowRuleBroken('Close follow-up '.($number - 1).' first: the follow-ups go in order.');
+        }
+        if ($slot['state'] !== FollowUpSchedule::OPEN) {
+            throw new WorkflowRuleBroken('Open follow-up '.$number.' first.');
+        }
         $held = Carbon::parse($heldOn)->startOfDay();
         if ($held->isFuture()) {
             throw new WorkflowRuleBroken('Record a follow-up meeting once it has been held.');
@@ -43,7 +57,24 @@ final class RecordFollowUp
         }
         $correcting = $slot['meeting'] !== null;
 
-        $meeting = DB::transaction(function () use ($assessment, $by, $number, $held, $attendees, $summary, $updates): OdpFollowUp {
+        $meeting = DB::transaction(function () use ($assessment, $by, $number, $held, $attendees, $summary, $updates, $statuses): OdpFollowUp {
+            // Where each task stands, as agreed at the meeting: Done counts from now (it was seen there).
+            foreach ($assessment->odpTasks()->get() as $task) {
+                /** @var OdpTask $task */
+                $progress = isset($statuses[$task->id]) ? TaskProgress::tryFrom((string) $statuses[$task->id]) : null;
+                if ($progress === null || $task->isDropped() || $task->carried_to_assessment_id !== null) {
+                    continue;
+                }
+                $done = $progress === TaskProgress::Done;
+                $task->forceFill([
+                    'progress' => $progress,
+                    'done' => $done,
+                    'confirmed_by' => $done ? ($task->done ? $task->confirmed_by : $by->id) : null,
+                    'confirmed_at' => $done ? ($task->done ? $task->confirmed_at : now()) : null,
+                    'returned_reason' => null,
+                ])->save();
+            }
+
             $meeting = OdpFollowUp::query()->updateOrCreate(
                 ['assessment_id' => $assessment->id, 'number' => $number],
                 ['held_on' => $held->toDateString(), 'attendees' => $attendees !== null && trim($attendees) !== '' ? trim($attendees) : null, 'summary' => trim($summary), 'recorded_by' => $by->id],
@@ -71,7 +102,7 @@ final class RecordFollowUp
 
         $movement = $assessment->movement;
         Notify::send(
-            collect([$movement->chair()->first(), $movement->generalSecretary()->first()])->merge(Notify::assessorsOf($assessment)),
+            collect([$movement->generalSecretary()->first()])->merge(Notify::assessorsOf($assessment)),
             new WorkflowNotice(
                 ($correcting ? 'Corrected: ' : '')."Follow-up meeting {$number} on {$movement->name}’s ODP",
                 "{$by->name} recorded follow-up meeting {$number}, held on {$held->format(DateFormats::DAY)}: where each ODP task stood, and what was agreed.",

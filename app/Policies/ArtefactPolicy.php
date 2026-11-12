@@ -5,7 +5,9 @@ namespace App\Policies;
 use App\Enums\ArtefactKind;
 use App\Enums\ArtefactState;
 use App\Models\Artefact;
+use App\Models\Assessment;
 use App\Models\User;
+use App\Oha\FollowUpSchedule;
 use App\Support\Approvers;
 use Illuminate\Auth\Access\Response;
 
@@ -14,7 +16,7 @@ use Illuminate\Auth\Access\Response;
  * show the reason instead of a button that quietly does nothing.
  *
  *   upload    the staff assigned to the movement, and the Administrators, upload the OHA form and
- *             each version of the report and ODP, until the ODP is signed
+ *             each version of the report and ODP, until the assessment is closed
  *   linkDrive the same people link the Google Drive document the ODP is written in
  *   syncDrive and ask the platform to read it now (it also does so by itself)
  *   submit    they hand each one in for approval
@@ -22,7 +24,8 @@ use Illuminate\Auth\Access\Response;
  *             they assess, they approve their own work straight away. The ODP only once the OHA
  *             form and the report are approved. Approval makes it visible to all AAYMCA staff
  *             and to the movement's Board Chairperson and National General Secretary
- *   sign      the Board Chairperson signs the approved ODP, which makes it "Validated"
+ *   sign      the Board Chairperson may sign the approved ODP, which makes it "Validated"
+ *             (optional: it holds nothing up and freezes nothing; closing the assessment does)
  */
 class ArtefactPolicy
 {
@@ -59,7 +62,7 @@ class ArtefactPolicy
 
     /**
      * Uploading the completed OHA form, or a version of the report or ODP: until the ODP is
-     * signed, also while the Administrators decide (they are told of the change), and after
+     * closed, also while the Administrators decide (they are told of the change), and after
      * approval (it goes back to them).
      */
     public function upload(User $user, Artefact $artefact): Response
@@ -72,7 +75,7 @@ class ArtefactPolicy
             return $denied;
         }
         if ($artefact->assessment->isFrozen()) {
-            return Response::deny('The Board Chairperson has signed the ODP, so the OHA form, the report and the ODP are frozen. Its implementation is followed in Stage 2.');
+            return Response::deny(Assessment::FROZEN.' Its implementation is followed in Stage 2.');
         }
 
         return $artefact->kind === ArtefactKind::Report && $artefact->status?->isLocked()
@@ -82,8 +85,8 @@ class ArtefactPolicy
 
     /**
      * Fixing what the report check found, in the report itself (a new version), or marking
-     * a finding as reviewed: the movement's assessors and the Administrators, until the ODP
-     * is signed.
+     * a finding as reviewed: the movement's assessors and the Administrators, until the
+     * assessment is closed.
      */
     public function fix(User $user, Artefact $artefact): Response
     {
@@ -94,7 +97,7 @@ class ArtefactPolicy
             return Response::deny('Only the assessors on this movement and the Administrators fix the report.');
         }
         if ($artefact->assessment->isFrozen()) {
-            return Response::deny('The Board Chairperson has signed the ODP, so the OHA form, the report and the ODP are frozen.');
+            return Response::deny(Assessment::FROZEN);
         }
 
         return $artefact->status?->isLocked()
@@ -103,7 +106,7 @@ class ArtefactPolicy
     }
 
     /**
-     * Linking (or re-linking) the Google Drive document. Also after signing: Stage 2 is
+     * Linking (or re-linking) the Google Drive document. Also after closing: Stage 2 is
      * followed in that document, and if the staff move to another copy, the link follows.
      */
     public function linkDrive(User $user, Artefact $artefact): Response
@@ -116,7 +119,7 @@ class ArtefactPolicy
     }
 
     /**
-     * Asking the platform to read the linked document in Google Drive now. After signing,
+     * Asking the platform to read the linked document in Google Drive now. After closing,
      * a change is noted (not a version).
      */
     public function syncDrive(User $user, Artefact $artefact): Response
@@ -165,12 +168,13 @@ class ArtefactPolicy
             return Response::deny('Only an Administrator approves.');
         }
         if ($artefact->assessment->isFrozen()) {
-            return Response::deny('The Board Chairperson has signed the ODP, so the assessment is final.');
+            return Response::deny(Assessment::FROZEN);
         }
 
-        // An Administrator's own work (a movement they assess) needs nobody else: they approve
-        // it straight away, with no submission, to make it visible and move it on.
-        $ownWork = $user->canAssess($artefact->assessment->movement)
+        // An Administrator's own work (a movement they are assigned to) needs nobody else: they
+        // approve it straight away, with no submission, to make it visible and move it on. Work
+        // on a movement they are not assigned to is submitted first, like anyone's.
+        $ownWork = $user->isAssignedTo($artefact->assessment->movement)
             && in_array($artefact->state, $artefact->kind === ArtefactKind::Form ? [ArtefactState::Ready, ArtefactState::Rejected] : [ArtefactState::Drafted, ArtefactState::Rejected], true);
         if ($artefact->state !== ArtefactState::PendingApproval && ! $ownWork) {
             return Response::deny('This is not awaiting approval.');
@@ -201,7 +205,7 @@ class ArtefactPolicy
             return Response::deny('Only an Administrator sends work back.');
         }
         if ($artefact->assessment->isFrozen()) {
-            return Response::deny('The Board Chairperson has signed the ODP, so the assessment is final.');
+            return Response::deny(Assessment::FROZEN);
         }
         if ($artefact->state !== ArtefactState::PendingApproval) {
             return Response::deny('This is not awaiting approval.');
@@ -210,7 +214,30 @@ class ArtefactPolicy
         return Response::allow();
     }
 
-    /** The Board Chairperson signs the approved ODP, which validates it. */
+    /**
+     * Revising the ODP during a follow-up (decided 12 Nov 2026): the movement's assessors or
+     * an Administrator, once the assessment is closed, while a follow-up is open. No separate
+     * approval: closing the follow-up is the sign-off.
+     */
+    public function revise(User $user, Artefact $artefact): Response
+    {
+        if ($artefact->kind !== ArtefactKind::Odp) {
+            return Response::deny('Only the ODP is revised during the follow-ups.');
+        }
+        $assessment = $artefact->assessment;
+        if (! $user->canAssess($assessment->movement)) {
+            return Response::deny('The ODP is revised by the movement’s assessors or an Administrator.');
+        }
+        if (! $assessment->isClosed() || $assessment->isFollowUpClosed()) {
+            return Response::deny($assessment->isClosed() ? 'This ODP’s follow-up cycle is closed: it is kept as a record.' : 'The ODP is revised during the follow-ups, once the assessment is closed.');
+        }
+
+        return (FollowUpSchedule::next($assessment)['state'] ?? null) === FollowUpSchedule::OPEN
+            ? Response::allow()
+            : Response::deny('Open the follow-up first: the ODP is revised during a follow-up.');
+    }
+
+    /** The Board Chairperson may sign the approved ODP, which validates it (optional), before or after closing. */
     public function sign(User $user, Artefact $artefact): Response
     {
         if (! $user->active || ! $user->isChairOf($artefact->assessment->movement)) {
@@ -234,8 +261,8 @@ class ArtefactPolicy
     /**
      * Why someone may not work on the ODP, or null if they may: the movement's
      * assessors and the Administrators work on it, from the moment a report version is
-     * saved until the Board Chairperson signs it. The signed ODP is frozen: Stage 2
-     * follows its implementation.
+     * saved until the assessment is closed. Then it is frozen: Stage 2 follows its
+     * implementation.
      */
     private function odpClosed(User $user, Artefact $odp): ?Response
     {
@@ -245,8 +272,8 @@ class ArtefactPolicy
         if ($odp->status?->isLocked()) {
             return Response::deny('The ODP unlocks once a version of the report is saved. The report does not need to be approved first.');
         }
-        if ($odp->signature()->exists()) {
-            return Response::deny('The Board Chairperson has signed this ODP, so it is frozen. Its implementation is followed in Stage 2.');
+        if ($odp->assessment->isFrozen()) {
+            return Response::deny(Assessment::FROZEN.' Its implementation is followed in Stage 2.');
         }
 
         return null;

@@ -19,5 +19,5 @@ it('starts every movement unscheduled, and says so', function () {
 
     $this->actingAs(User::factory()->admin()->create())->get(route('movements.index'))->assertOk()
         ->assertDontSee('planned Qtr')->assertDontSee('overdue')
-        ->assertSeeText('Not scheduled');
+        ->assertSeeText('Next assessment: not yet planned');
 });

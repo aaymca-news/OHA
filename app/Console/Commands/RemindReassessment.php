@@ -15,13 +15,14 @@ use Illuminate\Console\Command;
 use Illuminate\Support\Carbon;
 
 /**
- * Stage 2: the next assessment is coming. Each movement's assessors and the
- * Administrators are told 90 days before it is due, 30 days before, and once it is
- * overdue: each once (a late run sends only the most pressing one). Not while a new
- * assessment is already under way, nor while the movement's follow-up is paused.
+ * A movement's first assessment, planned by an Administrator, is coming. Its assessors
+ * and the Administrators are told 90 days before the month planned, 30 days before, and
+ * once it is past: each once (a late run sends only the most pressing one). Not once an
+ * assessment is under way. Later assessments have no due date (decided 12 Nov 2026): they
+ * start once the previous cycle is closed, and closing it tells the assessors.
  */
 #[Signature('oha:remind-reassessment')]
-#[Description('Remind the assessors and Administrators of next assessments coming due')]
+#[Description('Remind the assessors and Administrators of planned first assessments coming up')]
 class RemindReassessment extends Command
 {
     /** Most pressing first: [key, days before it is due (or overdue), what is said]. */
@@ -70,8 +71,8 @@ class RemindReassessment extends Command
         Notify::send(
             $movement->activeAssessors()->get()->merge(User::query()->administrators()->get()),
             new WorkflowNotice(
-                "{$movement->name}’s next assessment ".($overdue ? 'is overdue' : 'is coming up'),
-                "{$movement->name}’s next OHA assessment {$said} {$due->format(DateFormats::DAY)}. Its assessors open it from My Work when the time comes.",
+                "{$movement->name}’s first assessment ".($overdue ? 'is past its planned date' : 'is coming up'),
+                "{$movement->name}’s first OHA assessment, as planned, {$said} {$due->format(DateFormats::DAY)}. Its assessors open it from My Work when the time comes.",
                 route('movements.show', $movement, false),
                 $overdue ? 'serious' : 'info',
             ),

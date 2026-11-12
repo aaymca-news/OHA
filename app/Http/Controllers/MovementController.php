@@ -13,8 +13,10 @@ use App\Models\MovementStatus;
 use App\Models\Zone;
 use App\Oha\CategoryRows;
 use App\Queries\AllianceInsights;
+use App\Queries\Journeys;
 use App\Queries\MovementSnapshot;
 use App\Queries\OdpProgress;
+use App\Support\MovementCycle;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
@@ -67,7 +69,7 @@ class MovementController extends Controller
         ]);
     }
 
-    public function show(Request $request, Movement $movement): View
+    public function show(Request $request, Movement $movement, Journeys $journeys): View
     {
         Gate::authorize('view', $movement);
         $user = $request->user();
@@ -87,6 +89,10 @@ class MovementController extends Controller
             }
         }
         $snapshot = MovementSnapshot::of($status);
+        $underWay = $movement->assessmentUnderWay();
+        $lastDone = $movement->lastAssessmentDone();
+        // The assessment its cycle follows: the one under way, else the last one done.
+        $cycleOf = $underWay ?? $lastDone;
 
         $assessments = $movement->assessments()->with(['score.band', 'artefacts.status', 'workItem'])->latest('assessed_on')->latest('id')->get()
             ->filter(fn (Assessment $a) => Gate::forUser($user)->allows('view', $a));
@@ -107,14 +113,20 @@ class MovementController extends Controller
             'profile' => $snapshot->profile,
             'assignmentHistory' => $assignmentHistory,
             'assignedSince' => $assignedSince,
-            'underWay' => $movement->assessmentUnderWay(),
-            // Stage 1 done (ODP signed): its follow-ups are under way until the next assessment is due.
-            'lastDone' => $lastDone = $movement->lastAssessmentDone(),
-            // Stage 2: how its signed ODP is being carried out, for those who follow it up.
+            'underWay' => $underWay,
+            // Stage 1 done (closed): its follow-ups are under way until the next assessment is due.
+            'lastDone' => $lastDone,
+            // Stage 2: how its ODP is being carried out, for those who follow it up.
             'followUpProgress' => $lastDone !== null && Gate::forUser($user)->allows('viewFollowUp', $lastDone) ? OdpProgress::of($lastDone) : null,
-            'followingUp' => $status->has_odp && $status->next_assessment_on?->isFuture(),
+            // Its cycle's journey, baseline by baseline, for those who follow it up.
+            'journey' => $lastDone !== null && Gate::forUser($user)->allows('viewFollowUp', $lastDone) ? $journeys->of($lastDone) : [],
+            // In follow-up: closed, its cycle not closed yet (the next assessment waits for it).
+            'followingUp' => $lastDone !== null && ! $lastDone->isFollowUpClosed(),
             'canOpen' => Gate::forUser($user)->allows('openAssessment', $movement),
             'canAssign' => Gate::forUser($user)->allows('assignAssessors', $movement),
+            'stage' => Stage::of($cycleOf ?? $snapshot->latest),
+            'cycle' => $cycleOf !== null ? MovementCycle::steps($cycleOf, $status->next_assessment_on, $user->isSecretariat() ? 'its' : 'your') : null,
+            'cycleOf' => $cycleOf,
         ]);
     }
 

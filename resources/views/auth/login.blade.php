@@ -20,14 +20,14 @@
             <x-input name="password" label="Password" type="password" autocomplete="current-password" required />
 
             <label class="flex items-center gap-sm text-[0.875rem]">
-                <input type="checkbox" name="remember" value="1" class="rounded border-outline-variant">
+                <input type="checkbox" name="remember" value="1" class="size-4 accent-[#1c1b1f]">
                 Keep me signed in on this device
             </label>
 
             <x-button>Sign in</x-button>
 
             @unless ($showcase)
-                <a href="{{ route('password.request') }}" class="text-[0.875rem] text-primary underline self-start">Forgotten your password?</a>
+                <a href="{{ route('password.request') }}" class="text-[0.875rem] font-semibold text-on-surface underline decoration-[#d3d0c9] underline-offset-2 hover:decoration-on-surface self-start">Forgotten your password?</a>
             @endunless
         </form>
 

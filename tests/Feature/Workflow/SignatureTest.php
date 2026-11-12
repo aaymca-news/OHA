@@ -12,8 +12,10 @@ use Illuminate\Support\Facades\Notification;
 use Tests\Support\Journey;
 
 /*
- * Only the ODP is signed, by the movement's one user: its Board Chairperson. It
- * reaches them the moment an Administrator approves it; nobody "releases" it.
+ * Only the ODP is signed, by the movement's Board Chairperson. It reaches them the moment
+ * an Administrator approves it; nobody "releases" it. Since 12 Nov 2026 signing is
+ * optional: it validates the ODP, before or after the assessment is closed, and freezes
+ * nothing (see CloseAssessmentTest).
  */
 
 beforeEach(function () {
@@ -58,7 +60,8 @@ it('lets only this movement’s Chairperson sign, only the ODP, and only once it
 });
 
 it('never shows a report or form as validated: they are approved, not signed', function () {
-    $assessment = $this->j->assessmentAt('odp_signed');
+    $assessment = $this->j->assessmentAt('odp_approved');
+    $this->j->sign($this->j->odp($assessment));
 
     expect(ArtefactStatus::query()->findOrFail($this->j->report($assessment)->id)->validated)->toBeFalse()
         ->and(ArtefactStatus::query()->findOrFail($this->j->form($assessment)->id)->validated)->toBeFalse()
@@ -94,7 +97,7 @@ it('shows the typed signature to the Chairperson as they type, and on the signed
 });
 
 it('never lets a signature be changed afterwards', function () {
-    $this->j->assessmentAt('odp_signed');
+    $this->j->sign($this->j->odp($this->j->assessmentAt('odp_approved')));
 
     expect(fn () => DB::transaction(fn () => DB::table('board_signatures')->update(['signed_name' => 'Someone else'])))
         ->toThrow(QueryException::class, 'cannot be changed');

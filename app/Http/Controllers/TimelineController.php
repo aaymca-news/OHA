@@ -8,6 +8,8 @@ use App\Models\Assessment;
 use App\Models\AssessmentMilestone;
 use App\Models\OdpTask;
 use App\Models\TimelineItem;
+use App\Oha\FollowUpSchedule;
+use App\Queries\OdpProgress;
 use App\Support\OdpTimeline;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -19,9 +21,11 @@ class TimelineController extends Controller
     use BacksToAssessment;
 
     /**
-     * Two timelines on one page: each movement's ODP tasks and their deadlines (read
-     * from its ODP, or typed in), and the deadlines of the assessments under way.
-     * The Administrators see every movement's; staff see those they assess.
+     * Three views on one page (decided 12 Nov 2026): the follow-ups of each movement in
+     * follow-up (their agreed dates, open, closed, overdue), the ODP tasks (where each stands,
+     * as set at the last follow-up: tasks have no deadlines of their own), and the deadlines
+     * of the assessments under way (Stage 1). The Administrators see every movement's; staff
+     * see those they assess.
      */
     public function index(Request $request): View
     {
@@ -29,9 +33,51 @@ class TimelineController extends Controller
         Gate::authorize('viewTimelines');
         $mine = $user->visibleMovementIds();
 
-        return $request->query('tab') === 'gates'
-            ? $this->gates($request, $mine)
-            : $this->odpTasks($request, $mine);
+        return match ($request->query('tab')) {
+            'gates' => $this->gates($request, $mine),
+            'odp' => $this->odpTasks($request, $mine),
+            default => $this->followUps($request, $mine),
+        };
+    }
+
+    /**
+     * Each movement in follow-up, with its three follow-ups. Filtered to those overdue,
+     * open now, or whose next follow-up has no date yet.
+     *
+     * @param  list<int>|null  $mine  the movements this person assesses; null for every movement
+     */
+    private function followUps(Request $request, ?array $mine): View
+    {
+        $rows = Assessment::query()->with('movement')
+            ->whereNotNull('closed_at')->whereNull('follow_up_closed_at')
+            ->when($mine !== null, fn ($q) => $q->whereIn('movement_id', $mine))
+            ->get()->sortBy(fn (Assessment $a) => $a->movement->name)
+            ->map(function (Assessment $a) {
+                $schedule = FollowUpSchedule::for($a);
+                $next = collect($schedule)->first(fn (array $f) => in_array($f['state'], [FollowUpSchedule::OPEN, FollowUpSchedule::UPCOMING], true));
+                $tasks = $a->odpTasks()->get();
+
+                return [
+                    'assessment' => $a,
+                    'schedule' => $schedule,
+                    'next' => $next,
+                    'summary' => OdpProgress::summary($tasks),
+                    'flags' => array_values(array_filter([
+                        ($next['overdue'] ?? false) ? 'overdue' : null,
+                        ($next['state'] ?? null) === FollowUpSchedule::OPEN ? 'open' : null,
+                        $next !== null && $next['due_on'] === null ? 'unset' : null,
+                    ])),
+                ];
+            })->values();
+
+        $state = in_array($request->query('state'), ['overdue', 'open', 'unset'], true) ? (string) $request->query('state') : null;
+
+        return view('timelines', [
+            'tab' => 'follow-ups',
+            'rows' => $state === null ? $rows : $rows->filter(fn (array $r) => in_array($state, $r['flags'], true))->values(),
+            'counts' => collect(['overdue', 'open', 'unset'])->mapWithKeys(fn (string $k) => [$k => $rows->filter(fn (array $r) => in_array($k, $r['flags'], true))->count()])->all() + ['all' => $rows->count()],
+            'state' => $state,
+        ]);
     }
 
     /**
@@ -44,20 +90,16 @@ class TimelineController extends Controller
         $tasks = OdpTask::query()->whereIn('assessment_id', $assessments->pluck('id'))
             ->orderBy('sort_order')->orderBy('id')->get()->groupBy('assessment_id');
         $all = $tasks->flatten();
-        $counts = $all->countBy(fn (OdpTask $t) => $t->state());
+        $counts = $all->countBy(fn (OdpTask $t) => $t->followUpStatus()['key']);
 
-        $state = in_array($request->query('state'), ['overdue', 'soon', 'undated', 'done', 'open'], true) ? $request->query('state') : null;
+        $state = in_array($request->query('state'), ['blocked', 'progress', 'done'], true) ? $request->query('state') : null;
         $movement = $request->query('movement');
 
         return view('timelines', [
             'tab' => 'odp',
             'assessments' => $assessments->filter(fn (Assessment $a) => $movement === null || $a->movement->slug === $movement)->values(),
             'movements' => $assessments->pluck('movement'),
-            'tasks' => $tasks->map(fn ($group) => $group->filter(fn (OdpTask $t) => match ($state) {
-                null => true,
-                'open' => ! $t->done,
-                default => $t->state() === $state,
-            })->values()),
+            'tasks' => $tasks->map(fn ($group) => $group->filter(fn (OdpTask $t) => $state === null || $t->followUpStatus()['key'] === $state)->values()),
             'totals' => $tasks->map(fn ($group) => ['all' => $group->count(), 'done' => $group->where('done', true)->count()]),
             'counts' => $counts,
             'state' => $state,
@@ -107,7 +149,7 @@ class TimelineController extends Controller
 
     public function updateTask(Request $request, OdpTask $odpTask, EditTimeline $timeline): RedirectResponse
     {
-        $timeline->updateTask($odpTask, $this->task($request) + ['done' => $request->boolean('done')], $request->user());
+        $timeline->updateTask($odpTask, $this->task($request), $request->user());
 
         return back()->with('status', 'Task saved.');
     }
@@ -120,7 +162,7 @@ class TimelineController extends Controller
     }
 
     /**
-     * @return array{task: string, ref?: string|null, responsible?: string|null, due_on?: string|null}
+     * @return array{task: string, ref?: string|null, responsible?: string|null}
      */
     private function task(Request $request): array
     {
@@ -128,7 +170,6 @@ class TimelineController extends Controller
             'task' => ['required', 'string', 'max:4000'],
             'ref' => ['nullable', 'string', 'max:16'],
             'responsible' => ['nullable', 'string', 'max:500'],
-            'due_on' => ['nullable', 'date_format:Y-m-d'],
         ], ['task.required' => 'Say what the task is.']);
     }
 

@@ -3,6 +3,7 @@
 namespace App\Policies;
 
 use App\Enums\FindingSeverity;
+use App\Models\Assessment;
 use App\Models\FormFinding;
 use App\Models\User;
 use App\Oha\FindingFields;
@@ -24,7 +25,7 @@ class FormFindingPolicy
 
         $upload = $finding->formUpload;
         if ($upload->artefact->assessment->isFrozen()) {
-            return Response::deny('The Board Chairperson has signed the ODP, so the OHA form is frozen.');
+            return Response::deny(Assessment::FROZEN);
         }
         if ($upload->artefact->currentUpload()->value('id') !== $upload->id) {
             return Response::deny('This is the approved upload. Open the working version to settle what it found.');

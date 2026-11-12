@@ -3,18 +3,20 @@
 namespace App\Support;
 
 use App\Enums\ArtefactKind;
+use App\Enums\Stage;
 use App\Models\Assessment;
 use App\Models\Category;
-use App\Models\CategoryScore;
 use App\Models\Movement;
 use App\Models\MovementStatus;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
 
 /**
  * The Alliance's scores as a spreadsheet for the Secretariat's reporting: one row per
  * movement with its latest approved score (movements not yet rated have blank scores),
  * or with $every, one row per approved assessment. Each category as a percentage, the
- * total in points and percent, the band, and whether the ODP is validated.
+ * total in points and percent, the band, whether the ODP is validated, and when the next
+ * assessment comes (no band-based date: ready once the cycle is closed).
  */
 final class ScoresCsv
 {
@@ -30,25 +32,34 @@ final class ScoresCsv
             ->when(! $every, fn ($q) => $q->whereIn('id', MovementStatus::query()->whereNotNull('latest_assessment_id')->select('latest_assessment_id')))
             ->orderByDesc('assessed_on')->orderByDesc('id')
             ->get();
-        /** @var Collection<int, Collection<int, CategoryScore>> $scores */
-        $scores = CategoryScore::query()->whereIn('assessment_id', $assessments->pluck('id'))->get()
+        // Each assessment's score as it stands: its newest baseline (or, before it is closed, its approved form).
+        /** @var Collection<int, Collection<int, object{category_id: int, points: string, max_points_at_scoring: int}>> $scores */
+        $scores = DB::table('v_current_category_scores')->whereIn('assessment_id', $assessments->pluck('id'))->get()
             ->groupBy('assessment_id')->map(fn (Collection $s) => $s->keyBy('category_id'));
         $byMovement = $assessments->groupBy('movement_id');
+        // Each closed assessment's Baseline 1 score, to show how far it moved since.
+        $firsts = DB::table('v_baseline_scores as t')->join('baselines as b', 'b.id', '=', 't.baseline_id')
+            ->whereNull('b.superseded_at')->where('t.number', 1)->whereIn('t.assessment_id', $assessments->pluck('id'))
+            ->pluck('t.pct', 't.assessment_id');
+        // When each movement's next assessment comes: no band-based date (decided 12 Nov 2026).
+        $latestOf = Assessment::query()->latestPerMovement()->with('workItem')->get()->keyBy('movement_id');
 
         $rows = [[
             'Movement', 'Country', 'Zone', 'Membership', 'Assessment', 'Assessed (month)',
             ...$categories->map(fn (Category $c) => $c->name.' (%)')->all(),
-            'Points', 'Out of', 'Score (%)', 'Band', 'ODP validated', 'Next assessment due',
+            'Points', 'Out of', 'Score (%)', 'Band', 'ODP validated', 'Next assessment',
+            // The baseline the score is (decided 12 Nov 2026), and how far it moved from Baseline 1.
+            'Baseline', 'Baseline 1 (%)', 'Change since Baseline 1 (pts)',
         ]];
 
         foreach ($movements as $movement) {
             $theirs = $byMovement->get($movement->id, collect());
-            $next = $movement->status?->next_assessment_on;
+            $next = Stage::of($latestOf[$movement->id] ?? null)->nextAssessment($movement->status?->next_assessment_on)[0];
             $start = [$movement->name, $movement->country, $movement->zone->name, $movement->membershipStatus->label];
 
             if ($theirs->isEmpty()) {
                 if (! $every) {
-                    $rows[] = [...$start, null, null, ...array_fill(0, $categories->count(), null), null, null, null, 'Not yet rated', null, $next?->format('Y-m')];
+                    $rows[] = [...$start, null, null, ...array_fill(0, $categories->count(), null), null, null, null, 'Not yet rated', null, $next, null, null, null];
                 }
 
                 continue;
@@ -71,8 +82,11 @@ final class ScoresCsv
                     (float) $assessment->score->pct,
                     $assessment->score->band->label,
                     $odp?->signature !== null ? 'Yes' : 'No',
-                    // Only the latest assessment sets when the next is due.
-                    $i === 0 ? $next?->format('Y-m') : null,
+                    // Only on the latest assessment's row.
+                    $i === 0 ? $next : null,
+                    $assessment->score->baseline,
+                    isset($firsts[$assessment->id]) ? (float) $firsts[$assessment->id] : null,
+                    isset($firsts[$assessment->id]) ? round((float) $assessment->score->pct - (float) $firsts[$assessment->id], 1) : null,
                 ];
             }
         }

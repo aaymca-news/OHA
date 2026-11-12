@@ -55,7 +55,8 @@ it('rates a movement only once its form is approved, and every figure updates at
         ->and($status()->points_available)->toBe(84)
         ->and((float) $status()->pct)->toBe(69.0)
         ->and($status()->band_code)->toBe('developing')
-        ->and($status()->next_assessment_on->toDateString())->toBe('2027-08-01')
+        // No band-based next assessment date (decided 12 Nov 2026).
+        ->and($status()->next_assessment_on)->toBeNull()
         ->and($form->refresh()->state)->toBe(ArtefactState::Approved);
 });
 

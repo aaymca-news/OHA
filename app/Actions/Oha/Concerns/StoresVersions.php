@@ -9,6 +9,7 @@ use App\Enums\DocumentFormat;
 use App\Enums\DocumentPurpose;
 use App\Exceptions\WorkflowRuleBroken;
 use App\Models\Artefact;
+use App\Models\Assessment;
 use App\Models\Document;
 use App\Models\User;
 use App\Support\Audit;
@@ -62,7 +63,7 @@ trait StoresVersions
             // Whoever saves it: never once the ODP is signed. While the Administrators decide, it
             // may still be changed: it stays with them, and they are told.
             if ($artefact->assessment->isFrozen()) {
-                throw new WorkflowRuleBroken('The Board Chairperson has signed the ODP, so the OHA form, the report and the ODP are frozen.');
+                throw new WorkflowRuleBroken(Assessment::FROZEN);
             }
 
             $version = $artefact->documents()->create($stored + $attributes + [

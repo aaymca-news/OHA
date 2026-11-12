@@ -11,19 +11,19 @@
     <p class="text-[0.875rem]">
         <strong>{{ $backed }} of {{ $needed->count() }}</strong> “Yes” answers that call for evidence have it.
     </p>
-    <div class="flex flex-col divide-y divide-surface-container rounded border-[1.5px] border-outline-variant">
+    <div class="flex flex-col divide-y divide-[#f2f1ec] rounded-xl border border-[#ebe9e4]">
         @foreach ($checklist as $category => $questions)
             @php($missing = collect($questions)->where('documents', [])->count())
             <details class="text-[0.875rem]">
-                <summary class="cursor-pointer px-sm py-2 flex flex-wrap items-center gap-sm">
+                <summary class="cursor-pointer px-md py-[10px] flex flex-wrap items-center gap-sm hover:bg-[#fafaf8]">
                     <span class="font-semibold flex-1">{{ $categoryNames[$category] ?? $category }}</span>
                     @if ($missing > 0)
-                        <x-chip tone="warning" icon="pending">{{ $missing }} missing</x-chip>
+                        <x-status-pill tone="warning">{{ $missing }} missing</x-status-pill>
                     @else
-                        <x-chip tone="good" icon="task_alt">All supplied</x-chip>
+                        <x-status-pill tone="good">All supplied</x-status-pill>
                     @endif
                 </summary>
-                <ul class="flex flex-col gap-sm px-sm pb-sm">
+                <ul class="flex flex-col gap-sm px-md pb-md">
                     @foreach ($questions as $q)
                         @include('evidence._requirement', ['q' => $q, 'addLink' => null])
                     @endforeach

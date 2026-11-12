@@ -12,15 +12,22 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
+use Illuminate\Support\Carbon;
 
+/**
+ * @property Carbon|null $closed_at when Stage 1 was closed (Baseline 1 set)
+ */
 #[Fillable(['movement_id', 'period_label', 'assessed_on', 'opened_at', 'opened_by', 'odp_read_document_id', 'odp_read_problem'])]
 class Assessment extends Model
 {
     /** @use HasFactory<AssessmentFactory> */
     use HasFactory;
 
+    /** Why the OHA form, report and ODP can no longer change: said the same way everywhere. */
+    public const FROZEN = 'The assessment is closed, so the OHA form, the report and the ODP are frozen.';
+
     /**
-     * Under way: opened and not yet finished (it has a work item until its ODP is signed).
+     * Under way: opened and not yet finished (it has a work item until it is closed).
      *
      * @param  Builder<self>  $query
      */
@@ -30,13 +37,13 @@ class Assessment extends Model
     }
 
     /**
-     * Done: Stage 1 finished, its ODP signed by the board; its follow-ups are under way.
+     * Done: Stage 1 closed (Baseline 1 set); its follow-ups are under way, or done.
      *
      * @param  Builder<self>  $query
      */
     public function scopeDone(Builder $query): void
     {
-        $query->whereDoesntHave('workItem')->whereHas('odp', fn (Builder $odp) => $odp->whereHas('signature'));
+        $query->whereNotNull('closed_at');
     }
 
     /**
@@ -151,7 +158,27 @@ class Assessment extends Model
     }
 
     /**
-     * The derived overall score and band.
+     * Its baselines, in force and set aside (superseded), in order.
+     *
+     * @return HasMany<Baseline, $this>
+     */
+    public function baselines(): HasMany
+    {
+        return $this->hasMany(Baseline::class)->orderBy('number')->orderBy('id');
+    }
+
+    /**
+     * The newest baseline in force: its score is the movement's score everywhere.
+     *
+     * @return HasOne<Baseline, $this>
+     */
+    public function currentBaseline(): HasOne
+    {
+        return $this->hasOne(Baseline::class)->whereNull('superseded_at')->orderByDesc('number');
+    }
+
+    /**
+     * The derived overall score and band: the newest baseline's (see v_assessment_scores).
      *
      * @return HasOne<AssessmentScore, $this>
      */
@@ -197,7 +224,7 @@ class Assessment extends Model
     }
 
     /**
-     * The follow-up meetings recorded on its signed ODP (Stage 2), first to last.
+     * The follow-up meetings recorded once it is closed (Stage 2), first to last.
      *
      * @return HasMany<OdpFollowUp, $this>
      */
@@ -207,7 +234,7 @@ class Assessment extends Model
     }
 
     /**
-     * The overall review of its signed ODP (Stage 2), once written.
+     * The overall review of its ODP (Stage 2), once written.
      *
      * @return HasOne<OdpReview, $this>
      */
@@ -231,13 +258,29 @@ class Assessment extends Model
     }
 
     /**
-     * Once the Board Chairperson has signed the ODP, Stage 2 begins and the OHA form, the
-     * report and the ODP are frozen: the ODP rests on the report, which rests on the form.
+     * Once the assessment is closed (Stage 1 done), the OHA form, the report and the ODP
+     * are frozen: the ODP rests on the report, which rests on the form. The Board
+     * Chairperson's signature, now optional, freezes nothing.
      */
     public function isFrozen(): bool
     {
-        return BoardSignature::query()->whereHas('artefact', fn ($q) => $q
-            ->where('assessment_id', $this->id)->where('kind', ArtefactKind::Odp))->exists();
+        return $this->isClosed();
+    }
+
+    /** Whether Stage 1 is closed: Baseline 1 set, its follow-up under way (or done). */
+    public function isClosed(): bool
+    {
+        return $this->closed_at !== null;
+    }
+
+    /**
+     * Who closed it.
+     *
+     * @return BelongsTo<User, $this>
+     */
+    public function closer(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'closed_by');
     }
 
     protected function casts(): array
@@ -245,6 +288,7 @@ class Assessment extends Model
         return [
             'assessed_on' => 'date',
             'opened_at' => 'datetime',
+            'closed_at' => 'datetime',
             'follow_up_closed_at' => 'datetime',
         ];
     }

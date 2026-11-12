@@ -13,7 +13,7 @@
                 @endforeach
             </ul>
             <p>The movement’s assessors or an Administrator can set a different date for any gate below; that date then counts instead. Clearing it returns the gate to its default.</p>
-            <p>A gate is done the moment its document is: the OHA form, report or ODP when an Administrator first approves it, and the last gate when the Board Chairperson signs the ODP. Done after its date shows as late; not done by its date shows as overdue.</p>
+            <p>A gate is done the moment its document is: the OHA form, report or ODP when an Administrator first approves it, and the last gate when the assessment is closed (by its assessors or an Administrator). Done after its date shows as late; not done by its date shows as overdue.</p>
             <p>When the next assessment is due is a separate rule, set by the movement’s health band: the weaker the band, the sooner it is re-assessed.</p>
         </div>
     </details>

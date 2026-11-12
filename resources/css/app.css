@@ -225,7 +225,7 @@
     padding: var(--spacing-sm) var(--spacing-md);
 }
 .oha-table :where(thead tr) {
-    border-bottom: 1.5px solid var(--color-outline-variant);
+    border-bottom: 1px solid #ebe9e4;
 }
 
 /* x-card.details: its own chevron instead of the browser's marker. */

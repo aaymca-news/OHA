@@ -30,10 +30,11 @@ return [
     'badge_cache_seconds' => (int) env('OHA_BADGE_CACHE_SECONDS', 60),
 
     /*
-    | Stage 2, ODP follow-up: how many follow-up meetings a year, evenly spread from the
-    | signing of the ODP. 3, as in the ODP template (decided 10 Nov 2026): every 4 months.
+    | Stage 2, ODP follow-up: how many follow-ups a cycle has, after the assessment is closed.
+    | 3, as in the ODP template. Their dates are agreed with each movement, not fixed (decided
+    | 12 Nov 2026).
     */
-    'follow_ups_per_year' => (int) env('OHA_FOLLOW_UPS_PER_YEAR', 3),
+    'follow_ups' => (int) env('OHA_FOLLOW_UPS', 3),
 
     /*
     | The demo site (demo.oha.africaymca.org): the same platform, for trying it with made-up

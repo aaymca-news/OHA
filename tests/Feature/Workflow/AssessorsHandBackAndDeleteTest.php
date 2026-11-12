@@ -69,7 +69,7 @@ it('lets an assessor stop working on an assessment, and asks the Administrators 
 
 it('lets only an assessor on the movement hand back, and only while work remains', function () {
     $open = $this->j->assessmentAt('form_uploaded');
-    $done = $this->j->assessmentAt('odp_signed');
+    $done = $this->j->assessmentAt('closed');
 
     expect(Gate::forUser($this->j->otherStaff)->inspect('handBack', $open)->message())->toContain('Only an assessor on this movement')
         ->and(Gate::forUser($this->j->admin)->allows('handBack', $open))->toBeFalse()
@@ -89,7 +89,7 @@ it('lets only the Super Administrator delete an assessment, and never an Adminis
 });
 
 it('deletes the whole assessment so the movement is not assessed again, keeping the audit trail', function () {
-    $assessment = $this->j->assessmentAt('odp_signed');
+    $assessment = $this->j->assessmentAt('closed');
     $files = FormUpload::query()->pluck('path')->merge(Document::query()->pluck('path'));
     $before = AuditEvent::query()->where('assessment_id', $assessment->id)->count();
 

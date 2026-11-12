@@ -12,23 +12,23 @@
     <link rel="icon" type="image/png" href="{{ asset('images/aaymca-icon.png') }}">
     <style>
         /* The platform's own tokens (resources/css/app.css): ink, muted text, lines, the red accent and its text red. */
-        :root { color-scheme: light; --ink: #231f20; --muted: #4d4d4f; --line: #c7c8ca; --accent: #ef3340; --red: #c8102e; --primary: #231f20; }
+        :root { color-scheme: light; --ink: #231f20; --muted: #4d4d4f; --line: #e7e5e0; --accent: #ef3340; --red: #c8102e; --primary: #231f20; }
         * { box-sizing: border-box; }
         body { margin: 0; min-height: 100vh; min-height: 100dvh; display: flex; flex-direction: column; align-items: center; justify-content: center;
-               gap: 1.5rem; padding: 1rem; background: #f6f6f6; color: var(--ink); line-height: 1.55;
+               gap: 1.5rem; padding: 1rem; background: #f6f6f3; color: var(--ink); line-height: 1.55;
                font-family: 'IBM Plex Sans', system-ui, -apple-system, 'Segoe UI', Roboto, Arial, sans-serif; }
         img { width: 14rem; max-width: 100%; height: auto; }
-        main { width: 100%; max-width: 28rem; background: #fff; border: 1.5px solid var(--line); border-top: 4px solid var(--accent); border-radius: 0.5rem; padding: 1.25rem; }
+        main { width: 100%; max-width: 28rem; background: #fff; border: 1px solid var(--line); border-top: 3px solid var(--accent); border-radius: 1rem; padding: 1.5rem; box-shadow: 0 8px 30px rgba(20, 20, 20, 0.06); }
         .code { margin: 0; font-size: 0.875rem; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--red); }
         h1 { margin: 0.25rem 0 0.5rem; font-size: 1.375rem; line-height: 1.25; }
         p { margin: 0 0 0.75rem; font-size: 0.9375rem; color: var(--muted); overflow-wrap: anywhere; }
         .actions { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-top: 1rem; }
-        a.button { display: inline-flex; align-items: center; min-height: 2.75rem; padding: 0.5rem 1rem; border-radius: 0.25rem; font-weight: 600;
-                   font-size: 0.9375rem; text-decoration: none; border: 1.5px solid var(--primary); }
+        a.button { display: inline-flex; align-items: center; min-height: 2.75rem; padding: 0.5rem 1rem; border-radius: 10px; font-weight: 600;
+                   font-size: 0.9375rem; text-decoration: none; border: 1px solid var(--primary); }
         a.primary { background: var(--primary); color: #fff; }
-        a.secondary { background: #fff; color: var(--primary); }
+        a.secondary { background: #fff; color: var(--primary); border-color: var(--line); }
         a:focus-visible { outline: 3px solid var(--primary); outline-offset: 2px; }
-        @media (min-width: 40rem) { main { padding: 1.5rem; } }
+        @media (min-width: 40rem) { main { padding: 2rem; } }
     </style>
 </head>
 <body>

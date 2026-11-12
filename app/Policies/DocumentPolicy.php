@@ -4,6 +4,7 @@ namespace App\Policies;
 
 use App\Enums\ArtefactState;
 use App\Enums\DocumentPurpose;
+use App\Models\Assessment;
 use App\Models\Document;
 use App\Models\User;
 use Illuminate\Auth\Access\Response;
@@ -55,7 +56,7 @@ class DocumentPolicy
             return Response::deny('It is with the Administrators. Ask them to send it back first.');
         }
         if ($artefact->assessment->isFrozen()) {
-            return Response::deny('The Board Chairperson has signed the ODP, so the OHA form, the report and the ODP are frozen.');
+            return Response::deny(Assessment::FROZEN);
         }
         if (! $user->oversees() && $document->created_by !== $user->id) {
             return Response::deny('Only '.($document->creator->name ?? 'the person who saved it').', who saved it, or an Administrator can withdraw it. Save a corrected version instead.');

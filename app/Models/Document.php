@@ -22,7 +22,7 @@ use Throwable;
  * one waits. An ODP version taken from Google Drive records the Drive version it was
  * read at, and which Google account last changed the document.
  */
-#[Fillable(['artefact_id', 'purpose', 'source', 'format', 'disk', 'path', 'original_name', 'size_bytes', 'sha256', 'note', 'created_by', 'created_at', 'approved_by', 'approved_at', 'extracted', 'drive_version', 'edited_by_email', 'changes', 'version_number'])]
+#[Fillable(['artefact_id', 'purpose', 'source', 'format', 'disk', 'path', 'original_name', 'size_bytes', 'sha256', 'note', 'created_by', 'created_at', 'approved_by', 'approved_at', 'extracted', 'drive_version', 'edited_by_email', 'changes', 'version_number', 'follow_up_number'])]
 #[WithoutTimestamps]
 class Document extends Model
 {
@@ -122,6 +122,7 @@ class Document extends Model
             'approved_at' => 'datetime',
             'extracted' => 'array',
             'changes' => 'array',
+            'follow_up_number' => 'integer',
         ];
     }
 }

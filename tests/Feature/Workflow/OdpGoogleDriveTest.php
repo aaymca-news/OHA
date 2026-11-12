@@ -142,7 +142,7 @@ it('sends an approved ODP changed in Google Drive back for approval, showing the
     expect($signature->document->versionNumber())->toBe(2);
 });
 
-it('takes a change while the ODP is with the Administrators, keeping it with them, and once it is signed only notes changes', function () {
+it('takes a change while the ODP is with the Administrators, keeping it with them, and once the assessment is closed only notes changes', function () {
     $assessment = $this->j->assessmentAt('odp_submitted');
     $this->drive->edit('edited while waiting', $this->j->assessor->email);
 
@@ -150,27 +150,27 @@ it('takes a change while the ODP is with the Administrators, keeping it with the
         ->and($this->j->odp($assessment)->state)->toBe(ArtefactState::PendingApproval);
 
     app(ApproveArtefact::class)->handle($this->j->odp($assessment), $this->j->admin);
-    $this->drive->edit('edited after approval, before signing', $this->j->assessor->email);
+    $this->drive->edit('edited after approval, before closing', $this->j->assessor->email);
     ($this->take)($assessment);
     app(SubmitForApproval::class)->handle($this->j->odp($assessment), $this->j->assessor);
     app(ApproveArtefact::class)->handle($this->j->odp($assessment), $this->j->admin);
-    $this->drive->edit('edited after signing', $this->j->assessor->email);
-    $this->j->sign($this->j->odp($assessment));
+    $this->drive->edit('edited after closing', $this->j->assessor->email);
+    $this->j->close($assessment);
 
-    // Signed: the change is noted for Stage 2, and the signed version stays the only one approved.
+    // Closed: the change is noted for Stage 2, and the approved version stays the only one.
     $result = ($this->take)($assessment);
     expect($result['outcome'])->toBe(TakeOdpFromDrive::SAVED)
         ->and($result['version']->purpose)->toBe(DocumentPurpose::AfterSigning)
         ->and($this->j->odp($assessment)->versions()->count())->toBe(1)
         ->and($this->j->odp($assessment)->changesAfterSigning()->count())->toBe(1)
         ->and(($this->take)($assessment)['outcome'])->toBe(TakeOdpFromDrive::UNCHANGED)
-        ->and(fn () => $this->j->uploadOdp($assessment, 'after signing'))->toThrow(WorkflowRuleBroken::class, 'frozen');
+        ->and(fn () => $this->j->uploadOdp($assessment, 'after closing'))->toThrow(WorkflowRuleBroken::class, 'frozen');
 
     // The link can still follow the document if the staff move to another copy.
     expect(app(LinkOdpToDrive::class)->handle($this->j->odp($assessment), Journey::DRIVE_URL, $this->j->assessor)->drive_url)->toBe(Journey::DRIVE_URL);
 
     $this->actingAs($this->j->assessor)->get(route('assessments.show', ['assessment' => $assessment, 'tab' => 'odp']))
-        ->assertSee('Changes made after signing')->assertSee('Changed in Google Drive by '.$this->j->assessor->email);
+        ->assertSee('Changes made after closing')->assertSee('Changed in Google Drive by '.$this->j->assessor->email);
 });
 
 it('tells the assessors when the Google Drive link stops working, and when it works again', function () {

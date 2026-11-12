@@ -21,10 +21,11 @@
         <span class="absolute -top-[5px] w-1 h-[18px] -ml-0.5 rounded-sm bg-on-surface shadow-[0_0_0_2px_#fff]" style="left: {{ $pct }}%"></span>
     </div>
     <div class="relative h-4 text-[0.6875rem] text-on-surface-variant" aria-hidden="true">
-        <span class="absolute left-0">0</span>
+        {{-- The ends give way to the band's label when it comes near them. --}}
+        @if (! $mine || $pct >= 25)<span class="absolute left-0">0</span>@endif
         @if ($mine)
             <span class="absolute whitespace-nowrap font-semibold text-on-surface bg-surface-container-lowest px-1 {{ $align }}" style="{{ $pct >= 15 && $pct <= 85 ? 'left: '.$pct.'%' : '' }}">{{ $mine['label'] }} · {{ (int) $mine['from'] }}–{{ (int) $mine['to'] }}%</span>
         @endif
-        <span class="absolute right-0">100</span>
+        @if (! $mine || $pct <= 75)<span class="absolute right-0">100</span>@endif
     </div>
 </div>

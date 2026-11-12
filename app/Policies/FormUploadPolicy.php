@@ -3,6 +3,7 @@
 namespace App\Policies;
 
 use App\Enums\ArtefactState;
+use App\Models\Assessment;
 use App\Models\FormUpload;
 use App\Models\User;
 use Illuminate\Auth\Access\Response;
@@ -86,7 +87,7 @@ class FormUploadPolicy
         // While the Administrators decide it may still be changed; they are told. Only the
         // signed ODP closes it.
         return $form->assessment->isFrozen()
-            ? Response::deny('The Board Chairperson has signed the ODP, so the OHA form, the report and the ODP are frozen.')
+            ? Response::deny(Assessment::FROZEN)
             : null;
     }
 }

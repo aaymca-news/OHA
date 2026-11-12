@@ -4,6 +4,7 @@ namespace App\Queries;
 
 use App\Enums\Stage;
 use App\Models\Assessment;
+use App\Models\Baseline;
 use App\Models\Category;
 use App\Models\Movement;
 use App\Models\MovementStatus;
@@ -39,6 +40,7 @@ final class AllianceInsights
             ->join('form_uploads as fu', 'fu.id', '=', 'cs.form_upload_id')
             ->whereIn('cs.assessment_id', $statuses->pluck('latest_assessment_id'))
             ->select('cs.assessment_id', 'fu.answers', 'fu.form_meta')->distinct()->get()->keyBy('assessment_id');
+        $baselines = Baseline::newestAnswers($statuses->pluck('latest_assessment_id')->all());
 
         $rated = [];
         foreach ($statuses as $status) {
@@ -47,8 +49,10 @@ final class AllianceInsights
                 continue;
             }
             $upload = $uploads[$status->latest_assessment_id] ?? null;
+            // The answers as they stand: the newest baseline's, once it has one.
+            $answers = $baselines[$status->latest_assessment_id] ?? ($upload !== null ? json_decode($upload->answers, true) : null);
             $profile = $upload !== null
-                ? (new Profile(json_decode($upload->answers, true) ?? [], json_decode($upload->form_meta, true) ?? []))->toArray()
+                ? (new Profile($answers ?? [], json_decode($upload->form_meta, true) ?? []))->toArray()
                 : [];
 
             $rated[$movement->id] = ['movement' => $movement, 'status' => $status, 'profile' => $profile];
@@ -60,7 +64,7 @@ final class AllianceInsights
     /**
      * Where every movement is in Stage 1: not assessed, which step is under way, or complete.
      *
-     * @return array{not_assessed: int, form: int, report: int, odp: int, sign: int, complete: int, closed: int, total: int}
+     * @return array{not_assessed: int, form: int, report: int, odp: int, close: int, complete: int, closed: int, total: int}
      */
     public function pipeline(): array
     {
@@ -69,7 +73,7 @@ final class AllianceInsights
         // Stage 2 done too: the follow-up cycle closed.
         $closed = Assessment::query()->whereIn('id', $latest->values())->whereNotNull('follow_up_closed_at')->pluck('id')->flip();
         $total = Movement::query()->count();
-        $counts = ['not_assessed' => $total - $latest->count(), 'form' => 0, 'report' => 0, 'odp' => 0, 'sign' => 0, 'complete' => 0, 'closed' => 0, 'total' => $total];
+        $counts = ['not_assessed' => $total - $latest->count(), 'form' => 0, 'report' => 0, 'odp' => 0, 'close' => 0, 'complete' => 0, 'closed' => 0, 'total' => $total];
 
         foreach ($latest as $assessmentId) {
             $stage = Stage::ofWork($work[$assessmentId] ?? null);
@@ -87,7 +91,8 @@ final class AllianceInsights
     public function heatmap(): array
     {
         $categories = Category::query()->weighted()->orderBy('form_order')->get();
-        $scores = DB::table('category_scores')->whereIn('assessment_id', $this->rated()->pluck('status.latest_assessment_id'))
+        // Each movement's score as it stands: its newest baseline.
+        $scores = DB::table('v_current_category_scores')->whereIn('assessment_id', $this->rated()->pluck('status.latest_assessment_id'))
             ->get()->groupBy('assessment_id');
 
         $rows = $this->rated()->map(function (array $r) use ($categories, $scores) {

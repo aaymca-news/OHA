@@ -12,11 +12,11 @@ use App\Models\User;
 use App\Oha\Answer;
 use App\Oha\FindingFields;
 use App\Oha\FormChecker;
-use App\Oha\FormDefinition;
 use App\Oha\FormReader;
 use App\Oha\FormWorkbookWriter;
 use App\Oha\Interpreter;
 use App\Oha\Question;
+use App\Oha\TypedAnswer;
 use App\Support\Audit;
 use App\Support\VersionPruner;
 use Closure;
@@ -123,7 +123,7 @@ final class SupplyAnswer
     }
 
     /**
-     * When the Board Chairperson signs the ODP: the approved upload goes back to the
+     * When the assessment is closed: the approved upload goes back to the
      * answers it was approved with, dropping any typed since. Its file already carries
      * those (see ApproveArtefact), so the copy written since goes. Part of signing, not a
      * person's step, so no policy is checked. Returns whether anything was dropped.
@@ -228,76 +228,18 @@ final class SupplyAnswer
     /** One answer, as its question asks for it; refused with a plain reason otherwise. */
     private function answer(Question $q, string $input, FormUpload $upload): int|float|string
     {
-        $text = trim($input);
-        if ($text === '') {
-            throw new WorkflowRuleBroken($q->type === 'choice' ? 'Choose an answer.' : 'Type the answer.');
-        }
-
-        $read = Interpreter::read($q, $text, Interpreter::currencyCode($upload->answers['Q208'] ?? null));
-        if (isset($read['unit'])) {
-            throw new WorkflowRuleBroken('That is '.$read['unit'].'; the form asks for '.($read['expected'] ?? Interpreter::expected($q)).'.');
-        }
-        if (! isset($read['value'])) {
-            throw new WorkflowRuleBroken(match ($q->type) {
-                'choice' => 'Choose one of: '.implode(', ', $q->options ?? []).'.',
-                'money' => 'Type the amount as one figure, for example 10005.',
-                'pct' => 'Type the percentage as one figure, for example 25 for 25%.',
-                default => 'Type '.Interpreter::expected($q).' as one figure, for example 12.',
-            });
-        }
-        $value = $read['value'];
-        if ($q->type === 'pct' && ($value < 0 || $value > 100)) {
-            throw new WorkflowRuleBroken('A percentage is between 0 and 100.');
-        }
-        if ($q->type === 'number' && $value < 0) {
-            throw new WorkflowRuleBroken('This cannot be less than 0.');
-        }
-        if ($q->type === 'text' && mb_strlen((string) $value) > 2000) {
-            throw new WorkflowRuleBroken('Keep the answer under 2,000 characters.');
-        }
-
-        return $value;
+        return TypedAnswer::one($q, $input, Interpreter::currencyCode($upload->answers['Q208'] ?? null));
     }
 
     /**
-     * The percentages of a group (income by source, expenditure by type): each line 0–100,
-     * blank for 0, adding up to 100.
+     * The percentages of a group (income by source, expenditure by type).
      *
      * @param  string|array<string, string|null>  $input
      * @return array<string, int|float>
      */
     private function shares(string $group, string|array $input): array
     {
-        $codes = match ($group) {
-            'income' => FormDefinition::INCOME,
-            'expense' => FormDefinition::EXPENSE,
-            default => throw new WorkflowRuleBroken('This group is not on the form.'),
-        };
-        $input = is_array($input) ? $input : [];
-
-        $shares = [];
-        foreach ($codes as $code) {
-            $text = trim((string) ($input[$code] ?? ''));
-            if ($text === '') {
-                continue;
-            }
-            $read = Interpreter::read(Interpreter::question($code) ?? throw new WorkflowRuleBroken('This question is not on the form.'), $text);
-            $value = $read['value'] ?? null;
-            if (! is_int($value) && ! is_float($value) || $value < 0 || $value > 100) {
-                throw new WorkflowRuleBroken($code.': type a percentage between 0 and 100, for example 25.');
-            }
-            $shares[$code] = $value;
-        }
-
-        if ($shares === []) {
-            throw new WorkflowRuleBroken('Type at least one percentage. Leave a line blank if it is 0.');
-        }
-        $sum = array_sum($shares);
-        if (abs($sum - 100) > 2) {
-            throw new WorkflowRuleBroken('These add up to '.round($sum, 1).'%. Together they should make 100%.');
-        }
-
-        return $shares;
+        return TypedAnswer::shares($group, $input);
     }
 
     /**

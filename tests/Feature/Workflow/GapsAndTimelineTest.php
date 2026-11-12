@@ -75,7 +75,7 @@ it('gives every assessment its four gate milestones, from the SLA', function () 
 
     $milestones = AssessmentMilestone::query()->where('assessment_id', $assessment->id)->orderBy('sort_order')->get();
 
-    expect($milestones->pluck('gate_code')->all())->toBe(['form', 'report', 'odp', 'board'])
+    expect($milestones->pluck('gate_code')->all())->toBe(['form', 'report', 'odp', 'close'])
         ->and($milestones->first()->due_on->toDateString())->toBe($opened->copy()->addDays(21)->toDateString())
         ->and($milestones->last()->due_on->toDateString())->toBe($opened->copy()->addDays(98)->toDateString());
 });

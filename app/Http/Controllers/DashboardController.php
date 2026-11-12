@@ -3,19 +3,21 @@
 namespace App\Http\Controllers;
 
 use App\Enums\BandCode;
-use App\Enums\Role;
-use App\Enums\Stage;
+use App\Enums\TaskProgress;
 use App\Models\Assessment;
 use App\Models\Movement;
 use App\Models\MovementStatus;
 use App\Models\OdpTask;
 use App\Models\User;
+use App\Oha\FollowUpSchedule;
 use App\Queries\AllianceInsights;
 use App\Queries\AllianceStats;
+use App\Queries\Journeys;
 use App\Queries\MovementSnapshot;
 use App\Queries\MyWork;
 use App\Queries\OdpActivity;
 use App\Queries\OdpProgress;
+use App\Support\DateFormats;
 use App\Support\MovementCycle;
 use App\Support\OdpTimeline;
 use Illuminate\Http\Request;
@@ -33,12 +35,14 @@ use Illuminate\View\View;
  */
 class DashboardController extends Controller
 {
-    public function __invoke(Request $request, MyWork $myWork, AllianceStats $stats, AllianceInsights $insights, OdpActivity $odps): View
+    public function __invoke(Request $request, MyWork $myWork, AllianceStats $stats, AllianceInsights $insights, OdpActivity $odps, Journeys $journeys): View
     {
         $user = $request->user();
 
         if (Gate::forUser($user)->denies('viewAllianceStats')) {
+            // What waits on them (never the optional signature or the gaps: those inform, see MyWork::QUIET).
             $work = collect($myWork->for($user))
+                ->reject(fn (array $group) => in_array($group['key'], MyWork::QUIET, true))
                 ->flatMap(fn (array $group) => collect($group['items'])->where('actionable', true))
                 ->take(6);
 
@@ -51,7 +55,7 @@ class DashboardController extends Controller
             'headline' => $stats->headline(),
             'bands' => $stats->bandDistribution(),
             'weakest' => $stats->weakestCategories(),
-            'due' => $stats->reassessmentDue(),
+            'due' => $stats->readyForNext(),
             'underWay' => Movement::withAssessmentUnderWay(),
             'insights' => $insights,
             'pipeline' => $insights->pipeline(),
@@ -60,6 +64,8 @@ class DashboardController extends Controller
             'ranked' => $statuses,
             'zones' => $this->zones($statuses),
             'odp' => $this->odpProgress(OdpTimeline::assessments()),
+            // Each movement's latest cycle, baseline by baseline.
+            'journeys' => $journeys->alliance(),
         ]);
     }
 
@@ -89,7 +95,7 @@ class DashboardController extends Controller
         $lastDone = $current === null ? $movement->lastAssessmentDone() : null;
         $odp = $showOdp ? OdpProgress::summary($tasks) : null;
         $canFollowUp = $showOdp && $gate->allows('viewFollowUp', $odpAssessment);
-        $canReport = $canFollowUp && $tasks->isNotEmpty() && $gate->allows('report', $tasks->first());
+        $canNote = $canFollowUp && $tasks->isNotEmpty() && $gate->allows('note', $tasks->first());
 
         return view('dashboard.board', [
             'movement' => $movement,
@@ -103,12 +109,12 @@ class DashboardController extends Controller
             // The cycle, gate by gate and on into the follow-up year.
             'cycle' => MovementCycle::steps($current ?? $lastDone, $status->next_assessment_on),
             'cycleOf' => $current ?? $lastDone,
-            'action' => $this->action($user, $work, $current, $showOdp ? $odpAssessment : null, $tasks, $odp, $canReport),
+            'action' => $this->action($work, $showOdp ? $odpAssessment : null, $canNote),
             'odpAssessment' => $showOdp ? $odpAssessment : null,
             'odp' => $odp,
             'priorities' => $showOdp ? OdpProgress::byPriority($tasks) : [],
             'canFollowUp' => $canFollowUp,
-            'canReport' => $canReport,
+            'canNote' => $canNote,
             'tasks' => $tasks,
             'assessors' => $movement->activeAssessors()->get(),
             'assessments' => Assessment::query()->with('score.band')->where('movement_id', $movement->id)->latest('assessed_on')->latest('id')->get()
@@ -119,38 +125,30 @@ class DashboardController extends Controller
     /**
      * The one thing waiting on this person, for the slim banner at the top of the
      * movement's dashboard; null when nothing is (the page then opens onto its figures).
-     * The Board Chairperson: an ODP to sign (in My Work). The General Secretary: ODP
-     * tasks overdue, or sent back by an assessor, to report on. Nothing else: what is
-     * under way or on track is already in the figures and the cycle.
+     * Anything waiting on them in My Work (the Board Chairperson's signature is optional,
+     * so it never shows here). The General Secretary: a follow-up that is open, for their
+     * evidence and notes. Nothing else: what is under way or on track is already in the
+     * figures and the cycle.
      *
      * @param  Collection<int, mixed>  $work
-     * @param  Collection<int, OdpTask>  $tasks
-     * @param  array{total: int, done: int, waiting: int, overdue: int, blocked: int, pct: int}|null  $odp
      * @return array{title: string, href: string, button: string}|null
      */
-    private function action(User $user, Collection $work, ?Assessment $current, ?Assessment $odpAssessment, Collection $tasks, ?array $odp, bool $canReport): ?array
+    private function action(Collection $work, ?Assessment $odpAssessment, bool $canNote): ?array
     {
         if ($work->isNotEmpty()) {
-            $toSign = $current !== null && $user->role === Role::Board && Stage::of($current) === Stage::Sign;
             $n = $work->count();
 
-            return $toSign
-                ? ['title' => 'Your '.$current->period_label.' ODP is ready for your signature', 'href' => route('my-work'), 'button' => 'Review and sign']
-                : ['title' => $n.' '.Str::plural('item', $n).' '.($n === 1 ? 'needs' : 'need').' you in My Work', 'href' => route('my-work'), 'button' => 'Open My Work'];
+            return ['title' => $n.' '.Str::plural('item', $n).' '.($n === 1 ? 'needs' : 'need').' you in My Work', 'href' => route('my-work'), 'button' => 'Open My Work'];
         }
 
-        if ($canReport && $odpAssessment !== null && $odp !== null) {
-            $overdue = $odp['overdue'];
-            $returned = $tasks->filter(fn (OdpTask $t) => ! $t->isSettled() && $t->returned_reason !== null)->count();
-            $tasksOf = fn (int $n) => $n.' ODP '.Str::plural('task', $n);
-            $title = match (true) {
-                $overdue > 0 && $returned > 0 => $tasksOf($overdue).' '.($overdue === 1 ? 'is' : 'are').' overdue and '.$returned.' sent back: report their progress',
-                $overdue > 0 => $tasksOf($overdue).' '.($overdue === 1 ? 'is' : 'are').' overdue: report '.($overdue === 1 ? 'its' : 'their').' progress',
-                $returned > 0 => $tasksOf($returned).' '.($returned === 1 ? 'was' : 'were').' sent back by your assessors: update '.($returned === 1 ? 'it' : 'them'),
-                default => null,
-            };
-
-            return $title !== null ? ['title' => $title, 'href' => route('follow-up.show', $odpAssessment), 'button' => 'Report progress'] : null;
+        // A follow-up is open: the time for the movement's evidence and notes.
+        $next = $canNote && $odpAssessment !== null ? FollowUpSchedule::next($odpAssessment) : null;
+        if ($next !== null && $next['state'] === FollowUpSchedule::OPEN) {
+            return [
+                'title' => 'Follow-up '.$next['number'].' is open'.($next['due_on'] !== null ? ', planned for '.$next['due_on']->format(DateFormats::DAY) : '').': add your evidence and notes on the tasks',
+                'href' => route('follow-up.show', $odpAssessment),
+                'button' => 'Open the follow-up',
+            ];
         }
 
         return null;
@@ -181,21 +179,24 @@ class DashboardController extends Controller
     }
 
     /**
-     * How the ODPs are being carried out: every task's state across the region, and
-     * per movement, how many of its tasks are done and how many are overdue.
+     * How the ODPs are being carried out: across the region, the tasks blocked (as set at
+     * the last follow-ups) and the follow-ups past their agreed date; per movement, how
+     * many of its tasks are done.
      *
      * @param  Collection<int, Assessment>  $assessments
-     * @return array{counts: Collection<array-key, int>, total: int, rows: list<array<string, mixed>>}
+     * @return array{blocked: int, late: int, total: int, rows: list<array<string, mixed>>}
      */
     private function odpProgress(Collection $assessments): array
     {
         $tasks = OdpTask::query()->whereIn('assessment_id', $assessments->pluck('id'))->get();
+        // Each movement side by side, falling behind first (App\Queries\OdpProgress).
+        $rows = OdpProgress::alliance($assessments);
 
         return [
-            'counts' => $tasks->countBy(fn (OdpTask $t) => $t->state()),
+            'blocked' => $tasks->filter(fn (OdpTask $t) => ! $t->done && $t->progress === TaskProgress::Blocked)->count(),
+            'late' => collect($rows)->filter(fn (array $r) => $r['behind'])->count(),
             'total' => $tasks->count(),
-            // Each movement side by side, falling behind first (App\Queries\OdpProgress).
-            'rows' => OdpProgress::alliance($assessments),
+            'rows' => $rows,
         ];
     }
 }

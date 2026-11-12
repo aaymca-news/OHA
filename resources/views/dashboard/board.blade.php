@@ -5,9 +5,10 @@
     A National Movement's own dashboard, for its Board Chairperson and National General
     Secretary (design standard of 10 Nov 2026), laid out like AAYMCA's: a slim banner only
     when something waits on this person, then four key figures, the health by category and
-    the assessment cycle, the ODP by priority and by deadline, and the movement in numbers,
-    its contacts and its documents. Built from the shared components (x-action-banner,
-    x-kpi, x-category-bars, x-cycle-timeline, x-priority-bars, x-task-deadline).
+    the assessment cycle, the ODP by priority and its tasks still open (as set at the last
+    follow-up: tasks have no deadlines), and the movement in numbers, its contacts and its
+    documents. Built from the shared components (x-action-banner, x-kpi, x-category-bars,
+    x-cycle-timeline, x-priority-bars, x-task-line).
 --}}
 @php
     $me = auth()->user();
@@ -15,8 +16,12 @@
     $stage = Stage::of($cycleOf ?? $latest);
     $firstName = \Illuminate\Support\Str::before($me->name, ' ');
     $open = $tasks->reject(fn ($t) => $t->isSettled());
-    $deadlines = $open->sortBy(fn ($t) => [$t->due_on === null ? 1 : 0, $t->due_on?->timestamp ?? 0])->take(5);
-    $relative = fn ($date) => $date->isFuture() ? 'In '.$date->copy()->startOfDay()->diffForHumans(today(), ['syntax' => \Carbon\CarbonInterface::DIFF_ABSOLUTE, 'parts' => 1]) : 'Due now';
+    // Still open, blocked first, then in progress, then not started.
+    $stillOpen = $open->sortBy(fn ($t) => match ($t->progress) {
+        \App\Enums\TaskProgress::Blocked => 0,
+        \App\Enums\TaskProgress::InProgress => 1,
+        default => 2,
+    })->take(5);
 @endphp
 <x-layouts.app :title="$status->name" :subtitle="'Welcome back, '.$firstName.' · '.$me->role->label()">
     <x-slot:actions>
@@ -50,27 +55,26 @@
         <x-kpi label="ODP done" :value="$odp ? $odp['done'] : '—'" :unit="$odp ? ' / '.$odp['total'].' '.\Illuminate\Support\Str::plural('task', $odp['total']) : null">
             @if ($odp && $odp['total'] > 0)
                 <x-slot:visual><x-progress-ring :value="$odp['done']" :max="$odp['total']" :size="72" /></x-slot:visual>
-                Confirmed by your assessors
+                As set at your last follow-up
             @else
                 {{ $odpAssessment ? 'Its tasks are not entered yet' : 'No approved ODP yet' }}
             @endif
         </x-kpi>
 
-        <x-kpi label="Overdue" :value="$odp ? $odp['overdue'] : '—'" :tone="($odp['overdue'] ?? 0) > 0 ? 'critical' : null">
+        <x-kpi label="Blocked" :value="$odp ? $odp['blocked'] : '—'" :tone="($odp['blocked'] ?? 0) > 0 ? 'critical' : null">
             @if (! $odp)
                 Shown once your ODP is approved
-            @elseif ($odp['overdue'] > 0)
+            @elseif ($odp['blocked'] > 0)
                 of {{ $open->count() }} {{ \Illuminate\Support\Str::plural('task', $open->count()) }} still open
             @else
-                Nothing overdue{{ $open->isNotEmpty() ? ' · '.$open->count().' still open' : '' }}
+                Nothing blocked{{ $open->isNotEmpty() ? ' · '.$open->count().' still open' : '' }}
             @endif
         </x-kpi>
 
-        <x-kpi label="Next assessment" :value="$status->next_assessment_on?->asMonth() ?? 'Not scheduled'">
-            @if ($status->reassessment_overdue)
-                <span class="text-critical-ink font-semibold">Past its date</span>
-            @elseif ($status->next_assessment_on)
-                {{ $relative($status->next_assessment_on) }}{{ $latest ? ' · last '.$latest->period_label : '' }}
+        {{-- No band-based date (decided 12 Nov 2026): it starts once the cycle is closed. --}}
+        <x-kpi label="Next assessment" :value="$stage->nextAssessment($status->next_assessment_on)[0]">
+            @if ($stage->nextAssessment($status->next_assessment_on)[1] === 'critical')
+                <span class="text-critical-ink font-semibold">Past its planned date</span>
             @else
                 {{ $latest ? 'Last: '.$latest->period_label : 'Not yet assessed' }}
             @endif
@@ -100,7 +104,7 @@
         @if ($canFollowUp)
             <x-slot:actions>
                 <a href="{{ route('follow-up.show', $odpAssessment) }}" class="inline-flex items-center gap-sm min-h-10 px-[14px] rounded-[10px] border border-[#d9d7d1] bg-surface-container-lowest text-[0.84375rem] font-semibold text-on-surface hover:bg-[#f2f1ee]">
-                    {{ $canReport ? 'Report progress' : 'Open the follow-up' }}
+                    {{ $canNote ? 'Add notes or evidence' : 'Open the follow-up' }}
                 </a>
             </x-slot:actions>
         @endif
@@ -112,24 +116,24 @@
             <div class="grid gap-x-xl gap-y-lg lg:grid-cols-2">
                 <x-priority-bars :priorities="$priorities" />
                 <div class="flex flex-col">
-                    <p class="text-[0.75rem] font-semibold uppercase tracking-[0.06em] text-on-surface-variant">Deadlines</p>
-                    @if ($deadlines->isEmpty())
+                    <p class="text-[0.75rem] font-semibold uppercase tracking-[0.06em] text-on-surface-variant">Still open</p>
+                    @if ($stillOpen->isEmpty())
                         <p class="mt-sm"><x-status-pill tone="good">Every task is done</x-status-pill></p>
                     @else
                         <ul class="mt-1">
-                            @foreach ($deadlines as $task)
-                                <x-task-deadline :task="$task" />
+                            @foreach ($stillOpen as $task)
+                                <x-task-line :task="$task" />
                             @endforeach
                         </ul>
                     @endif
                     @if ($canFollowUp)
                         <x-more-link :href="route('follow-up.show', $odpAssessment)" class="self-start mt-sm -ml-[10px]">All {{ $tasks->count() }} tasks</x-more-link>
-                    @elseif ($tasks->count() > $deadlines->count())
+                    @elseif ($tasks->count() > $stillOpen->count())
                         <details class="text-[0.875rem] mt-sm">
                             <summary class="cursor-pointer font-semibold w-fit">All {{ $tasks->count() }} tasks</summary>
                             <ul class="flex flex-col mt-xs">
                                 @foreach ($tasks as $task)
-                                    @include('timelines._task', ['task' => $task])
+                                    <x-task-line :task="$task" />
                                 @endforeach
                             </ul>
                         </details>

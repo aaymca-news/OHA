@@ -3,7 +3,6 @@
 namespace App\Actions\Oha;
 
 use App\Actions\Concerns\EnforcesPolicy;
-use App\Enums\TaskProgress;
 use App\Exceptions\WorkflowRuleBroken;
 use App\Models\Assessment;
 use App\Models\Gate;
@@ -118,7 +117,7 @@ final class EditTimeline
     /**
      * An ODP task typed in: the ODP could not be read, or left it out.
      *
-     * @param  array{task: string, ref?: string|null, responsible?: string|null, due_on?: string|null}  $details
+     * @param  array{task: string, ref?: string|null, responsible?: string|null}  $details
      */
     public function addTask(Assessment $assessment, array $details, User $user): OdpTask
     {
@@ -127,30 +126,28 @@ final class EditTimeline
         if ($task === '') {
             throw new WorkflowRuleBroken('Say what the task is.');
         }
-        $due = ($details['due_on'] ?? null) !== null ? $this->date($details['due_on'], $task) : null;
 
-        return DB::transaction(function () use ($assessment, $details, $task, $due, $user): OdpTask {
+        return DB::transaction(function () use ($assessment, $details, $task, $user): OdpTask {
             $created = $assessment->odpTasks()->create([
                 'source' => OdpTask::TYPED,
                 'ref' => $this->clean($details['ref'] ?? null),
                 'task' => $task,
                 'responsible' => $this->clean($details['responsible'] ?? null),
-                'due_on' => $due,
                 'sort_order' => 1000 + $assessment->odpTasks()->count(),
                 'edited_by' => $user->id,
                 'edited_at' => now(),
             ]);
-            $this->recorded($assessment, $user, 'ODP task added: "'.Str::limit($task, 60).'" '.($due ?? 'no date'));
+            $this->recorded($assessment, $user, 'ODP task added: "'.Str::limit($task, 60).'"');
 
             return $created;
         });
     }
 
     /**
-     * Corrects an ODP task: its deadline (read wrongly, or not at all), who is
-     * responsible, whether it is done, and its wording.
+     * Corrects an ODP task: its wording and who is responsible. Tasks have no deadlines of
+     * their own, and where one stands is set at the follow-ups (decided 12 Nov 2026).
      *
-     * @param  array{task: string, responsible?: string|null, due_on?: string|null, done: bool}  $details
+     * @param  array{task: string, responsible?: string|null}  $details
      */
     public function updateTask(OdpTask $odpTask, array $details, User $user): OdpTask
     {
@@ -160,31 +157,14 @@ final class EditTimeline
         if ($task === '') {
             throw new WorkflowRuleBroken('Say what the task is.');
         }
-        $due = ($details['due_on'] ?? null) !== null ? $this->date($details['due_on'], $task) : null;
 
-        return DB::transaction(function () use ($odpTask, $assessment, $details, $task, $due, $user): OdpTask {
-            $odpTask->fill(['task' => $task, 'responsible' => $this->clean($details['responsible'] ?? null), 'due_on' => $due, 'done' => $details['done']]);
+        return DB::transaction(function () use ($odpTask, $assessment, $details, $task, $user): OdpTask {
+            $odpTask->fill(['task' => $task, 'responsible' => $this->clean($details['responsible'] ?? null)]);
             if (! $odpTask->isDirty()) {
                 return $odpTask;
             }
-
-            $changes = [];
-            if ($odpTask->isDirty('due_on')) {
-                $changes[] = 'due '.($odpTask->getOriginal('due_on')?->toDateString() ?? 'no date').' → '.($due ?? 'no date');
-            }
-            if ($odpTask->isDirty('done')) {
-                $changes[] = $details['done'] ? 'done' : 'reopened';
-                // Ticked by an assessor: Done and confirmed, as on the Follow-up page.
-                $odpTask->fill($details['done']
-                    ? ['progress' => TaskProgress::Done, 'confirmed_by' => $user->id, 'confirmed_at' => now(), 'returned_reason' => null]
-                    : ['progress' => TaskProgress::InProgress, 'confirmed_by' => null, 'confirmed_at' => null]);
-            }
-            if ($odpTask->isDirty('task') || $odpTask->isDirty('responsible')) {
-                $changes[] = 'details corrected';
-            }
-            // A date a person chose is no longer a guess.
-            $odpTask->fill(['date_guessed' => $odpTask->isDirty('due_on') ? false : $odpTask->date_guessed, 'edited_by' => $user->id, 'edited_at' => now()])->save();
-            $this->recorded($assessment, $user, 'ODP task "'.Str::limit($task, 60).'": '.implode(', ', $changes));
+            $odpTask->fill(['edited_by' => $user->id, 'edited_at' => now()])->save();
+            $this->recorded($assessment, $user, 'ODP task "'.Str::limit($task, 60).'": details corrected');
 
             return $odpTask;
         });

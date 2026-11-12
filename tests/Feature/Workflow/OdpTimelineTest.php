@@ -72,14 +72,14 @@ it('lets the assessors correct a task, and keeps the correction when a newer ODP
     $first = ($this->tasks)()->first();
 
     $this->actingAs($this->j->assessor)->put(route('timeline.tasks.update', $first), [
-        'task' => 'Draft the strategy', 'responsible' => 'General Secretary', 'due_on' => '2026-06-15', 'done' => '0',
+        'task' => 'Draft the strategy', 'responsible' => 'The Finance Committee',
     ])->assertSessionHasNoErrors();
 
     ($this->upload)(($this->workbook)('By July 2026'));
 
     $again = ($this->tasks)()->first();
     expect($again->id)->not->toBe($first->id)
-        ->and($again->due_on->toDateString())->toBe('2026-06-15')
+        ->and($again->responsible)->toBe('The Finance Committee')
         ->and($again->edited_by)->toBe($this->j->assessor->id)
         ->and($this->assessment->auditEvents()->where('action', 'timeline.updated')->exists())->toBeTrue();
 });
@@ -87,27 +87,27 @@ it('lets the assessors correct a task, and keeps the correction when a newer ODP
 it('says why an ODP that is not a workbook cannot be read, and takes its tasks typed in', function () {
     $this->j->uploadOdp($this->assessment, 'Zambia ODP as a PDF');
 
-    $this->actingAs($this->j->assessor)->get(route('timelines', ['movement' => 'zambia']))->assertOk()
+    $this->actingAs($this->j->assessor)->get(route('timelines', ['tab' => 'odp', 'movement' => 'zambia']))->assertOk()
         ->assertSee('cannot be read automatically')->assertSee('Add a task');
 
     $this->actingAs($this->j->assessor)->post(route('timeline.tasks.store', $this->assessment), [
-        'ref' => '2.1', 'task' => 'Hold a Board retreat', 'responsible' => 'Board', 'due_on' => '2026-11-30',
+        'ref' => '2.1', 'task' => 'Hold a Board retreat', 'responsible' => 'Board',
     ])->assertSessionHasNoErrors();
 
     expect(($this->tasks)()->sole()->only(['ref', 'task', 'source']))->toBe(['ref' => '2.1', 'task' => 'Hold a Board retreat', 'source' => 'typed']);
-    $this->actingAs($this->j->assessor)->get(route('timelines', ['movement' => 'zambia']))->assertSee('Hold a Board retreat')->assertSee('Typed in');
+    $this->actingAs($this->j->assessor)->get(route('timelines', ['tab' => 'odp', 'movement' => 'zambia']))->assertSee('Hold a Board retreat')->assertSee('Typed in');
 });
 
 it('shows staff only the movements they assess, and lets them change only those', function () {
     ($this->upload)(($this->workbook)());
     $task = ($this->tasks)()->first();
 
-    $this->actingAs($this->j->otherStaff)->get(route('timelines'))->assertOk()
+    $this->actingAs($this->j->otherStaff)->get(route('timelines', ['tab' => 'odp']))->assertOk()
         ->assertSee('None of the movements you assess has an ODP yet')->assertDontSee('Draft the strategy');
     $this->actingAs($this->j->otherStaff)->put(route('timeline.tasks.update', $task), ['task' => 'Changed', 'done' => '1'])
         ->assertSessionHasErrors('action');
     expect($task->refresh()->task)->toBe('Draft the strategy');
 
-    $this->actingAs($this->j->assessor)->get(route('timelines'))->assertOk()->assertSee('Zambia YMCA')->assertSee('Draft the strategy');
-    $this->actingAs($this->j->admin)->get(route('timelines'))->assertOk()->assertSee('Draft the strategy')->assertSee('Set the date');
+    $this->actingAs($this->j->assessor)->get(route('timelines', ['tab' => 'odp']))->assertOk()->assertSee('Zambia YMCA')->assertSee('Draft the strategy');
+    $this->actingAs($this->j->admin)->get(route('timelines', ['tab' => 'odp']))->assertOk()->assertSee('Draft the strategy')->assertSee('Correct');
 });

@@ -1,59 +1,47 @@
 {{--
-    One ODP task on the follow-up page: a compact row (its status, the task, who and when,
-    its evidence), and a side panel to work on it. The panel puts the decision first (an
-    assessor confirming a reported Done), then where it stands, its evidence (added right
-    here: it goes into Resources too), what has happened to it, and, out of the way,
-    dropping it. Several of these forms share field names on one page, so their controls
-    are plain (no old()). Expects $task, $status (OdpTask::followUpStatus), $canReport,
-    $canConfirm, $canDrop, $evidence (the library: id => title).
+    One ODP task on the follow-up page: a compact row (where it stands, the task, who does
+    it, its evidence), and a side panel. Where it stands is set at each follow-up meeting,
+    for every task together (decided 12 Nov 2026); tasks have no deadlines of their own.
+    Between the meetings the panel takes a note and evidence (added right here: it goes
+    into Resources too), shows what has happened to it, and, out of the way, dropping it.
+    Several of these forms share field names on one page, so their controls are plain (no
+    old()). Expects $task, $status (OdpTask::followUpStatus), $canNote, $canDrop, $evidence
+    (the library: id => title).
 --}}
-@use('App\Enums\TaskProgress')
 @use('App\Models\OdpTask')
 @use('Illuminate\Support\Str')
 @php
-    $progress = $task->progress;
-    $waiting = $task->awaitsConfirmation();
     $settled = $task->carried_to_assessment_id !== null || $task->isDropped();
-    $report = $canReport && ! $settled;
-    $confirm = $canConfirm && $waiting && ! $assessment->isFollowUpClosed();
+    $note = $canNote && ! $settled;
     $drop = $canDrop && ! $task->done && $task->carried_to_assessment_id === null;
-    $overdue = $status['key'] === 'overdue' && $status['label'] === 'Overdue';
     $control = \App\Support\Ui::control(false, 'sm');
-    $when = $task->done && $task->confirmed_at ? 'Done '.$task->confirmed_at->asDay() : ($task->due_on ? 'Due '.$task->due_on->asDay() : 'No date set');
-    $meta = collect([$task->responsible ? 'By '.$task->responsible : null, $when])->filter()->join(' · ');
-    $dot = fn (TaskProgress $p) => match ($p) {
-        TaskProgress::Done => 'bg-band-strong',
-        TaskProgress::InProgress => 'bg-band-developing',
-        TaskProgress::Blocked => 'bg-band-critical',
-        default => 'bg-band-notstarted',
-    };
+    $meta = collect([$task->responsible ? 'By '.$task->responsible : null, $task->done && $task->confirmed_at ? 'Done '.$task->confirmed_at->asDay() : null])->filter()->join(' · ');
 
     // What has happened to it, newest first.
     $activity = collect([
         $task->isDropped() ? ['icon' => 'block', 'text' => 'Dropped'.($task->dropper ? ' by '.$task->dropper->name : '').($task->dropped_reason ? ': “'.$task->dropped_reason.'”' : ''), 'at' => $task->dropped_at] : null,
         $task->carriedTo ? ['icon' => 'redo', 'text' => 'Carried into the '.$task->carriedTo->period_label.' assessment', 'at' => null] : null,
-        $task->done && $task->confirmer ? ['icon' => 'verified', 'text' => 'Confirmed done by '.$task->confirmer->name, 'at' => $task->confirmed_at] : null,
-        $task->returned_reason ? ['icon' => 'undo', 'text' => 'Sent back: “'.$task->returned_reason.'”', 'at' => null] : null,
-        $task->reporter ? ['icon' => 'edit_note', 'text' => $task->reporter->name.' reported it '.Str::lower($progress->label()).($task->progress_note ? ': “'.$task->progress_note.'”' : ''), 'at' => $task->reported_at] : null,
+        $task->done && $task->confirmer ? ['icon' => 'verified', 'text' => 'Marked done at a follow-up by '.$task->confirmer->name, 'at' => $task->confirmed_at] : null,
+        $task->reporter && $task->progress_note ? ['icon' => 'edit_note', 'text' => $task->reporter->name.' noted: “'.$task->progress_note.'”', 'at' => $task->reported_at] : null,
         $task->source === OdpTask::CARRIED ? ['icon' => 'history', 'text' => 'Carried over'.($task->carriedFrom?->assessment ? ' from '.$task->carriedFrom->assessment->period_label : ''), 'at' => null] : null,
     ])->filter()->values();
 @endphp
 <li id="task-{{ $task->id }}" x-show="filter === 'all' || filter === '{{ $status['key'] }}'"
     class="flex flex-wrap items-center gap-x-md gap-y-sm px-lg py-md border-t border-[#f2f1ec] first:border-0 hover:bg-[#fafaf8]"
-    x-data="{ open: false, kind: 'file', back: false, dropping: false, fileName: '' }"
+    x-data="{ open: false, kind: 'file', dropping: false, fileName: '' }"
     x-effect="document.documentElement.classList.toggle('overflow-hidden', open)"
     x-on:keydown.escape.window="open = false">
     <x-status-pill :tone="$status['tone']" class="min-w-[8.5rem]">{{ $status['label'] }}</x-status-pill>
     <div class="flex-[999_1_18rem] min-w-0 flex flex-col gap-[2px]">
         <span class="text-[0.9375rem] font-semibold">@if ($task->ref)<span class="text-on-surface-variant font-normal">{{ $task->ref }} · </span>@endif{{ $task->task }}</span>
-        <span class="text-[0.8125rem] text-on-surface-variant">{{ $meta }}</span>
+        @if ($meta !== '')<span class="text-[0.8125rem] text-on-surface-variant">{{ $meta }}</span>@endif
     </div>
     <span class="inline-flex items-center gap-xs text-[0.8125rem] text-on-surface-variant">
         <span class="material-symbols-outlined text-[1rem]" aria-hidden="true">attach_file</span>{{ $task->evidence ? '1 evidence' : 'No evidence' }}
     </span>
     <button type="button" x-on:click="open = true"
             class="min-h-[40px] rounded-[10px] border border-[#e7e5e0] bg-transparent px-[14px] text-[0.84375rem] font-semibold hover:bg-surface-container-low">
-        {{ $report || $confirm || $drop ? 'Update' : 'Details' }}<span class="sr-only">: {{ $task->task }}</span>
+        {{ $note || $drop ? 'Note or evidence' : 'Details' }}<span class="sr-only">: {{ $task->task }}</span>
     </button>
 
     {{-- The side panel --}}
@@ -84,61 +72,18 @@
                     @if ($task->responsible)
                         <span class="inline-flex items-center gap-[5px]"><span class="material-symbols-outlined text-[1rem]" aria-hidden="true">person</span>{{ $task->responsible }}</span>
                     @endif
-                    <span @class(['inline-flex items-center gap-[5px]', 'font-semibold text-critical-ink' => $overdue])>
-                        <span class="material-symbols-outlined text-[1rem]" aria-hidden="true">event</span>{{ $when }}
-                    </span>
                 </div>
+                <p class="text-[0.8125rem] text-on-surface-variant">Where it stands is set at each follow-up meeting, for every task together.</p>
             </header>
 
             {{-- Body --}}
             <div class="flex flex-1 flex-col gap-xl overflow-y-auto px-lg py-lg">
 
-                {{-- The decision first: an assessor confirming a reported Done --}}
-                @if ($confirm)
-                    <section class="flex flex-col gap-md rounded-2xl border border-[#d6e2f5] bg-info-wash p-md">
-                        <div class="flex items-start gap-sm">
-                            <span class="material-symbols-outlined mt-[1px] text-[1.25rem] text-info-ink" aria-hidden="true">hourglass_top</span>
-                            <div class="flex flex-col gap-[2px]">
-                                <p class="text-[0.9375rem] font-semibold text-info-ink">Reported done: is it?</p>
-                                <p class="text-[0.84375rem] text-info-ink/80">{{ $task->reporter?->name ?? 'The movement' }} reported this done{{ $task->reported_at ? ' on '.$task->reported_at->asDay() : '' }}. Confirm it, or send it back saying what is missing.</p>
-                            </div>
-                        </div>
-                        <div class="flex flex-wrap gap-sm">
-                            <form method="POST" action="{{ route('follow-up.confirm', $task) }}">
-                                @csrf
-                                <input type="hidden" name="confirmed" value="1">
-                                <x-button size="sm" icon="verified">Confirm done</x-button>
-                            </form>
-                            <x-button type="button" variant="secondary" size="sm" x-on:click="back = ! back">Not yet</x-button>
-                        </div>
-                        <form method="POST" action="{{ route('follow-up.confirm', $task) }}" x-show="back" x-cloak class="flex flex-col gap-sm">
-                            @csrf
-                            <input type="hidden" name="confirmed" value="0">
-                            <label class="flex flex-col gap-xs text-[0.84375rem] font-semibold text-info-ink">What is still missing?
-                                <textarea name="reason" rows="2" required maxlength="2000" @class([...$control, 'w-full font-normal' => true])></textarea>
-                            </label>
-                            <x-button variant="secondary" size="sm" icon="undo" class="self-start">Send it back</x-button>
-                        </form>
-                    </section>
-                @endif
-
-                {{-- Where it stands --}}
-                @if ($report)
-                    <form id="progress-{{ $task->id }}" method="POST" action="{{ route('follow-up.progress', $task) }}" class="flex flex-col gap-md">
+                {{-- A note between the follow-ups --}}
+                @if ($note)
+                    <form id="note-{{ $task->id }}" method="POST" action="{{ route('follow-up.note', $task) }}" class="flex flex-col gap-md">
                         @csrf
-                        <fieldset class="flex flex-col gap-sm">
-                            <legend class="mb-sm text-[0.9375rem] font-semibold">Where it stands</legend>
-                            <div class="grid grid-cols-2 gap-[4px] rounded-xl bg-surface-container-low p-[4px] sm:grid-cols-4">
-                                @foreach (TaskProgress::cases() as $option)
-                                    <label class="flex min-h-[44px] cursor-pointer items-center justify-center gap-[7px] rounded-[9px] px-sm text-[0.84375rem] font-semibold text-on-surface-variant hover:text-on-surface has-[:checked]:bg-surface-container-lowest has-[:checked]:text-on-surface has-[:checked]:shadow-[0_1px_3px_rgba(20,20,20,0.12)] has-[:focus-visible]:outline has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-on-surface">
-                                        <input type="radio" name="progress" value="{{ $option->value }}" @checked($progress === $option) class="sr-only">
-                                        <span class="size-[8px] rounded-full {{ $dot($option) }}" aria-hidden="true"></span>{{ $option->label() }}
-                                    </label>
-                                @endforeach
-                            </div>
-                            <p class="text-[0.8125rem] text-on-surface-variant">A “Done” from the General Secretary counts once an assessor confirms it.</p>
-                        </fieldset>
-                        <label class="flex flex-col gap-xs text-[0.875rem] font-semibold">Note
+                        <label class="flex flex-col gap-xs text-[0.9375rem] font-semibold">Note
                             <textarea name="note" rows="3" maxlength="2000" placeholder="What was done, or what is in the way"
                                       @class([...$control, 'w-full font-normal' => true])>{{ $task->progress_note }}</textarea>
                         </label>
@@ -158,6 +103,7 @@
                     </form>
                 @endif
 
+
                 {{-- Evidence --}}
                 <section class="flex flex-col gap-md" aria-labelledby="task-{{ $task->id }}-evidence">
                     <h4 id="task-{{ $task->id }}-evidence" class="text-[0.9375rem] font-semibold">Evidence</h4>
@@ -169,11 +115,11 @@
                             <div class="min-w-0 flex-1 text-[0.875rem]"><x-evidence-link :doc="$task->evidence" /></div>
                             <span class="text-[0.75rem] font-semibold text-good-ink">In Resources</span>
                         </div>
-                    @elseif (! $report)
+                    @elseif (! $note)
                         <p class="text-[0.875rem] text-on-surface-variant">None linked.</p>
                     @endif
 
-                    @if ($report)
+                    @if ($note)
                         <form method="POST" action="{{ route('follow-up.evidence', $task) }}" enctype="multipart/form-data" class="flex flex-col gap-sm">
                             @csrf
                             <div role="group" aria-label="Add a file or a link" class="inline-grid grid-cols-2 gap-[4px] self-start rounded-xl bg-surface-container-low p-[4px]">
@@ -254,11 +200,11 @@
                 @endif
             </div>
 
-            {{-- Footer: saving where it stands --}}
-            @if ($report)
+            {{-- Footer: saving the note --}}
+            @if ($note)
                 <footer class="flex items-center justify-end gap-sm border-t border-[#efede8] bg-surface-container-lowest px-lg py-md">
                     <x-button type="button" variant="secondary" x-on:click="open = false">Cancel</x-button>
-                    <x-button type="submit" form="progress-{{ $task->id }}" icon="check">Save</x-button>
+                    <x-button type="submit" form="note-{{ $task->id }}" icon="check">Save the note</x-button>
                 </footer>
             @endif
         </div>

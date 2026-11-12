@@ -17,6 +17,7 @@ use Illuminate\Support\Carbon;
  * @property int|null $latest_assessment_id
  * @property string|null $pct
  * @property string $band_code
+ * @property Carbon|null $last_assessed_on
  * @property Carbon|null $next_assessment_on
  * @property bool $reassessment_overdue
  * @property bool $has_odp

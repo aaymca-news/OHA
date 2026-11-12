@@ -16,14 +16,14 @@ final class DemoPeople
 {
     /** @var array<string, array{email: string, label: string, explains: string}> AAYMCA staff: key => person */
     public const STAFF = [
-        'admin' => ['email' => 'demo.admin@example.org', 'label' => 'Administrator', 'explains' => 'Approves, assigns assessors, sees every movement'],
-        'assessor' => ['email' => 'demo.assessor@example.org', 'label' => 'AAYMCA assessor', 'explains' => 'Runs the assessments and the ODP follow-up, for every movement'],
+        'admin' => ['email' => 'demo.admin@example.org', 'label' => 'Administrator', 'explains' => 'Approves, assigns assessors, and can do all an assessor does, on any movement'],
+        'assessor' => ['email' => 'demo.assessor@example.org', 'label' => 'AAYMCA assessor', 'explains' => 'Runs the assessments, closes them, and runs the follow-ups and re-scoring, for every movement'],
     ];
 
     /** @var array<string, array{role: Role, label: string, explains: string}> a movement's people: key => role */
     public const MOVEMENT = [
-        'chair' => ['role' => Role::Board, 'label' => 'Board Chairperson', 'explains' => 'Reads the approved report, signs the ODP'],
-        'ngs' => ['role' => Role::Ngs, 'label' => 'National General Secretary', 'explains' => 'Adds evidence, reports progress on the ODP'],
+        'chair' => ['role' => Role::Board, 'label' => 'Board Chairperson', 'explains' => 'Reads the approved report, may sign the ODP'],
+        'ngs' => ['role' => Role::Ngs, 'label' => 'National General Secretary', 'explains' => 'Adds evidence, and notes on the ODP tasks between follow-ups'],
     ];
 
     /** @return list<string> every key a visitor can choose */

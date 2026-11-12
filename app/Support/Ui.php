@@ -16,11 +16,11 @@ final class Ui
     public static function control(bool $invalid = false, string $size = 'md'): array
     {
         return [
-            'rounded border-[1.5px] bg-surface-container-lowest focus:border-primary outline-none' => true,
+            'rounded-[10px] border bg-surface-container-lowest focus:border-on-surface focus:ring-2 focus:ring-[#1c1b1f]/10 outline-none' => true,
             'px-sm py-2' => $size !== 'sm',
             'px-sm py-1.5 text-[0.875rem]' => $size === 'sm',
             'border-error' => $invalid,
-            'border-outline-variant' => ! $invalid,
+            'border-[#dcd9d3]' => ! $invalid,
         ];
     }
 

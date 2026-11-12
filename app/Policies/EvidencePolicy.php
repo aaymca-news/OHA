@@ -6,6 +6,7 @@ use App\Models\Assessment;
 use App\Models\Evidence;
 use App\Models\Movement;
 use App\Models\User;
+use App\Oha\FollowUpSchedule;
 use Illuminate\Auth\Access\Response;
 
 /**
@@ -15,7 +16,8 @@ use Illuminate\Auth\Access\Response;
  *                Chairperson, National General Secretary) see their own
  *   upload       AAYMCA staff, and the movement's National General Secretary
  *   download     whoever sees the library, and every movement once it is shared
- *   remove       AAYMCA staff anything; the National General Secretary what they added
+ *   remove       AAYMCA staff anything; the National General Secretary what they added,
+ *                until it is counted in something closed (the assessment, a follow-up)
  *   move         to another folder: the same people as remove
  *   share        the Administrators, and the movement's National General Secretary
  */
@@ -73,9 +75,14 @@ class EvidencePolicy
             return Response::allow();
         }
 
-        return $user->isGeneralSecretaryOf($evidence->assessment->movement) && $evidence->uploaded_by === $user->id
-            ? Response::allow()
-            : Response::deny('You can remove only the documents you added. AAYMCA staff can remove any.');
+        if (! $user->isGeneralSecretaryOf($evidence->assessment->movement) || $evidence->uploaded_by !== $user->id) {
+            return Response::deny('You can remove only the documents you added. AAYMCA staff can remove any.');
+        }
+
+        // Counted in something now locked (the closed assessment, a closed follow-up): kept as counted.
+        return $evidence->isCounted()
+            ? Response::deny('This document was counted in '.FollowUpSchedule::label($evidence->counted_in).', which is closed, so it stays. AAYMCA staff can remove it if it must go.')
+            : Response::allow();
     }
 
     /** Correcting the folder is managing the evidence, as removing it is. */

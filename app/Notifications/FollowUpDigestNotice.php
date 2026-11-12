@@ -2,17 +2,16 @@
 
 namespace App\Notifications;
 
-use App\Models\OdpTask;
 use App\Support\DateFormats;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Notifications\Notification;
-use Illuminate\Support\Str;
 
 /**
  * The weekly ODP follow-up digest (Stage 2): one email a week with what needs attention
- * on each movement this person follows up, instead of one email per task. Built from
+ * on each movement this person follows up: the follow-up under way (open, coming up or
+ * past its agreed date) and the overall review still to write. Built from
  * App\Queries\FollowUpDigest. Also kept in the app (the bell), in short.
  */
 class FollowUpDigestNotice extends Notification implements ShouldQueue
@@ -20,7 +19,7 @@ class FollowUpDigestNotice extends Notification implements ShouldQueue
     use Queueable;
 
     /**
-     * @param  list<array{movement: string, link: string, overdue: list<string>, due_soon: list<string>, waiting: list<string>, meeting: string|null, reassess: string|null, review?: string|null}>  $sections  plain text, ready to send
+     * @param  list<array{movement: string, link: string, follow_up: string|null, review: string|null}>  $sections  plain text, ready to send
      */
     public function __construct(public array $sections) {}
 
@@ -31,19 +30,17 @@ class FollowUpDigestNotice extends Notification implements ShouldQueue
      */
     public static function from(array $sections): self
     {
-        $task = fn (OdpTask $t) => ($t->ref ? $t->ref.' ' : '').Str::limit($t->task, 90).($t->due_on ? ' (due '.$t->due_on->format(DateFormats::DAY).')' : '');
-
         return new self(array_map(fn (array $s) => [
             'movement' => $s['movement']->name,
             'link' => route('follow-up.show', $s['assessment'], false),
-            'overdue' => $s['overdue']->map($task)->all(),
-            'due_soon' => $s['due_soon']->map($task)->all(),
-            'waiting' => $s['waiting']->map($task)->all(),
-            'meeting' => $s['meeting'] !== null ? 'Follow-up meeting '.$s['meeting']['number'].' is due on '.$s['meeting']['due_on']->format(DateFormats::DAY).'.' : null,
-            'reassess' => $s['reassess_on'] !== null
-                ? ($s['reassess_on']->isPast() ? 'The next assessment was due on ' : 'The next assessment is due on ').$s['reassess_on']->format(DateFormats::DAY).'.'
+            'follow_up' => ($f = $s['follow_up']) !== null
+                ? 'Follow-up '.$f['number'].match (true) {
+                    $f['overdue'] => ' is past its agreed date ('.$f['due_on']->format(DateFormats::DAY).') and not closed yet.',
+                    $f['open'] => ' is open'.($f['due_on'] !== null ? ', planned for '.$f['due_on']->format(DateFormats::DAY) : '').': add the evidence and notes on the tasks.',
+                    default => ' is planned for '.$f['due_on']->format(DateFormats::DAY).'.',
+                }
                 : null,
-            'review' => ($s['review_due'] ?? false) ? 'The overall review of the ODP is not written yet: write it before the next assessment.' : null,
+            'review' => ($s['review_due'] ?? false) ? 'The three follow-ups are closed: the overall review of the ODP is still to write.' : null,
         ], $sections));
     }
 
@@ -62,12 +59,7 @@ class FollowUpDigestNotice extends Notification implements ShouldQueue
 
         foreach ($this->sections as $s) {
             $mail->line('**'.$s['movement'].'**');
-            foreach ([['overdue', 'Overdue'], ['due_soon', 'Due in the next 30 days'], ['waiting', 'Reported done, waiting for your confirmation']] as [$key, $heading]) {
-                if ($s[$key] !== []) {
-                    $mail->line($heading.':')->line(implode("\n", array_map(fn (string $t) => '- '.$t, $s[$key])));
-                }
-            }
-            foreach (['meeting', 'reassess', 'review'] as $key) {
+            foreach (['follow_up', 'review'] as $key) {
                 if (($s[$key] ?? null) !== null) {
                     $mail->line($s[$key]);
                 }
@@ -83,18 +75,11 @@ class FollowUpDigestNotice extends Notification implements ShouldQueue
      */
     public function toArray(object $notifiable): array
     {
-        $counts = collect($this->sections)->map(fn (array $s) => $s['movement'].': '.collect([
-            count($s['overdue']) > 0 ? count($s['overdue']).' overdue' : null,
-            count($s['due_soon']) > 0 ? count($s['due_soon']).' due soon' : null,
-            count($s['waiting']) > 0 ? count($s['waiting']).' to confirm' : null,
-            $s['meeting'] !== null ? 'a follow-up meeting due' : null,
-            $s['reassess'] !== null ? 'next assessment due' : null,
-            ($s['review'] ?? null) !== null ? 'the ODP review to write' : null,
-        ])->filter()->join(', '));
+        $lines = collect($this->sections)->map(fn (array $s) => $s['movement'].': '.collect([$s['follow_up'], $s['review'] ?? null])->filter()->join(' '));
 
         return [
             'subject' => 'This week’s ODP follow-up',
-            'body' => $counts->join('. ').'.',
+            'body' => $lines->join(' '),
             'link' => count($this->sections) === 1 ? $this->sections[0]['link'] : null,
             'tone' => 'action',
         ];

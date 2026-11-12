@@ -26,9 +26,9 @@ beforeEach(function () {
 });
 
 it('gives each role its own menu', function () {
-    expect(($this->menu)($this->j->admin))->toBe(['Dashboard', 'My Work', 'National Movements', 'Assessments', 'Timelines', 'Resources', 'Users & Roles'])
-        ->and(($this->menu)($this->j->superAdmin))->toBe(['Dashboard', 'My Work', 'National Movements', 'Assessments', 'Timelines', 'Resources', 'Users & Roles'])
-        ->and(($this->menu)($this->j->assessor))->toBe(['Dashboard', 'My Work', 'National Movements', 'Timelines', 'Resources'])
+    expect(($this->menu)($this->j->admin))->toBe(['Dashboard', 'My Work', 'National Movements', 'Assessments', 'Timelines', 'Journeys', 'Resources', 'Users & Roles'])
+        ->and(($this->menu)($this->j->superAdmin))->toBe(['Dashboard', 'My Work', 'National Movements', 'Assessments', 'Timelines', 'Journeys', 'Resources', 'Users & Roles'])
+        ->and(($this->menu)($this->j->assessor))->toBe(['Dashboard', 'My Work', 'National Movements', 'Timelines', 'Journeys', 'Resources'])
         ->and(($this->menu)($this->j->chair))->toBe(['Dashboard', 'My Work', 'Our Movement', 'Resources'])
         ->and(($this->menu)($this->ngs))->toBe(['Dashboard', 'Our Movement', 'Resources']);
 
@@ -64,7 +64,7 @@ it('shows the movement’s own users its approved form, report and ODP; the ODP 
     expect($this->ngs->can('view', $odp->refresh()))->toBeTrue();
 });
 
-it('tells the NGS when the form, report and ODP are approved, and when the ODP is signed', function () {
+it('tells the NGS when the form, report and ODP are approved, when the ODP is signed, and when follow-up begins', function () {
     $notice = WorkflowNotice::class;
     $assessment = $this->j->assessmentAt('report_approved');
     Notification::assertSentTo($this->ngs, $notice, fn ($n) => $n->subject === 'Now available: OHA form, Zambia YMCA');
@@ -74,11 +74,15 @@ it('tells the NGS when the form, report and ODP are approved, and when the ODP i
     app(SubmitForApproval::class)->handle($this->j->odp($assessment), $this->j->assessor);
     app(ApproveArtefact::class)->handle($this->j->odp($assessment), $this->j->admin);
     Notification::assertSentTo($this->ngs, $notice, fn ($n) => str_starts_with($n->subject, 'Now available: ODP') && str_contains($n->body, 'add your supporting documents'));
-    Notification::assertSentTo($this->j->chair, $notice, fn ($n) => str_starts_with($n->subject, 'Please sign: ODP'));
-    Notification::assertNotSentTo($this->ngs, $notice, fn ($n) => str_starts_with($n->subject, 'Please sign'));
+    // The Board Chairperson is told it is available; signing is optional, never asked for.
+    Notification::assertSentTo($this->j->chair, $notice, fn ($n) => str_starts_with($n->subject, 'Now available: ODP') && str_contains($n->body, 'optional'));
+    Notification::assertNotSentTo($this->j->chair, $notice, fn ($n) => str_starts_with($n->subject, 'Please sign'));
 
     $this->j->sign($this->j->odp($assessment));
     Notification::assertSentTo($this->ngs, $notice, fn ($n) => str_starts_with($n->subject, 'Validated by the board: ODP'));
+
+    $this->j->close($assessment);
+    Notification::assertSentTo($this->ngs, $notice, fn ($n) => $n->subject === 'Follow-up begins: Zambia YMCA');
 });
 
 it('lets the NGS add evidence once the ODP is approved, and from then on, signed included', function () {
@@ -123,7 +127,9 @@ it('shows AAYMCA the region, and the movement its own dashboard', function () {
 
     $this->actingAs($this->j->chair)->get(route('dashboard'))->assertOk()
         ->assertSee('Welcome back')->assertSee('Your assessment cycle')->assertSee('Your ODP')
-        ->assertSee('Your contacts at AAYMCA')->assertSee('Tendai Moyo')->assertSee('ODP is ready for your signature')->assertSee('Review and sign')->assertDontSee('By zone');
+        ->assertSee('Your contacts at AAYMCA')->assertSee('Tendai Moyo')->assertDontSee('By zone')
+        // Signing is optional: never a prompt on the dashboard (it is in My Work).
+        ->assertDontSee('ready for your signature')->assertDontSee('Review and sign')->assertDontSee('in My Work');
 
     $this->actingAs($this->ngs)->get(route('dashboard'))->assertOk()
         ->assertSee('Welcome back')->assertDontSee('ready for your signature')->assertDontSee('Review and sign')->assertDontSee('Ghana YMCA');

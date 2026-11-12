@@ -9,6 +9,11 @@ namespace App\Enums;
 enum DocumentPurpose: string
 {
     case Uploaded = 'uploaded';
-    /** The signed ODP as changed in Google Drive afterwards: noted, never a version. */
+    /** The ODP as changed in Google Drive after the assessment was closed: noted, never a version. */
     case AfterSigning = 'after_signing';
+    /**
+     * The ODP revised during an open follow-up (uploaded, or taken from Google Drive): its
+     * tasks are read into the plan, counted in that follow-up, with no separate approval.
+     */
+    case Revision = 'revision';
 }

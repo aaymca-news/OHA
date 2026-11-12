@@ -3,7 +3,10 @@
 namespace Tests\Support;
 
 use App\Actions\Oha\ApproveArtefact;
+use App\Actions\Oha\CloseAssessment;
+use App\Actions\Oha\FollowUpWindows;
 use App\Actions\Oha\OpenAssessment;
+use App\Actions\Oha\RecordFollowUp;
 use App\Actions\Oha\SignAsBoard;
 use App\Actions\Oha\SubmitForApproval;
 use App\Actions\Oha\UploadForm;
@@ -15,8 +18,10 @@ use App\Models\BoardSignature;
 use App\Models\Document;
 use App\Models\Movement;
 use App\Models\User;
+use App\Oha\FollowUpSchedule;
 use Database\Seeders\MovementsSeeder;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Storage;
 
 /**
@@ -32,7 +37,7 @@ final class Journey
     public const STAGES = [
         'opened', 'form_uploaded', 'form_submitted', 'form_approved',
         'report_uploaded', 'report_submitted', 'report_approved',
-        'odp_uploaded', 'odp_submitted', 'odp_approved', 'odp_signed',
+        'odp_uploaded', 'odp_submitted', 'odp_approved', 'closed',
     ];
 
     /** A Google Docs link, as copied from the address bar. */
@@ -79,14 +84,14 @@ final class Journey
 
     /**
      * Opens an assessment as the platform does, checks included. A test that sets up a
-     * second assessment beside one still under way (which the platform refuses: one at a
-     * time) gets the records without the check.
+     * second assessment the platform would refuse (one still under way, or a cycle not
+     * closed yet) gets the records without the check.
      */
     public static function open(User $by, Movement $movement, string $period, Carbon $start): Assessment
     {
         $open = app(OpenAssessment::class);
 
-        return $movement->assessmentUnderWay() === null
+        return Gate::forUser($by)->allows('openAssessment', $movement)
             ? $open->handle($by, $movement, $period, $start)
             : $open->create($by, $movement, $period, $start);
     }
@@ -107,7 +112,7 @@ final class Journey
             'odp_uploaded' => fn () => $this->uploadOdp($assessment, 'Zambia ODP, first version'),
             'odp_submitted' => fn () => app(SubmitForApproval::class)->handle($this->odp($assessment), $this->assessor),
             'odp_approved' => fn () => app(ApproveArtefact::class)->handle($this->odp($assessment), $this->admin),
-            'odp_signed' => fn () => $this->sign($this->odp($assessment)),
+            'closed' => fn () => $this->close($assessment),
         ];
 
         foreach (array_slice(self::STAGES, 1, (int) $target) as $step) {
@@ -146,6 +151,28 @@ final class Journey
         file_put_contents($path, "%PDF-1.4\n% {$content}\n%%EOF\n");
 
         return $path;
+    }
+
+    /** Closes the assessment (Stage 1 done, Baseline 1), by its assessor unless said otherwise. */
+    public function close(Assessment $assessment, ?User $by = null, ?string $firstFollowUpOn = null): Assessment
+    {
+        return app(CloseAssessment::class)->handle($assessment, $by ?? $this->assessor, $firstFollowUpOn);
+    }
+
+    /** Opens follow-up $number, as its assessor does when it is time. */
+    public function openFollowUp(Assessment $assessment, ?User $by = null): void
+    {
+        app(FollowUpWindows::class)->open($assessment, $by ?? $this->assessor);
+    }
+
+    /** Opens follow-up $number, records its meeting (held today) and closes it, which locks it: as its assessor does. */
+    public function holdFollowUp(Assessment $assessment, int $number, string $summary = 'Tasks reviewed.', ?User $by = null): void
+    {
+        if ((FollowUpSchedule::next($assessment)['state'] ?? null) === FollowUpSchedule::UPCOMING) {
+            $this->openFollowUp($assessment, $by);
+        }
+        app(RecordFollowUp::class)->handle($assessment, $by ?? $this->assessor, $number, today()->toDateString(), 'Mwila Banda', $summary);
+        app(FollowUpWindows::class)->close($assessment, $by ?? $this->assessor, $number);
     }
 
     public function sign(Artefact $artefact, ?User $by = null): BoardSignature

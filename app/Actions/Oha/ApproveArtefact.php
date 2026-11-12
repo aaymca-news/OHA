@@ -100,7 +100,7 @@ final class ApproveArtefact
             $onwards = match ($artefact->kind) {
                 ArtefactKind::Form => 'Its score is now recorded, and the movement’s Board Chairperson and National General Secretary can see it.',
                 ArtefactKind::Report => 'All AAYMCA staff and the movement’s Board Chairperson and National General Secretary can now see it.',
-                ArtefactKind::Odp => 'All AAYMCA staff and the movement’s National General Secretary can now see it, and it is with the Board Chairperson for signature.',
+                ArtefactKind::Odp => 'All AAYMCA staff and the movement’s Board Chairperson and National General Secretary can now see it. The assessment can now be closed, which sets Baseline 1 and starts the follow-up.',
             };
             Notify::send([$artefact->submitter], new WorkflowNotice(
                 "Approved: {$name}, {$movement}",
@@ -108,14 +108,15 @@ final class ApproveArtefact
                 Notify::link($assessment), 'good',
             ), except: $approver);
 
-            // The movement's own users: each approved document to both; the ODP to the Board
-            // Chairperson to sign, and to the National General Secretary, who can now add evidence.
+            // The movement's own users: each approved document to both; the ODP also to the
+            // National General Secretary, who can now add evidence. The Board Chairperson may
+            // sign the ODP (optional): it is in their My Work, without a reminder.
             $approved = 'The '.SubmitForApproval::inSentence($name)." for {$movement} ({$assessment->period_label}) has been approved by AAYMCA.";
             if ($artefact->kind === ArtefactKind::Odp) {
                 Notify::send([$assessment->movement->chair], new WorkflowNotice(
-                    "Please sign: {$name}, {$movement}",
-                    $approved.' Please read it and sign it to validate it on behalf of your board.',
-                    Notify::link($assessment), 'action',
+                    "Now available: {$name}, {$movement}",
+                    $approved.' You can read and download it in Resources. You may also sign it on behalf of your board; this is optional.',
+                    Notify::link($assessment), 'info',
                 ));
                 Notify::send([$assessment->movement->generalSecretary], new WorkflowNotice(
                     "Now available: {$name}, {$movement}",

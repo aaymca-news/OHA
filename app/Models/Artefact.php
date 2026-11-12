@@ -158,7 +158,7 @@ class Artefact extends Model
     }
 
     /**
-     * The signed ODP as changed in Google Drive since the Board Chairperson signed it,
+     * The ODP as changed in Google Drive since the assessment was closed,
      * oldest first: noted for Stage 2, never versions.
      *
      * @return HasMany<Document, $this>

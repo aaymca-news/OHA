@@ -6,11 +6,13 @@ use App\Actions\Evidence\UploadEvidence;
 use App\Actions\Movements\PauseFollowUp;
 use App\Actions\Oha\ApproveArtefact;
 use App\Actions\Oha\CarryOverTasks;
-use App\Actions\Oha\ConfirmTask;
+use App\Actions\Oha\CloseAssessment;
+use App\Actions\Oha\CloseFollowUp;
+use App\Actions\Oha\FollowUpWindows;
+use App\Actions\Oha\NoteOnTask;
 use App\Actions\Oha\OpenAssessment;
 use App\Actions\Oha\RecordFollowUp;
 use App\Actions\Oha\RecordOdpReview;
-use App\Actions\Oha\ReportTaskProgress;
 use App\Actions\Oha\SignAsBoard;
 use App\Actions\Oha\SubmitForApproval;
 use App\Actions\Oha\UploadForm;
@@ -26,7 +28,6 @@ use App\Models\Assessment;
 use App\Models\Movement;
 use App\Models\OdpTask;
 use App\Models\User;
-use App\Oha\FollowUpSchedule;
 use App\Oha\Report\DraftReport;
 use App\Oha\Report\WordReport;
 use Illuminate\Database\Seeder;
@@ -113,10 +114,18 @@ class DemoStorySeeder extends Seeder
             ?? $movement->activeAssessors()->where('role', Role::Staff)->first()
             ?? $movement->activeAssessors()->firstOrFail();
 
-        // Zambia: an earlier cycle, done and followed up; then a new assessment, with its tasks carried over.
+        // Zambia: an earlier cycle, done, followed up and closed (the next assessment starts only
+        // then); then a new assessment, with its unfinished tasks carried over.
         if ($extra === 'next-cycle') {
             $old = $this->assessment($movement, $assessor, $story['strength'], $story['opened'], 'signed');
-            $this->followUp($old, $assessor, $story['opened'], 'review');
+            $this->followUp($old, $assessor, $story['opened'], null);
+            $this->at(now()->subMonths(2), function () use ($old, $assessor): void {
+                app(RecordOdpReview::class)->handle($old, $assessor,
+                    'The Board was renewed and trained, a reserve fund was opened, and the website is updated every month.',
+                    'The property plan was not finished: the title deeds are still with the lands office.',
+                    'Set fewer tasks per priority, and agree the evidence for each task at the start.');
+                app(CloseFollowUp::class)->handle($old, $assessor, 'The three follow-ups were held; the next assessment is due.');
+            });
             $new = $this->assessment($movement, $assessor, min(0.95, $story['strength'] + 0.12), 1, 'form_approved');
             $this->at(now()->subWeeks(2), fn () => app(CarryOverTasks::class)->handle($old, $assessor,
                 $old->odpTasks()->where('done', false)->limit(3)->pluck('id')->map(fn ($id) => (int) $id)->all()));
@@ -190,62 +199,69 @@ class DemoStorySeeder extends Seeder
             return $assessment;
         }
         $this->at($day(13), fn () => app(SignAsBoard::class)->handle($assessment->odp()->firstOrFail(), $chair, $chair->name, true, 'Approved by the Board at its quarterly meeting.'));
+        // Closing the assessment ends Stage 1 (Baseline 1); the signature itself is optional.
+        $this->at($day(13), fn () => app(CloseAssessment::class)->handle($assessment, $this->admin));
 
         return $assessment->refresh();
     }
 
     /**
-     * Stage 2 after signing: progress on the tasks, the follow-up meetings held so far, and
+     * Stage 2 after closing: progress on the tasks, the follow-up meetings held so far, and
      * the story's twist: on track, falling behind, paused, or the annual review written.
      */
     private function followUp(Assessment $assessment, User $assessor, int $monthsAgo, ?string $extra): void
     {
         $ngs = $assessment->movement->generalSecretary()->firstOrFail();
-        $signed = now()->subMonths($monthsAgo)->startOfMonth()->addWeeks(13);
-        $elapsed = max(0.0, min(1.0, $signed->diffInDays(now()) / 365));
         $behind = $extra === 'behind';
 
-        // Tasks due already are mostly done (fewer when falling behind); some later ones started.
-        foreach ($assessment->odpTasks()->get() as $i => $task) {
+        // What becomes of each task over the follow-ups: done at one of them (fewer when
+        // falling behind), blocked, in progress, or not started yet.
+        $fates = [];
+        foreach ($assessment->odpTasks()->get() as $task) {
             /** @var OdpTask $task */
-            $due = $task->due_on;
-            $past = $due !== null && $due->isPast();
             $roll = $this->random->getFloat(0, 1);
-            $when = $past ? $due->copy()->subDays($this->random->getInt(3, 25)) : now()->subDays($this->random->getInt(2, 40));
-            if ($when->lt($signed)) {
-                $when = $signed->copy()->addDays($this->random->getInt(5, 20));
-            }
-
-            if ($past && $roll < ($behind ? 0.35 : 0.8)) {
-                $this->at($when, fn () => $this->done($task, $assessor, $ngs, $assessment, $i));
-            } elseif (! $past && $roll < 0.25 * $elapsed) {
-                $this->at($when, fn () => $this->done($task, $assessor, $ngs, $assessment, $i));
-            } elseif ($roll < 0.85) {
-                $progress = $roll > 0.78 ? TaskProgress::Blocked : TaskProgress::InProgress;
-                $note = $progress === TaskProgress::Blocked ? 'Waiting for the funds to be released.' : 'Under way; a draft is with the committee.';
-                $this->at($when, fn () => app(ReportTaskProgress::class)->handle($task, $ngs, $progress, $note));
-            }
+            $fates[$task->id] = match (true) {
+                $roll < ($behind ? 0.3 : 0.55) => ['done', $this->random->getInt(1, 3)],
+                $roll < 0.68 => ['blocked', 0],
+                $roll < 0.9 => ['progress', 0],
+                default => ['none', 0],
+            };
         }
+        $statusAt = fn (int $n) => collect($fates)->map(fn (array $fate) => match (true) {
+            $fate[0] === 'done' && $fate[1] <= $n => TaskProgress::Done->value,
+            $fate[0] === 'blocked' => TaskProgress::Blocked->value,
+            $fate[0] === 'progress', $fate[0] === 'done' => TaskProgress::InProgress->value,
+            default => TaskProgress::NotStarted->value,
+        })->all();
 
-        // One task reported done this week, waiting for the assessor to confirm it.
-        $open = $assessment->odpTasks()->where('done', false)->whereNot('progress', TaskProgress::Done->value)->first();
-        if ($open !== null && ! $behind) {
-            $this->at(now()->subDays(2), fn () => app(ReportTaskProgress::class)->handle($open, $ngs, TaskProgress::Done, 'Approved by the Board last week; the minutes are in the library.'));
-        }
-
-        // The follow-up meetings held so far (when falling behind, the last one due was missed).
-        foreach (FollowUpSchedule::for($assessment) as $slot) {
-            if (! $slot['due_on']->isPast() || ($behind && $slot['due_on']->gt(now()->subMonths(4)))) {
-                continue;
+        // The follow-ups, as the assessor agreed them with the movement: every four months. Each
+        // is dated, opened two weeks before (the General Secretary then adds notes and evidence),
+        // held (where every task stands is set there) and closed, which dates the next. Those not
+        // due yet are only dated; when falling behind, the last one due was opened but not held.
+        $windows = app(FollowUpWindows::class);
+        $closedOn = $assessment->refresh()->closed_at->copy()->startOfDay();
+        $dueOf = fn (int $n) => $closedOn->copy()->addMonthsNoOverflow(4 * $n);
+        $this->at($closedOn->copy()->addHours(12), fn () => $windows->plan($assessment, $assessor, 1, $dueOf(1)->toDateString()));
+        foreach ([1, 2, 3] as $n) {
+            $opens = $dueOf($n)->subWeeks(2);
+            if ($opens->isFuture()) {
+                break;
             }
-            $held = $slot['due_on']->copy()->addDays($this->random->getInt(0, 10));
-            if ($held->isFuture()) {
-                continue;
+            $this->at($opens, fn () => $windows->open($assessment, $assessor));
+            $held = $dueOf($n)->addDays($this->random->getInt(0, 10));
+            if ($held->isFuture() || ($behind && $dueOf($n)->gt(now()->subMonths(4)))) {
+                // Open now: the General Secretary has noted one task this week.
+                $this->noteOn($assessment, $ngs, $fates, $n, now()->subDays(2));
+                break;
             }
-            $this->at($held, fn () => app(RecordFollowUp::class)->handle($assessment, $assessor, $slot['number'], $held->toDateString(),
+            $this->noteOn($assessment, $ngs, $fates, $n, $held->copy()->subDays(5));
+            $this->at($held, fn () => app(RecordFollowUp::class)->handle($assessment, $assessor, $n, $held->toDateString(),
                 $ngs->name.', '.$assessor->name.', the Board Treasurer',
                 'Went through each priority. Financial tasks are moving; governance needs the Board to meet sooner. Agreed to send the evidence before the next meeting.',
-                $assessment->odpTasks()->limit(4)->get()->mapWithKeys(fn (OdpTask $t) => [$t->id => $t->done ? 'Done, evidence seen.' : 'Discussed; next step agreed.'])->all()));
+                $assessment->odpTasks()->limit(4)->get()->mapWithKeys(fn (OdpTask $t) => [$t->id => 'Discussed; next step agreed.'])->all(),
+                $statusAt($n)));
+            // Closed after its meeting, which locks it, dating the next one.
+            $this->at($held, fn () => $windows->close($assessment, $assessor, $n, $n < 3 ? $dueOf($n + 1)->toDateString() : null));
         }
 
         match ($extra) {
@@ -259,17 +275,27 @@ class DemoStorySeeder extends Seeder
         };
     }
 
-    /** A task done: with evidence from the General Secretary, confirmed by the assessor (or by the assessor directly). */
-    private function done(OdpTask $task, User $assessor, User $ngs, Assessment $assessment, int $i): void
+    /**
+     * Before follow-up $n is held, the General Secretary's notes: the evidence of each task
+     * done by then (into the library, linked to it), and why a blocked task is stuck.
+     *
+     * @param  array<int, array{0: string, 1: int}>  $fates
+     */
+    private function noteOn(Assessment $assessment, User $ngs, array $fates, int $n, Carbon $when): void
     {
-        if ($i % 3 === 0) {
-            app(ReportTaskProgress::class)->handle($task, $assessor, TaskProgress::Done, 'Seen at the follow-up meeting.');
-
-            return;
+        foreach ($assessment->odpTasks()->get() as $task) {
+            /** @var OdpTask $task */
+            [$fate, $at] = $fates[$task->id] ?? ['none', 0];
+            if ($fate === 'done' && $at === $n) {
+                $this->at($when, function () use ($task, $ngs, $assessment): void {
+                    $evidence = app(UploadEvidence::class)->handle($ngs, $assessment, null, null, Str::limit($task->task, 60, ''),
+                        url: 'https://example.org/evidence/'.Str::slug(Str::limit($task->task, 40, '')).'-'.$task->id);
+                    app(NoteOnTask::class)->handle($task, $ngs, 'Done; the evidence is in the library.', $evidence->id);
+                });
+            } elseif ($fate === 'blocked' && $n === 1) {
+                $this->at($when, fn () => app(NoteOnTask::class)->handle($task, $ngs, 'Waiting for the funds to be released.'));
+            }
         }
-        $evidence = app(UploadEvidence::class)->handle($ngs, $assessment, null, null, Str::limit($task->task, 60, ''), url: 'https://example.org/evidence/'.Str::slug(Str::limit($task->task, 40, '')));
-        app(ReportTaskProgress::class)->handle($task, $ngs, TaskProgress::Done, 'Done; the evidence is in the library.', $evidence->id);
-        app(ConfirmTask::class)->handle($task->refresh(), $assessor, true);
     }
 
     /**

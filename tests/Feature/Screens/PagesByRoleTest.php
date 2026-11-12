@@ -96,7 +96,7 @@ it('offers each person only the buttons their role allows', function () {
     $report = route('assessments.show', ['assessment' => $this->assessment->id, 'tab' => 'report']);
 
     $this->actingAs($this->j->chair)->get($odp)->assertSee('Sign and validate')->assertSee('Not validated');
-    $this->actingAs($this->j->assessor)->get($odp)->assertDontSee('Sign and validate')->assertSee('does not hold up the Secretariat');
+    $this->actingAs($this->j->assessor)->get($odp)->assertDontSee('Sign and validate')->assertSee('this is optional and holds nothing up');
     $this->actingAs($this->j->admin)->get($odp)->assertDontSee('Release to the board')->assertDontSee('Sign and validate');
 
     $this->actingAs($this->j->assessor)->get($report)->assertSee('Upload a new version');

@@ -1,14 +1,15 @@
 {{--
     Tab 3: the ODP. Written by the staff in Google Drive and saved here in versions, uploaded
-    or taken from Google Drive; approved by an Administrator; signed by the Board Chairperson,
-    which freezes it and starts Stage 2. Expects $artefact and $versions (newest first, only
-    those this user may see).
+    or taken from Google Drive; approved by an Administrator; frozen once the assessment is
+    closed (Stage 2 begins). The Board Chairperson may sign it (optional), which validates it.
+    Expects $artefact and $versions (newest first, only those this user may see).
 --}}
 @php
     $status = $artefact->status;
     $effective = $status->effective_state;
     $latestId = $artefact->latestVersion?->id;
     $signature = $artefact->signature;
+    $closed = $assessment->isClosed();
     $me = auth()->user();
     $seesDrafts = $me->can('viewDrafts', $assessment);
     // The last approved version is current for everyone; those working on it can open the newer one.
@@ -27,7 +28,7 @@
     @if ($artefact->state->value === 'pending_approval' && $seesDrafts)
         <span class="text-on-surface-variant">Version {{ $versions->firstWhere('id', $latestId)?->number }} is with the Administrators for approval</span>
     @endif
-    @if ($status->published && ! $artefact->isApproved() && ! $signature && $seesDrafts)
+    @if ($status->published && ! $artefact->isApproved() && ! $closed && $seesDrafts)
         <span class="flex items-center gap-xs text-on-surface-variant">
             <span class="material-symbols-outlined text-[1.125rem]" aria-hidden="true">visibility</span>
             Staff and the movement’s Board Chairperson and National General Secretary see the last approved version until the new one is approved.
@@ -42,7 +43,7 @@
     <x-empty-state icon="lock">The ODP unlocks once a version of the report is saved. The report does not need to be approved first.</x-empty-state>
 @endif
 
-@if ($workingVersion && ! $signature)
+@if ($workingVersion && ! $closed)
     @include('assessments.tabs._current-or-working', [
         'tab' => 'odp',
         'working' => $shown?->id === $workingVersion->id,
@@ -59,10 +60,16 @@
     </x-callout>
 @endif
 
-@if ($signature)
+@if ($closed)
     <x-callout tone="good" icon="verified">
-        <p><span class="font-semibold">Signed by the Board Chairperson, so this ODP is frozen.</span>
-            Version {{ $signature->document?->versionNumber() }} is the plan of record. Its implementation is followed in Stage 2.</p>
+        <p><span class="font-semibold">The assessment is closed, so this ODP is kept as approved.</span>
+            Version {{ $artefact->approvedVersion?->versionNumber() }} is the ODP of the assessment. During the follow-ups it may be revised, while a follow-up is open:
+            @can('viewFollowUp', $assessment)
+                <a href="{{ route('follow-up.show', $assessment) }}#odp-revisions" class="font-semibold underline decoration-[#d3d0c9] underline-offset-2 hover:decoration-on-surface">see the revisions on the follow-up page</a>.
+            @else
+                its revisions are kept with the follow-up.
+            @endcan
+        </p>
     </x-callout>
 @endif
 
@@ -78,10 +85,10 @@
             <dd>{{ $artefact->driveLinker?->name ?? '—' }}{{ $artefact->drive_linked_at ? ', '.$artefact->drive_linked_at->asDay() : '' }}</dd>
             <dt class="text-on-surface-variant">Updates</dt>
             <dd>
-                @if ($signature && $connected)
-                    The signed ODP is frozen. Changes made in Google Drive are still read, and noted below as changes after signing, never as versions.
-                @elseif ($signature)
-                    The signed ODP is frozen. Once AAYMCA’s Google administrator connects the platform, changes made in Google Drive are noted below.
+                @if ($closed && $connected)
+                    The ODP is frozen. Changes made in Google Drive are still read, and noted below as changes after closing, never as versions.
+                @elseif ($closed)
+                    The ODP is frozen. Once AAYMCA’s Google administrator connects the platform, changes made in Google Drive are noted below.
                 @elseif (! $connected)
                     By upload only, for now. Changes in Google Drive are taken automatically once AAYMCA’s Google administrator connects the platform.
                 @elseif ($artefact->drive_checked_at)
@@ -158,7 +165,7 @@
 
 @include('assessments.tabs._decisions')
 
-{{-- Validation: the Board Chairperson's online signature. It never holds the Secretariat back. --}}
+{{-- Validation: the Board Chairperson's online signature. Optional: it holds nothing up and freezes nothing. --}}
 @if ($signature)
     <x-card title="Validated by the board" :subtitle="'Signed by '.$assessment->movement->name.'’s Board Chairperson.'">
         <div class="flex flex-wrap items-end gap-lg">
@@ -182,7 +189,7 @@
         @endif
     </x-card>
 @elseif (Gate::allows('sign', $artefact))
-    <x-card title="Sign to validate the ODP" :subtitle="'Read version '.$artefact->approvedVersion?->versionNumber().' of the ODP below, then sign. Your signature, your name, the date and a fingerprint of this exact file are recorded. Once signed, the ODP is frozen, and so are the OHA form and the report it rests on.'">
+    <x-card title="Sign to validate the ODP (optional)" :subtitle="'Read version '.$artefact->approvedVersion?->versionNumber().' of the ODP below, then sign on behalf of your board if you wish. Your signature, your name, the date and a fingerprint of this exact file are recorded. Nothing waits on it.'">
         <form method="POST" action="{{ route('artefacts.sign', $artefact) }}" x-data="{ mark: @js(old('signature', '')) }" class="flex flex-col gap-md">
             @csrf
             <div class="flex flex-col gap-xs max-w-[28rem]">
@@ -204,7 +211,7 @@
     <x-empty-state icon="draw">
         @if ($me->isSecretariat())
             @if ($artefact->isApproved())
-                Approved and waiting for {{ $assessment->movement->chair?->name ?? 'the Board Chairperson' }}’s signature. This does not hold up the Secretariat.
+                Approved. {{ $assessment->movement->chair?->name ?? 'The Board Chairperson' }} may sign it on behalf of the board; this is optional and holds nothing up.
             @else
                 A newer version is waiting for approval. {{ $assessment->movement->chair?->name ?? 'The Board Chairperson' }} can sign once it is approved.
             @endif
@@ -214,15 +221,15 @@
     </x-empty-state>
 @endif
 
-{{-- Stage 2: the signed ODP as changed in Google Drive since; noted, never versions. --}}
-@if ($signature)
+{{-- Stage 2: the ODP as changed in Google Drive since the assessment was closed; noted, never versions. --}}
+@if ($closed)
     @php
         $after = $artefact->changesAfterSigning()->with('creator')->get()->reverse()->values();
     @endphp
-    <x-card id="after-signing" title="Changes made after signing"
+    <x-card id="after-signing" title="Changes made after closing"
             :subtitle="$after->isEmpty()
-                ? 'None yet. Changes made to the ODP in Google Drive after the Board Chairperson signed are noted here, with what changed. The signed version stays the plan of record.'
-                : 'Noted from Google Drive since the Board Chairperson signed. The signed version (version '.$signature->document?->versionNumber().') stays the plan of record.'">
+                ? 'None yet. Changes made to the ODP in Google Drive after the assessment was closed are noted here, with what changed. The approved version stays the plan of record.'
+                : 'Noted from Google Drive since the assessment was closed. The approved version (version '.$artefact->approvedVersion?->versionNumber().') stays the plan of record.'">
         @if ($after->isNotEmpty())
             <ul class="flex flex-col gap-sm text-[0.875rem]">
                 @foreach ($after as $change)

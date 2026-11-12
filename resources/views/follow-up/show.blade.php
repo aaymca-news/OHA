@@ -1,5 +1,5 @@
 {{--
-    Stage 2, ODP follow-up for one signed assessment, in the site's newer style (design
+    Stage 2, ODP follow-up for one closed assessment, in the site's newer style (design
     standard of 10 Nov 2026): where the ODP stands at a glance, the follow-up year as a
     timeline, the tasks (each updated in a side panel, evidence included), the meetings,
     the overall review, and closing the cycle. Expects what FollowUpController::show gives.
@@ -12,19 +12,27 @@
     $allTasks = $tasks;
     $statuses = $allTasks->mapWithKeys(fn ($t) => [$t->id => $t->followUpStatus()]);
     $tabCount = fn (string $key) => $statuses->where('key', $key)->count();
-    $nextMeeting = collect($meetings)->first(fn ($m) => $m['meeting'] === null);
+    // The follow-up under way: the first not closed (open, or still to open).
+    $nextMeeting = collect($meetings)->first(fn ($m) => in_array($m['state'], [\App\Oha\FollowUpSchedule::OPEN, \App\Oha\FollowUpSchedule::UPCOMING], true));
     $relative = fn ($date) => $date->isToday() ? 'today' : $date->copy()->startOfDay()->diffForHumans(today(), ['syntax' => \Carbon\CarbonInterface::DIFF_RELATIVE_TO_NOW, 'parts' => 1]);
 
     // The one next step, as the "Next" card says it.
     $nextStep = match (true) {
         $closed => ['title' => 'Cycle complete', 'sub' => 'Closed '.$assessment->follow_up_closed_at->asDay().($assessment->followUpCloser ? ' by '.$assessment->followUpCloser->name : '').'. The movement is ready for its next assessment.'],
-        // The overall review written: the cycle can close now, or after the meetings still to come.
-        $review !== null => ['title' => 'Close this cycle', 'sub' => 'The overall review is written: close now'.($nextMeeting !== null ? ', or after Follow-up '.$nextMeeting['number'].' on '.$nextMeeting['due_on']->asDay() : '').'. What is still open goes to the next assessment.'],
-        $nextMeeting !== null => ['title' => 'Follow-up '.$nextMeeting['number'].' · '.$nextMeeting['due_on']->asDay(), 'sub' => ucfirst($relative($nextMeeting['due_on'])).'. Agree where each task stands with the General Secretary.'],
+        // The three follow-ups closed and the overall review written: the cycle can close.
+        $review !== null && ! $early => ['title' => 'Close this cycle', 'sub' => 'The three follow-ups are closed and the overall review is written. What is still open goes to the next assessment.'],
+        $nextMeeting !== null => [
+            'title' => 'Follow-up '.$nextMeeting['number'].' · '.($nextMeeting['due_on']?->asDay() ?? 'date not set'),
+            'sub' => ($nextMeeting['due_on'] !== null ? ucfirst($relative($nextMeeting['due_on'])).'. ' : 'Agree its date with the movement. ')
+                .($nextMeeting['state'] === \App\Oha\FollowUpSchedule::OPEN
+                    ? 'It is open: agree where each task stands with the General Secretary, record the meeting, then close it.'
+                    : 'Open it when it is time; evidence added meanwhile counts in it.'),
+        ],
+        $review !== null => ['title' => 'Close this cycle', 'sub' => 'The overall review is written. An Administrator can close the cycle early, with a reason.'],
         default => ['title' => 'Overall review', 'sub' => 'What the ODP achieved, what it did not and why, and the lessons. Then the cycle can close.'],
     };
 @endphp
-<x-layouts.app title="ODP follow-up" :subtitle="$movement->name.' · '.$assessment->period_label.($signedOn ? ' · ODP signed by the Board Chairperson on '.$signedOn->asDay() : '')">
+<x-layouts.app title="ODP follow-up" :subtitle="$movement->name.' · '.$assessment->period_label.($closedOn ? ' · assessment closed on '.$closedOn->asDay() : '')">
     <x-button variant="link" icon="arrow_back" :href="route('movements.show', $movement)" class="self-start">Back to {{ $movement->name }}</x-button>
 
     @if ($closed)
@@ -40,7 +48,7 @@
             <div class="flex flex-col gap-xs">
                 <span class="text-[0.75rem] font-semibold uppercase tracking-[0.06em] text-on-surface-variant">Tasks done</span>
                 <span class="text-[1.375rem] font-bold">{{ $counts['done'] }} of {{ $counts['total'] }}</span>
-                <span class="text-[0.84375rem] text-on-surface-variant">Done counts once an assessor confirms it</span>
+                <span class="text-[0.84375rem] text-on-surface-variant">As set at the last follow-up meeting</span>
             </div>
         </x-panel>
         <x-panel class="flex flex-col gap-sm !border-on-surface">
@@ -50,13 +58,13 @@
         </x-panel>
         <x-panel class="flex flex-col gap-sm">
             <span class="text-[0.75rem] font-semibold uppercase tracking-[0.06em] text-on-surface-variant">Needs attention</span>
-            @if ($counts['overdue'] + $counts['blocked'] + $counts['waiting'] > 0)
+            @php($late = collect($meetings)->firstWhere('overdue', true))
+            @if ($counts['blocked'] > 0 || $late)
                 <div class="flex flex-wrap gap-sm">
-                    @if ($counts['overdue'] > 0)<x-status-pill tone="critical">{{ $counts['overdue'] }} overdue</x-status-pill>@endif
+                    @if ($late)<x-status-pill tone="critical">Follow-up {{ $late['number'] }} overdue</x-status-pill>@endif
                     @if ($counts['blocked'] > 0)<x-status-pill tone="critical">{{ $counts['blocked'] }} blocked</x-status-pill>@endif
-                    @if ($counts['waiting'] > 0)<x-status-pill tone="info">{{ $counts['waiting'] }} waiting for an assessor</x-status-pill>@endif
                 </div>
-                <span class="text-[0.84375rem] text-on-surface-variant">Reminders go out in the weekly digest.</span>
+                <span class="text-[0.84375rem] text-on-surface-variant">Blocked as agreed at the last follow-up; overdue once its agreed date has passed.</span>
             @else
                 <x-status-pill tone="good" class="self-start">Nothing needs attention</x-status-pill>
             @endif
@@ -99,7 +107,7 @@
             <h2 class="text-[1.125rem] font-bold">ODP tasks</h2>
             @if ($allTasks->isNotEmpty())
                 <div role="group" aria-label="Show tasks" class="flex flex-wrap gap-sm">
-                    @foreach (['all' => 'All', 'overdue' => 'Overdue or blocked', 'waiting' => 'Waiting to confirm', 'progress' => 'Not done yet', 'done' => 'Done'] as $key => $label)
+                    @foreach (['all' => 'All', 'blocked' => 'Blocked', 'progress' => 'Not done yet', 'done' => 'Done'] as $key => $label)
                         <button type="button" x-on:click="filter = '{{ $key }}'" x-bind:aria-pressed="filter === '{{ $key }}'"
                                 class="min-h-[40px] rounded-full border px-[14px] text-[0.84375rem] font-semibold"
                                 x-bind:class="filter === '{{ $key }}' ? 'bg-on-surface text-surface-container-lowest border-on-surface' : 'bg-surface-container-lowest text-on-surface-variant border-[#e7e5e0] hover:bg-surface-container-low'">
@@ -124,6 +132,8 @@
     </section>
 
     @include('follow-up._meetings', ['tasks' => $allTasks])
+
+    @include('follow-up._odp-revisions')
 
     @include('follow-up._review', ['tasks' => $allTasks])
 

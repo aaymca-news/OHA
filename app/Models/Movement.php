@@ -47,8 +47,8 @@ class Movement extends Model
     }
 
     /**
-     * The assessment under way, if any: opened and not yet finished (its ODP not yet
-     * signed by the board). A movement has at most one at a time.
+     * The assessment under way, if any: opened and not yet finished (not yet closed). A
+     * movement has at most one at a time.
      */
     public function assessmentUnderWay(): ?Assessment
     {
@@ -56,7 +56,7 @@ class Movement extends Model
     }
 
     /**
-     * The latest assessment done (its ODP signed by the board), whose follow-ups are under way.
+     * The latest assessment done (closed), whose follow-ups are under way.
      */
     public function lastAssessmentDone(): ?Assessment
     {

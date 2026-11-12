@@ -10,15 +10,15 @@
     EvidenceQuestions::EITHER => ['attach_file', 'Document or link'],
 ])
 @php([$kindIcon, $kindLabel] = $kinds[$q['accepts']])
-<li @class(['flex flex-col gap-xs p-sm rounded border-l-4', 'border-band-strong bg-surface-container-lowest' => $q['documents'] !== [], 'border-warning-ink bg-warning-wash/40' => $q['documents'] === []])>
+<li @class(['flex flex-col gap-xs rounded-xl border p-md', 'border-[#ebe9e4] bg-surface-container-lowest' => $q['documents'] !== [], 'border-[#f1e2bd] bg-warning-wash/40' => $q['documents'] === []])>
     <div class="flex flex-wrap items-baseline gap-x-sm gap-y-xs">
         <span class="text-on-surface-variant">{{ EvidenceQuestions::shown($q['code']) }}</span>
         <span class="font-semibold flex-1 min-w-[min(12rem,100%)]">{{ $q['label'] }}</span>
         <x-chip tone="neutral" :icon="$kindIcon">{{ $kindLabel }}</x-chip>
         @if ($q['documents'] === [])
-            <x-chip tone="warning" icon="pending">Missing</x-chip>
+            <x-status-pill tone="warning">Missing</x-status-pill>
         @else
-            <x-chip tone="good" icon="task_alt">Supplied</x-chip>
+            <x-status-pill tone="good">Supplied</x-status-pill>
         @endif
     </div>
     <p class="text-[0.8125rem] text-on-surface-variant">Needed: {{ $q['needed'] }}</p>
@@ -30,7 +30,7 @@
             <x-evidence-link :doc="$doc" />
         @endforeach
         @if ($q['documents'] === [] && $addLink)
-            <a href="{{ $addLink }}" class="inline-flex items-center gap-xs text-primary font-semibold underline">
+            <a href="{{ $addLink }}" class="inline-flex items-center gap-[6px] min-h-9 rounded-[10px] border border-on-surface bg-surface-container-lowest px-[12px] font-semibold hover:bg-surface-container-low">
                 <span class="material-symbols-outlined text-[1.125rem]" aria-hidden="true">add_circle</span>
                 Add the {{ $q['accepts'] === EvidenceQuestions::LINK ? 'link' : ($q['accepts'] === EvidenceQuestions::EITHER ? 'document or link' : 'document') }}
             </a>

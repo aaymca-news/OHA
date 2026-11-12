@@ -3,6 +3,7 @@
 namespace App\Queries;
 
 use App\Models\Assessment;
+use App\Models\Baseline;
 use App\Models\FormUpload;
 use App\Models\MovementStatus;
 use App\Oha\CategoryRows;
@@ -38,7 +39,8 @@ final readonly class MovementSnapshot
         return new self(
             $latest,
             CategoryRows::for($latest),
-            $frozen !== null ? (new Profile($frozen->answers ?? [], $frozen->form_meta ?? []))->toArray() : null,
+            // The answers as they stand: the newest baseline's, once it has one.
+            $frozen !== null ? (new Profile(Baseline::newestAnswers([$latest->id])[$latest->id] ?? $frozen->answers ?? [], $frozen->form_meta ?? []))->toArray() : null,
         );
     }
 }

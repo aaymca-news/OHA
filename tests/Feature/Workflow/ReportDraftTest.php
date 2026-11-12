@@ -134,7 +134,7 @@ it('discards a draft, and is closed once the ODP is signed', function () {
     $this->actingAs($this->j->assessor)->delete(route('report-draft.destroy', $this->report))->assertSessionHasNoErrors();
     expect(ReportDraft::query()->count())->toBe(0);
 
-    $signed = $this->j->assessmentAt('odp_signed');
+    $signed = $this->j->assessmentAt('closed');
     expect(fn () => $this->edit->start($this->j->report($signed), $this->j->assessor))->toThrow(WorkflowRuleBroken::class, 'frozen');
 });
 

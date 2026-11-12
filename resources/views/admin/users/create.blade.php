@@ -66,7 +66,7 @@
                     </select>
                     <span class="text-[0.8125rem] text-on-surface-variant"
                           x-text="mode === 'new' ? 'Movements that already have a ' + label + ' are greyed out: choose “Replacing” to change theirs.' : 'Only movements that have a ' + label + ' can be chosen.'">
-                        A movement has two users: its Board Chairperson, who signs the ODP, and its National General Secretary, who supplies its evidence.
+                        A movement has two users: its Board Chairperson, who may sign the ODP, and its National General Secretary, who supplies its evidence.
                     </span>
                 </x-field>
 

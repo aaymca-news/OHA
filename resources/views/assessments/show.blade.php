@@ -1,56 +1,89 @@
+@use('App\Support\Bands')
+{{--
+    One assessment, in the site's newer style (design standard of 10 Nov 2026): on top its
+    score, gaps, due date (or when it was closed) and ODP validation as pills; once its ODP
+    is approved, closing it (Stage 1 done, Baseline 1); its four gates as one line of steps; then its sections as tabs (form, report, ODP, timeline, audit trail), each in
+    the same panels; and, tucked away, stopping work on it or deleting it.
+--}}
 <x-layouts.app :title="$assessment->movement->name.' — OHA '.$assessment->period_label"
                :subtitle="'Opened '.$assessment->opened_at->asDay().' by '.$assessment->opener->name">
     <x-slot:actions>
         <div class="flex flex-wrap items-center gap-sm">
             @if ($assessment->score)
-                <x-chip tone="info" icon="scoreboard">{{ \App\Support\Viz::figure((float) $assessment->score->points_achieved) }} / {{ $assessment->score->points_available }} · {{ number_format((float) $assessment->score->pct, 1) }}%</x-chip>
-                <x-band-chip :band="$assessment->score->band" />
+                <span class="inline-flex items-baseline gap-[4px] rounded-full bg-surface-container-lowest border border-[#e7e5e0] px-[12px] py-[4px] text-[0.8125rem]">
+                    <span class="font-bold tabular-nums">{{ number_format((float) $assessment->score->pct, 1) }}%</span>
+                    <span class="text-on-surface-variant">{{ \App\Support\Viz::figure((float) $assessment->score->points_achieved) }} / {{ $assessment->score->points_available }}</span>
+                </span>
+                <x-status-pill :tone="Bands::tone($assessment->score->band->code)">{{ $assessment->score->band->label }}</x-status-pill>
+                {{-- Once closed, the score is the newest baseline's: its history is a click away for those who follow it up. --}}
+                @if ($assessment->isClosed() && Gate::allows('viewFollowUp', $assessment))
+                    <a href="{{ route('baselines.show', $assessment) }}" class="text-[0.8125rem] font-semibold underline underline-offset-2">Baseline {{ $assessment->score->baseline }}</a>
+                @endif
             @endif
             @if ($openGaps > 0 && Gate::allows('viewGaps', $assessment))
-                <a href="{{ route('assessments.show', ['assessment' => $assessment, 'tab' => 'form']) }}#findings"><x-chip tone="serious" icon="playlist_remove">{{ $openGaps }} missing from the form</x-chip></a>
+                <a href="{{ route('assessments.show', ['assessment' => $assessment, 'tab' => 'form']) }}#findings" class="rounded-full focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary">
+                    <x-status-pill tone="critical" class="hover:brightness-95">{{ $openGaps }} missing from the form</x-status-pill>
+                </a>
             @endif
             @if ($assessment->workItem)
-                <x-due-chip :days="$assessment->workItem->days_left" />
-            @else
-                <x-chip tone="good" icon="verified_user">Stage 1 done</x-chip>
+                <x-due-note :days="$assessment->workItem->days_left" />
+            @elseif ($assessment->closed_at)
+                <x-status-pill tone="good">Closed {{ $assessment->closed_at->asDay() }} · Baseline 1</x-status-pill>
             @endif
             @if ($tabs->contains('odp'))
-                <span class="text-[0.8125rem] text-on-surface-variant">ODP</span> <x-validation-chip :status="$artefacts['odp']->status" />
+                <x-validation-chip :status="$artefacts['odp']->status" />
             @endif
         </div>
     </x-slot:actions>
 
+    {{-- Stage 1 done: whoever may close it, once the ODP is approved and nothing waits for approval. --}}
+    @can('close', $assessment)
+        <x-action-banner id="close" title="The ODP is approved. Close the assessment to set Baseline 1 and start the follow-up.">
+            <x-confirm-form :action="route('assessments.close', $assessment)" class="flex flex-wrap items-end gap-sm"
+                            :confirm="'Close the '.$assessment->movement->name.' assessment? Its OHA form, report and ODP are frozen as approved, its scores become Baseline 1, and the follow-up begins. The Board Chairperson can still sign the ODP afterwards.'">
+                <x-field label="Follow-up 1’s date (optional)" size="sm">
+                    <input type="date" name="first_follow_up_on" @class(\App\Support\Ui::control(false, 'sm'))>
+                </x-field>
+                <x-button>Close the assessment</x-button>
+            </x-confirm-form>
+        </x-action-banner>
+    @endcan
+
     @if ($milestones->isNotEmpty() && $canAudit)
-        <x-gate-stepper :milestones="$milestones" :current="$assessment->workItem?->gate_code" />
+        <x-panel class="!py-md">
+            <x-gate-stepper :milestones="$milestones" :current="$assessment->workItem?->gate_code" />
+        </x-panel>
     @endif
 
-    <nav class="flex flex-wrap gap-xs border-b-[1.5px] border-outline-variant" aria-label="Assessment sections">
-        @foreach ($tabs as $i => $t)
-            @php($state = in_array($t, ['form', 'report', 'odp'], true) ? $artefacts[$t]->status->effective_state : null)
-            <a href="{{ route('assessments.show', ['assessment' => $assessment, 'tab' => $t]) }}" @if ($tab === $t) aria-current="page" @endif
-               @class(['px-md py-sm text-[0.875rem] -mb-[1.5px] border-b-[3px] flex items-center gap-xs',
-                       'border-primary font-semibold text-primary' => $tab === $t,
-                       'border-transparent text-on-surface-variant hover:text-primary' => $tab !== $t])>
-                {{ ['form' => '1. OHA form', 'report' => '2. Report', 'odp' => '3. ODP', 'timeline' => '4. Timeline', 'audit' => '5. Audit trail'][$t] }}
-                @if ($state === 'locked')
-                    <span class="material-symbols-outlined text-[1rem]" aria-label="locked">lock</span>
+    <div class="flex flex-col gap-sm">
+        <nav class="flex gap-lg overflow-x-auto border-b border-[#e4e1db]" aria-label="Assessment sections">
+            @foreach ($tabs as $t)
+                @php($state = in_array($t, ['form', 'report', 'odp'], true) ? $artefacts[$t]->status->effective_state : null)
+                <a href="{{ route('assessments.show', ['assessment' => $assessment, 'tab' => $t]) }}" @if ($tab === $t) aria-current="page" @endif
+                   @class(['flex items-center gap-[6px] whitespace-nowrap py-[10px] -mb-px border-b-2 text-[0.9375rem]',
+                           'border-on-surface font-semibold text-on-surface' => $tab === $t,
+                           'border-transparent text-on-surface-variant hover:text-on-surface' => $tab !== $t])>
+                    {{ ['form' => '1. OHA form', 'report' => '2. Report', 'odp' => '3. ODP', 'timeline' => '4. Timeline', 'audit' => '5. Audit trail'][$t] }}
+                    @if ($state === 'locked')
+                        <span class="material-symbols-outlined text-[1rem]" aria-label="locked">lock</span>
+                    @endif
+                </a>
+            @endforeach
+        </nav>
+
+        {{-- Who last changed this document, for those working on it: several assessors see each other's steps. --}}
+        @if ($lastChange !== null && in_array($tab, ['form', 'report', 'odp'], true) && ($change = $lastChange($tab)))
+            <p class="flex flex-wrap items-center gap-xs text-[0.8125rem] text-on-surface-variant">
+                <span class="material-symbols-outlined text-[1.125rem]" aria-hidden="true">history</span>
+                Last change: <strong class="text-on-surface">{{ $change->actor?->name ?? 'The platform' }}</strong>
+                {{ str_replace(['.', '_'], [': ', ' '], $change->action) }},
+                <span title="{{ $change->occurred_at->asStamp() }}">{{ $change->occurred_at->diffForHumans() }}</span>
+                @if ($canAudit)
+                    · <a href="{{ route('assessments.show', ['assessment' => $assessment, 'tab' => 'audit']) }}" class="font-semibold text-on-surface underline decoration-[#d3d0c9] underline-offset-2 hover:decoration-on-surface">Audit trail</a>
                 @endif
-            </a>
-        @endforeach
-    </nav>
-
-    {{-- Who last changed this document, for those working on it: several assessors see each other's steps. --}}
-    @if ($lastChange !== null && in_array($tab, ['form', 'report', 'odp'], true) && ($change = $lastChange($tab)))
-        <p class="flex flex-wrap items-center gap-xs text-[0.8125rem] text-on-surface-variant">
-            <span class="material-symbols-outlined text-[1.125rem]" aria-hidden="true">history</span>
-            Last change: <strong class="text-on-surface">{{ $change->actor?->name ?? 'The platform' }}</strong>
-            {{ str_replace(['.', '_'], [': ', ' '], $change->action) }},
-            <span title="{{ $change->occurred_at->asStamp() }}">{{ $change->occurred_at->diffForHumans() }}</span>
-            @if ($canAudit)
-                · <a href="{{ route('assessments.show', ['assessment' => $assessment, 'tab' => 'audit']) }}" class="text-primary underline">Audit trail</a>
-            @endif
-        </p>
-    @endif
+            </p>
+        @endif
+    </div>
 
     @switch($tab)
         @case('form')
@@ -74,8 +107,8 @@
     @if (Gate::allows('handBack', $assessment) || Gate::allows('delete', $assessment))
         <div class="grid md:grid-cols-2 gap-md items-start">
             @can('handBack', $assessment)
-                <details class="bg-surface-container-lowest border-[1.5px] border-outline-variant rounded-lg p-md" @if ($errors->has('reason') && old('_action') === 'hand-back') open @endif>
-                    <summary class="cursor-pointer text-[0.875rem] font-semibold text-primary">Stop working on this assessment</summary>
+                <details class="bg-surface-container-lowest border border-[#e7e5e0] rounded-2xl p-lg shadow-[0_1px_2px_rgba(20,20,20,0.04)]" @if ($errors->has('reason') && old('_action') === 'hand-back') open @endif>
+                    <summary class="cursor-pointer text-[0.9375rem] font-semibold text-on-surface">Stop working on this assessment</summary>
                     <form method="POST" action="{{ route('assessments.hand-back', $assessment) }}" class="flex flex-col gap-sm mt-sm">
                         @csrf
                         <input type="hidden" name="_action" value="hand-back">
@@ -89,8 +122,8 @@
                 </details>
             @endcan
             @can('delete', $assessment)
-                <details class="bg-surface-container-lowest border-[1.5px] border-band-critical rounded-lg p-md" @if (old('_action') === 'delete') open @endif>
-                    <summary class="cursor-pointer text-[0.875rem] font-semibold text-critical-ink">Delete this assessment</summary>
+                <details class="bg-surface-container-lowest border border-[#ecc9c4] rounded-2xl p-lg shadow-[0_1px_2px_rgba(20,20,20,0.04)]" @if (old('_action') === 'delete') open @endif>
+                    <summary class="cursor-pointer text-[0.9375rem] font-semibold text-critical-ink">Delete this assessment</summary>
                     <form method="POST" action="{{ route('assessments.destroy', $assessment) }}" class="flex flex-col gap-sm mt-sm">
                         @csrf
                         @method('DELETE')

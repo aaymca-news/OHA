@@ -41,7 +41,7 @@ it('opens an assessment in the month chosen, whatever day it is today', function
     expect(Assessment::query()->latest('id')->firstOrFail()->assessed_on->toDateString())->toBe('2026-02-01');
 });
 
-it('takes Zambia from a new assessment to a signed ODP through the screens', function () {
+it('takes Zambia from a new assessment to a closed one, with the ODP signed, through the screens', function () {
     $j = $this->j;
 
     // The assessor opens the assessment from the movement's page and uploads the form.
@@ -113,7 +113,11 @@ it('takes Zambia from a new assessment to a signed ODP through the screens', fun
     expect($j->odp($assessment)->state)->toBe(ArtefactState::Approved)
         ->and(ArtefactStatus::query()->findOrFail($report->id)->validated)->toBeFalse()
         ->and(ArtefactStatus::query()->findOrFail($odp->id)->validated)->toBeTrue()
-        ->and(MovementStatus::query()->where('slug', 'zambia')->value('has_odp'))->toBeTrue();
+        // Signed, but Stage 1 ends only when the assessment is closed.
+        ->and(MovementStatus::query()->where('slug', 'zambia')->value('has_odp'))->toBeFalse();
+
+    $this->actingAs($j->assessor)->post(route('assessments.close', $assessment))->assertRedirect(route('follow-up.show', $assessment));
+    expect(MovementStatus::query()->where('slug', 'zambia')->value('has_odp'))->toBeTrue();
 
     // The typed signature shows on the ODP for everyone who may see it.
     $this->actingAs($j->otherStaff)->get($odpTab)->assertSee('Validated by the board')->assertSee('Naledi Moyo');

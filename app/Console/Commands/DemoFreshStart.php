@@ -29,10 +29,10 @@ class DemoFreshStart extends Command
 {
     /** What was fed into the demo, cleared in full (the accounts, movements and settings are not here). */
     public const CLEARED = [
-        'artefact_comments', 'artefacts', 'assessments', 'audit_events', 'board_signatures', 'category_scores',
-        'documents', 'drive_sync_runs', 'evidence', 'evidence_odp_tasks', 'evidence_questions', 'form_findings',
+        'artefact_comments', 'artefacts', 'assessments', 'audit_events', 'baseline_scores', 'baselines', 'board_signatures', 'category_scores',
+        'documents', 'drive_sync_runs', 'evidence', 'evidence_odp_tasks', 'evidence_questions', 'follow_up_windows', 'form_findings',
         'form_uploads', 'notifications', 'odp_follow_up_tasks', 'odp_follow_ups', 'odp_reviews', 'odp_tasks',
-        'report_drafts', 'sent_reminders', 'timeline_items', 'demo_changes',
+        'report_drafts', 'rescore_uploads', 'sent_reminders', 'timeline_items', 'demo_changes',
     ];
 
     public function handle(): int

@@ -44,18 +44,26 @@ class MovementPolicy
             : Response::deny('Only the Administrators change a National Movement’s details.');
     }
 
+    /**
+     * Starting an assessment: the movement's assessors, an Administrator or the Super
+     * Administrator. One at a time, and (decided 12 Nov 2026) the next one only once the
+     * previous cycle is closed: no band-based date, whenever they are ready.
+     */
     public function openAssessment(User $user, Movement $movement): Response
     {
         if (! $user->canAssess($movement)) {
             return Response::deny("You are not assigned to assess {$movement->name}. The Administrators assign assessors.");
         }
 
-        // One assessment at a time: the next one starts once this one is finished.
         $underWay = $movement->assessmentUnderWay();
+        if ($underWay !== null) {
+            return Response::deny("{$movement->name}’s {$underWay->period_label} assessment has already started. A new one can start once it is finished (closed).");
+        }
+        $last = $movement->lastAssessmentDone();
 
-        return $underWay === null
+        return $last === null || $last->isFollowUpClosed()
             ? Response::allow()
-            : Response::deny("{$movement->name}’s {$underWay->period_label} assessment has already started. A new one can start once it is finished (its ODP signed by the board).");
+            : Response::deny("{$movement->name}’s {$last->period_label} cycle is still in follow-up. The next assessment can start once that cycle is closed.");
     }
 
     /** An approved pause of a movement's follow-up (elections, a crisis) is agreed by an Administrator. */

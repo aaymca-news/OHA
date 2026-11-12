@@ -63,7 +63,8 @@ it('puts an assigned movement with no assessment under way in My Work, until its
 
     $this->actingAs($this->staff)->get(route('my-work'))->assertOk()
         ->assertSee('To be started')->assertSee('Ghana YMCA')->assertSee('not assessed yet')->assertSee('Start the assessment');
-    $this->actingAs($this->staff)->get(route('dashboard'))->assertOk()->assertSee('Start the assessment');
+    // The dashboard is analytics only: the work is in My Work.
+    $this->actingAs($this->staff)->get(route('dashboard'))->assertOk()->assertDontSee('Start the assessment');
 
     app(OpenAssessment::class)->handle($this->staff, $this->j->ghana, 'Oct 2026', Carbon::parse('2026-10-01'));
 

@@ -53,10 +53,17 @@ class User extends Authenticatable
     }
 
     /**
-     * Every AAYMCA user (Staff and both kinds of Administrator) may assess the
-     * movements they are assigned to. Only the Administrators assign them.
+     * Who may do an assessor's work on a movement (decided 12 Nov 2026): the AAYMCA staff
+     * assigned to it, and every Administrator and the Super Administrator, assigned or not.
+     * Only the Administrators assign staff; staff never assign themselves.
      */
     public function canAssess(Movement $movement): bool
+    {
+        return $this->active && ($this->isAdmin() || $this->isAssignedTo($movement));
+    }
+
+    /** Whether this AAYMCA user was given this movement to assess (by an Administrator). */
+    public function isAssignedTo(Movement $movement): bool
     {
         return $this->active
             && $this->isAssessor()

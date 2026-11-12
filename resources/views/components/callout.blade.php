@@ -14,14 +14,14 @@
         'warning' => 'bg-warning-wash text-warning-ink',
         'serious' => 'bg-serious-wash text-serious-ink',
         'critical' => 'bg-critical-wash text-critical-ink',
-        'neutral' => 'bg-surface-container text-on-surface',
+        'neutral' => 'bg-[#f4f3f0] text-on-surface',
     ];
     $borders = ['warning' => 'border-band-developing', 'serious' => 'border-band-atrisk', 'critical' => 'border-band-critical', 'good' => 'border-band-strong'];
 @endphp
 <div @if ($alert) role="alert" @endif {{ $attributes->class([
-    'flex items-start gap-sm p-md rounded-lg text-[0.875rem]',
+    'flex items-start gap-sm p-md rounded-xl text-[0.875rem]',
     $washes[$tone] ?? $washes['info'],
-    'border-[1.5px] '.($borders[$tone] ?? 'border-outline-variant') => $alert,
+    'border '.($borders[$tone] ?? 'border-outline-variant') => $alert,
 ]) }}>
     @if ($icon !== '')
         <span class="material-symbols-outlined" aria-hidden="true">{{ $icon }}</span>

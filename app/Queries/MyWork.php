@@ -7,12 +7,12 @@ use App\Enums\ArtefactState;
 use App\Enums\FindingSeverity;
 use App\Enums\HolderRole;
 use App\Enums\Role;
-use App\Enums\TaskProgress;
 use App\Models\Artefact;
 use App\Models\Assessment;
 use App\Models\Movement;
 use App\Models\User;
 use App\Models\WorkItem;
+use App\Oha\FollowUpSchedule;
 use Illuminate\Auth\Access\Response;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
@@ -23,9 +23,11 @@ use Illuminate\Support\Facades\Gate;
  *
  *   start     assessors: their movements with no assessment under way, to open
  *   started   assessors: their movements whose assessment has started; actionable when it is with them
- *   done      assessors: their movements whose assessment is done (ODP signed), follow-ups under way
+ *   done      assessors: their movements whose assessment is done (closed), follow-ups under way
  *   approve   Administrators: everything awaiting approval (what they submitted themselves is shown locked, with why)
- *   sign      the Board Chairperson: the approved ODP awaiting their signature
+ *   close     Administrators: assessments whose ODP is approved, ready to close (on the movements
+ *             they do not assess themselves; those are in "started")
+ *   sign      the Board Chairperson: the approved ODP they may sign (optional: never a reminder)
  *   gaps      forms on your movements that went forward with missing information still open
  *
  * Each entry is one document, with its due date from v_work_items where it is on
@@ -33,8 +35,11 @@ use Illuminate\Support\Facades\Gate;
  */
 final class MyWork
 {
+    /** Groups that inform rather than wait on someone: never on the badge, the banner or "waiting on you". */
+    public const QUIET = ['sign', 'gaps'];
+
     /**
-     * @return list<array{key: string, items: list<array{artefact: Artefact|null, movement?: Movement, opened?: true, started?: true, done?: Assessment|null, waiting?: int, holder: string, days_left: int|null, actionable: bool, blocked: string|null}>}>
+     * @return list<array{key: string, items: list<array{artefact: Artefact|null, movement?: Movement, opened?: true, started?: true, done?: Assessment|null, follow_up?: array<string, mixed>|null, holder: string, days_left: int|null, actionable: bool, blocked: string|null}>}>
      */
     public function for(User $user): array
     {
@@ -45,27 +50,32 @@ final class MyWork
             $groups[] = $this->fromArtefacts('approve', $this->artefacts()
                 ->where('state', ArtefactState::PendingApproval)->get(),
                 __('oha.holder.approver'), fn (Artefact $a) => Gate::forUser($user)->inspect('approve', $a));
+            // Approved ODPs to close (Stage 1 done), on movements someone else assesses.
+            $groups[] = $this->fromWork('close', $this->work(HolderRole::Closer)->whereNotIn('movement_id', $assigned)->get(),
+                fn (Artefact $a) => Gate::forUser($user)->inspect('close', $a->assessment));
         }
 
-        // Only the Board Chairperson signs; the National General Secretary has nothing to sign.
+        // Only the Board Chairperson signs (optional, no target date); the National General Secretary has nothing to sign.
         if ($user->role === Role::Board) {
-            $groups[] = $this->fromArtefacts('sign', $this->artefacts()
+            $toSign = $this->artefacts()
                 ->where('kind', ArtefactKind::Odp)
                 ->where('state', ArtefactState::Approved)->whereDoesntHave('signature')
                 ->whereHas('assessment', fn (Builder $q) => $q->where('movement_id', $user->movement_id))
-                ->get(), __('oha.holder.board'), fn (Artefact $a) => Gate::forUser($user)->inspect('sign', $a));
+                ->get();
+            $groups[] = ['key' => 'sign', 'items' => $toSign->map(fn (Artefact $a) => $this->entry($a, __('oha.holder.board'), null,
+                fn (Artefact $a) => Gate::forUser($user)->inspect('sign', $a)))->values()->all()];
         }
 
         // The movements they assess, always these four (who did what is in each assessment's audit trail):
         if ($user->isAssessor()) {
             // assigned, with no assessment under way: theirs to open;
             $groups[] = ['key' => 'start', 'items' => $this->toStart($user, $assigned)];
-            // opened and not yet signed by the board, with where each stands (theirs to act on when it is with them);
+            // opened and not yet closed, with where each stands (theirs to act on when it is with them, or ready to close);
             $groups[] = ['key' => 'started', 'items' => $this->started($assigned)];
-            // signed by the board, its follow-ups under way;
+            // closed, its follow-ups under way;
             $groups[] = ['key' => 'done', 'items' => $this->done($user)];
             // and forms that went forward with information missing. Only assessments under way:
-            // once the ODP is signed, the assessment leaves this list.
+            // once the assessment is closed, it leaves this list.
             $groups[] = $this->fromWork('gaps', $this->withOpenGaps($assigned), fn () => null);
         }
 
@@ -78,7 +88,7 @@ final class MyWork
     public function actionableCount(User $user): int
     {
         return collect($this->for($user))
-            ->whereIn('key', ['start', 'started', 'done', 'approve', 'sign'])
+            ->whereNotIn('key', self::QUIET)
             ->sum(fn (array $group) => count(array_filter($group['items'], fn ($i) => $i['actionable'])));
     }
 
@@ -143,23 +153,23 @@ final class MyWork
     }
 
     /**
-     * Its assessment is done (ODP signed) and the next one is not yet due: the
-     * follow-ups are what is under way, not a new assessment.
+     * Its assessment is done (closed) and its cycle is not closed yet: the follow-ups are
+     * what is under way, not a new assessment (which waits for the cycle to close).
      */
     private function followingUp(Movement $m): bool
     {
-        $next = $m->status?->next_assessment_on;
+        $last = $m->lastAssessmentDone();
 
-        return (bool) $m->status?->has_odp && $next !== null && $next->isFuture();
+        return $last !== null && ! $last->isFollowUpClosed();
     }
 
     /**
-     * The movements this person assesses whose assessment is done (Stage 1: ODP signed),
-     * with its follow-ups under way (Stage 2), until the next assessment is due. Tasks the
-     * movement reported done wait for this assessor to confirm them: then it is theirs to
-     * act on, and counts on the badge.
+     * The movements this person assesses whose assessment is done (Stage 1: closed),
+     * with its follow-ups under way (Stage 2). When the follow-up under way is open (its
+     * meeting to hold, record and close) or past its agreed date, it is theirs to act on,
+     * and counts on the badge.
      *
-     * @return list<array{artefact: null, movement: Movement, done: Assessment, waiting: int, holder: string, days_left: null, actionable: bool, blocked: null}>
+     * @return list<array{artefact: null, movement: Movement, done: Assessment, follow_up: array<string, mixed>|null, holder: string, days_left: null, actionable: bool, blocked: null}>
      */
     private function done(User $user): array
     {
@@ -167,16 +177,16 @@ final class MyWork
             ->filter(fn (Movement $m) => $this->followingUp($m))
             ->map(function (Movement $m) {
                 $done = $m->lastAssessmentDone();
-                $waiting = $done === null ? 0 : $done->odpTasks()->where('progress', TaskProgress::Done)->where('done', false)->count();
+                $next = $done === null || $done->isFollowUpClosed() ? null : FollowUpSchedule::next($done);
 
                 return [
                     'artefact' => null,
                     'movement' => $m,
                     'done' => $done,
-                    'waiting' => $waiting,
+                    'follow_up' => $next,
                     'holder' => __('oha.holder.assessor'),
                     'days_left' => null,
-                    'actionable' => $waiting > 0,
+                    'actionable' => $next !== null && ($next['state'] === FollowUpSchedule::OPEN || $next['overdue']),
                     'blocked' => null,
                 ];
             })
@@ -185,12 +195,13 @@ final class MyWork
     }
 
     /**
-     * The ongoing assessments (opened, ODP not yet signed) of the movements this person
-     * assesses, with where each stands. One waiting on the assessor (to prepare, or sent
-     * back) is theirs to act on, so it counts on the badge; the rest are with someone else.
+     * The ongoing assessments (opened, not yet closed) of the movements this person
+     * assesses, with where each stands. One waiting on the assessor (to prepare, sent back,
+     * or approved and ready to close) is theirs to act on, so it counts on the badge; the
+     * rest are with someone else.
      *
      * @param  list<int>  $assigned
-     * @return list<array{artefact: Artefact, movement: Movement, started: true, holder: string, days_left: int|null, actionable: bool, blocked: null}>
+     * @return list<array{artefact: Artefact, movement: Movement, started: true, ready: bool, holder: string, days_left: int|null, actionable: bool, blocked: null}>
      */
     private function started(array $assigned): array
     {
@@ -203,9 +214,10 @@ final class MyWork
                 'artefact' => $w->artefact,
                 'movement' => $w->artefact->assessment->movement,
                 'started' => true,
+                'ready' => $w->holder_role === HolderRole::Closer,
                 'holder' => $w->holder_role->label(),
                 'days_left' => $w->days_left,
-                'actionable' => $w->holder_role === HolderRole::Assessor,
+                'actionable' => in_array($w->holder_role, [HolderRole::Assessor, HolderRole::Closer], true),
                 'blocked' => null,
             ])->values()->all();
     }

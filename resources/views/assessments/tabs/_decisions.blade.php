@@ -39,7 +39,7 @@
     </x-card>
 @else
     {{-- Why an Administrator cannot approve yet: e.g. the ODP before the OHA form and report are approved. --}}
-    @if (auth()->user()->isAdmin() && ($artefact->state->value === 'pending_approval' || (auth()->user()->canAssess($assessment->movement) && in_array($artefact->state->value, ['drafted', 'ready', 'rejected'], true))))
+    @if (auth()->user()->isAdmin() && ($artefact->state->value === 'pending_approval' || (auth()->user()->isAssignedTo($assessment->movement) && in_array($artefact->state->value, ['drafted', 'ready', 'rejected'], true))))
         <x-empty-state icon="lock">{{ Gate::inspect('approve', $artefact)->message() }}</x-empty-state>
     @endif
     {{-- It can still go back now, if something in it is wrong. --}}

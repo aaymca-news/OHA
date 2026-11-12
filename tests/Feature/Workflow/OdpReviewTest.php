@@ -1,11 +1,10 @@
 <?php
 
 use App\Actions\Oha\CarryOverTasks;
+use App\Actions\Oha\RecordFollowUp;
 use App\Actions\Oha\RecordOdpReview;
-use App\Actions\Oha\ReportTaskProgress;
 use App\Enums\TaskProgress;
 use App\Exceptions\WorkflowRuleBroken;
-use App\Models\MovementStatus;
 use App\Models\OdpTask;
 use App\Models\User;
 use App\Notifications\WorkflowNotice;
@@ -23,7 +22,7 @@ beforeEach(function () {
     Notification::fake();
     $this->j = Journey::begin();
     $this->ngs = User::factory()->generalSecretary($this->j->zambia)->create();
-    $this->assessment = $this->j->assessmentAt('odp_signed');
+    $this->assessment = $this->j->assessmentAt('closed');
     $task = fn (string $ref) => OdpTask::query()->create([
         'assessment_id' => $this->assessment->id, 'source' => OdpTask::TYPED, 'ref' => $ref, 'priority' => 'GOVERNANCE', 'task' => 'Task '.$ref,
         'due_on' => today()->addMonth()->toDateString(), 'responsible' => 'The General Secretary',
@@ -31,8 +30,10 @@ beforeEach(function () {
     $this->done = $task('1.1');
     $this->open = $task('1.2');
     $this->blocked = $task('1.3');
-    app(ReportTaskProgress::class)->handle($this->done, $this->j->assessor, TaskProgress::Done);
-    app(ReportTaskProgress::class)->handle($this->blocked, $this->ngs, TaskProgress::Blocked, 'No funds.');
+    // Where they stand, as set at follow-up 1's meeting.
+    $this->j->openFollowUp($this->assessment);
+    app(RecordFollowUp::class)->handle($this->assessment, $this->j->assessor, 1, today()->toDateString(), null, 'Tasks reviewed.',
+        statuses: [$this->done->id => TaskProgress::Done->value, $this->blocked->id => TaskProgress::Blocked->value]);
 });
 
 it('lets an assessor write the review, keeping the counts as they stood, and tells the movement', function () {
@@ -90,13 +91,16 @@ it('shows the review and the carry-over on the follow-up page', function () {
     $this->actingAs($this->ngs)->get($page)->assertOk()->assertSee('The board was trained.')->assertSee('Carried over')->assertSee('Mar 2028')->assertDontSee('Save the review');
 });
 
-it('reminds the assessors in the digest to write the review as the next assessment nears', function () {
-    $due = MovementStatus::query()->findOrFail($this->j->zambia->id)->next_assessment_on;
-    $this->travelTo($due->copy()->subDays(60));
+it('reminds the assessors in the digest to write the review once the three follow-ups are closed', function () {
+    expect(app(FollowUpDigest::class)->for($this->j->assessor)[0]['review_due'])->toBeFalse();
+    foreach ([1, 2, 3] as $n) {
+        $this->j->holdFollowUp($this->assessment, $n);
+    }
 
     expect(app(FollowUpDigest::class)->for($this->j->assessor)[0]['review_due'])->toBeTrue()
-        ->and(app(FollowUpDigest::class)->for($this->ngs)[0]['review_due'])->toBeFalse();
+        // Nothing for the General Secretary: the review is the assessors'.
+        ->and(app(FollowUpDigest::class)->for($this->ngs))->toBe([]);
 
     app(RecordOdpReview::class)->handle($this->assessment, $this->j->assessor, 'Done.', 'Not done.');
-    expect(app(FollowUpDigest::class)->for($this->j->assessor)[0]['review_due'])->toBeFalse();
+    expect(app(FollowUpDigest::class)->for($this->j->assessor))->toBe([]);
 });

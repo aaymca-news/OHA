@@ -1,8 +1,7 @@
 <?php
 
 use App\Actions\Movements\PauseFollowUp;
-use App\Actions\Oha\ReportTaskProgress;
-use App\Enums\TaskProgress;
+use App\Actions\Oha\FollowUpWindows;
 use App\Exceptions\WorkflowRuleBroken;
 use App\Models\MovementStatus;
 use App\Models\OdpTask;
@@ -22,27 +21,31 @@ beforeEach(function () {
     Notification::fake();
     $this->j = Journey::begin();
     $this->ngs = User::factory()->generalSecretary($this->j->zambia)->create(['name' => 'Mwila Banda']);
-    $this->assessment = $this->j->assessmentAt('odp_signed');
-    $task = fn (string $ref, string $text, ?string $due) => OdpTask::query()->create([
-        'assessment_id' => $this->assessment->id, 'source' => OdpTask::TYPED, 'ref' => $ref, 'task' => $text, 'due_on' => $due,
-    ]);
-    $this->overdue = $task('1.1', 'Approve a resource mobilisation plan', today()->subDays(5)->toDateString());
-    $this->soon = $task('2.1', 'Train the board', today()->addDays(10)->toDateString());
-    $this->later = $task('3.1', 'Publish an annual report', today()->addMonths(6)->toDateString());
+    $this->assessment = $this->j->assessmentAt('closed');
+    OdpTask::query()->create(['assessment_id' => $this->assessment->id, 'source' => OdpTask::TYPED, 'ref' => '1.1', 'task' => 'Approve a resource mobilisation plan']);
+    // Follow-up 1 planned in ten days, and open.
+    app(FollowUpWindows::class)->plan($this->assessment, $this->j->assessor, 1, today()->addDays(10)->toDateString());
+    $this->j->openFollowUp($this->assessment);
 });
 
-it('gathers what needs attention for each person: overdue, due soon, and for assessors what waits for them', function () {
-    app(ReportTaskProgress::class)->handle($this->later, $this->ngs, TaskProgress::Done);
-
+it('gathers what needs attention for each person: the follow-up under way, and once all are closed the review', function () {
     $forNgs = app(FollowUpDigest::class)->for($this->ngs);
-    $forAssessor = app(FollowUpDigest::class)->for($this->j->assessor);
 
     expect($forNgs)->toHaveCount(1)
-        ->and($forNgs[0]['overdue']->pluck('ref')->all())->toBe(['1.1'])
-        ->and($forNgs[0]['due_soon']->pluck('ref')->all())->toBe(['2.1'])
-        ->and($forNgs[0]['waiting'])->toBeEmpty()
-        ->and($forAssessor[0]['waiting']->pluck('ref')->all())->toBe(['3.1'])
+        ->and($forNgs[0]['follow_up'])->toMatchArray(['number' => 1, 'open' => true, 'overdue' => false])
+        ->and($forNgs[0]['review_due'])->toBeFalse()
         ->and(app(FollowUpDigest::class)->for($this->j->otherStaff))->toBe([]);
+
+    // Past its agreed date: overdue.
+    $this->travel(11)->days();
+    expect(app(FollowUpDigest::class)->for($this->ngs)[0]['follow_up']['overdue'])->toBeTrue();
+
+    // The three closed: the review is for the assessors to write.
+    foreach ([1, 2, 3] as $n) {
+        $this->j->holdFollowUp($this->assessment, $n);
+    }
+    expect(app(FollowUpDigest::class)->for($this->j->assessor)[0])->toMatchArray(['follow_up' => null, 'review_due' => true])
+        ->and(app(FollowUpDigest::class)->for($this->ngs))->toBe([]);
 });
 
 it('sends the digest once a week to those with something on it', function () {
@@ -60,21 +63,27 @@ it('sends the digest once a week to those with something on it', function () {
     Notification::assertSentToTimes($this->ngs, FollowUpDigestNotice::class, 2);
 });
 
-it('writes the digest as one email with each movement’s tasks and a link', function () {
+it('writes the digest as one email with each movement’s follow-up and a link', function () {
     $notice = FollowUpDigestNotice::from(app(FollowUpDigest::class)->for($this->ngs));
     $mail = $notice->toMail($this->ngs);
     $text = implode("\n", $mail->introLines);
 
     expect($mail->subject)->toBe('This week’s ODP follow-up')
-        ->and($text)->toContain('Zambia YMCA')->toContain('Overdue:')->toContain('1.1 Approve a resource mobilisation plan')
-        ->toContain('Due in the next 30 days:')->toContain(route('follow-up.show', $this->assessment))
-        ->and($notice->toArray($this->ngs)['body'])->toContain('1 overdue');
+        ->and($text)->toContain('Zambia YMCA')->toContain('Follow-up 1 is open, planned for')
+        ->toContain('add the evidence and notes on the tasks')->toContain(route('follow-up.show', $this->assessment))
+        ->and($notice->toArray($this->ngs)['body'])->toContain('Follow-up 1 is open');
 });
 
-it('reminds of the next assessment 90 and 30 days before, then once overdue, each once', function () {
-    $due = MovementStatus::query()->findOrFail($this->j->zambia->id)->next_assessment_on;
+it('has no band-based date for the next assessment: it is ready once the cycle is closed', function () {
+    expect(MovementStatus::query()->findOrFail($this->j->zambia->id)->next_assessment_on)->toBeNull();
+});
+
+it('reminds of a planned first assessment 90 and 30 days before, then once past, each once', function () {
+    $this->j->assessor->assignedMovements()->attach($this->j->ghana);
+    $this->j->ghana->update(['planned_assessment_on' => today()->addMonths(6)->startOfMonth()->toDateString()]);
+    $due = MovementStatus::query()->findOrFail($this->j->ghana->id)->next_assessment_on;
     $reminded = fn () => Notification::sent($this->j->assessor, WorkflowNotice::class)
-        ->filter(fn (WorkflowNotice $n) => str_contains($n->subject, 'next assessment'))->count();
+        ->filter(fn (WorkflowNotice $n) => str_contains($n->subject, 'Ghana YMCA’s first assessment'))->count();
 
     $this->travelTo($due->copy()->subDays(100));
     $this->artisan('oha:remind-reassessment');
@@ -92,16 +101,16 @@ it('reminds of the next assessment 90 and 30 days before, then once overdue, eac
     $this->travelTo($due->copy()->addDays(3));
     $this->artisan('oha:remind-reassessment');
     expect($reminded())->toBe(3);
-    Notification::assertSentTo($this->j->admin, WorkflowNotice::class, fn (WorkflowNotice $n) => str_contains($n->subject, 'is overdue'));
+    Notification::assertSentTo($this->j->admin, WorkflowNotice::class, fn (WorkflowNotice $n) => str_contains($n->subject, 'is past its planned date'));
 });
 
 it('sends only the most pressing reminder when it runs late', function () {
-    $due = MovementStatus::query()->findOrFail($this->j->zambia->id)->next_assessment_on;
-    $this->travelTo($due->copy()->addDays(2));
+    $this->j->assessor->assignedMovements()->attach($this->j->ghana);
+    $this->j->ghana->update(['planned_assessment_on' => today()->subMonth()->startOfMonth()->toDateString()]);
     $this->artisan('oha:remind-reassessment');
 
-    $sent = Notification::sent($this->j->assessor, WorkflowNotice::class)->filter(fn (WorkflowNotice $n) => str_contains($n->subject, 'next assessment'));
-    expect($sent)->toHaveCount(1)->and($sent->first()->subject)->toContain('is overdue');
+    $sent = Notification::sent($this->j->assessor, WorkflowNotice::class)->filter(fn (WorkflowNotice $n) => str_contains($n->subject, 'first assessment'));
+    expect($sent)->toHaveCount(1)->and($sent->first()->subject)->toContain('is past its planned date');
 });
 
 it('pauses the follow-up: no digest or reminders, "Paused" shown, until it is lifted', function () {

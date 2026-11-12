@@ -12,8 +12,7 @@
     $me = auth()->user();
     $rated = $insights->rated();
     $n = $rated->count();
-    $overdueTasks = $odp['counts']['overdue'] ?? 0;
-    $underWayCount = $pipeline['form'] + $pipeline['report'] + $pipeline['odp'] + $pipeline['sign'];
+    $underWayCount = $pipeline['form'] + $pipeline['report'] + $pipeline['odp'] + $pipeline['close'];
     $meanBand = $headline['mean'] !== null ? Bands::at((float) $headline['mean']) : null;
     $short = fn (string $name) => str_replace(' YMCA', '', $name);
     $label = 'text-[0.75rem] font-semibold uppercase tracking-[0.06em] text-on-surface-variant';
@@ -41,22 +40,22 @@
             Movements below 50%, calling for support
         </x-kpi>
         <x-kpi label="Assessments under way" :value="$underWayCount">
-            At the form, report, ODP or signature
+            At the form, report, ODP or closing
         </x-kpi>
-        <x-kpi label="ODPs validated" :value="$headline['with_odp']">
-            Signed by the Board Chairperson
+        <x-kpi label="Assessments closed" :value="$headline['with_odp']">
+            Baseline 1 set, the ODP in follow-up
         </x-kpi>
-        <x-kpi label="ODP tasks overdue" :value="$overdueTasks" :tone="$overdueTasks > 0 ? 'critical' : null">
-            Of {{ $odp['total'] }} tasks in {{ count($odp['rows']) }} {{ count($odp['rows']) === 1 ? 'ODP' : 'ODPs' }}
+        <x-kpi label="Follow-ups overdue" :value="$odp['late']" :tone="$odp['late'] > 0 ? 'critical' : null">
+            Past their agreed date, of {{ count($odp['rows']) }} {{ count($odp['rows']) === 1 ? 'ODP' : 'ODPs' }} followed up
         </x-kpi>
     </section>
 
-    <x-panel title="Stage 1 across the region" :subtitle="'Where each of the '.$pipeline['total'].' National Movements is: from not yet assessed to a signed ODP.'">
+    <x-panel title="Stage 1 across the region" :subtitle="'Where each of the '.$pipeline['total'].' National Movements is: from not yet assessed to a closed assessment.'">
         <x-viz.pipeline :pipeline="$pipeline" />
     </x-panel>
 
     <div class="grid gap-md lg:grid-cols-[1.4fr_1fr] items-start">
-        <x-panel title="Every movement’s health score" subtitle="Its overall score in the latest approved OHA form, highest first">
+        <x-panel title="Every movement’s health score" subtitle="Its overall score as it stands (its newest baseline), highest first">
             <x-slot:actions><x-more-link :href="route('movements.index')">National Movements</x-more-link></x-slot:actions>
             @if ($n === 0)
                 <x-empty-state icon="insights">No movement is rated yet. Each one appears here once its OHA form is approved.</x-empty-state>
@@ -129,27 +128,25 @@
         </div>
     </div>
 
-    <x-panel title="How the ODPs are being carried out" subtitle="The tasks in each movement’s newest ODP and their deadlines, as read from the ODP or set by its assessors" stack>
+    <x-panel title="How the ODPs are being carried out" subtitle="The tasks in each movement’s newest ODP, as set at its last follow-up, and its next follow-up" stack>
         <x-slot:actions><x-more-link :href="route('timelines')">Open Timelines</x-more-link></x-slot:actions>
         @if ($odp['total'] === 0)
             <x-empty-state icon="checklist">No ODP has tasks yet. They appear once an ODP is uploaded.</x-empty-state>
         @else
             <div class="flex flex-wrap gap-sm">
-                <x-status-pill tone="good">Done {{ $odp['counts']['done'] ?? 0 }}</x-status-pill>
-                <x-status-pill tone="critical">Overdue {{ $overdueTasks }}</x-status-pill>
-                <x-status-pill tone="warning">Due within 30 days {{ $odp['counts']['soon'] ?? 0 }}</x-status-pill>
-                <x-status-pill>Later {{ $odp['counts']['upcoming'] ?? 0 }}</x-status-pill>
-                <x-status-pill tone="atrisk">No date {{ $odp['counts']['undated'] ?? 0 }}</x-status-pill>
+                <x-status-pill tone="good">Done {{ collect($odp['rows'])->sum(fn ($r) => $r['summary']['done']) }}</x-status-pill>
+                <x-status-pill tone="warning">In progress {{ collect($odp['rows'])->sum(fn ($r) => $r['summary']['in_progress']) }}</x-status-pill>
+                <x-status-pill tone="critical">Blocked {{ $odp['blocked'] }}</x-status-pill>
+                <x-status-pill tone="critical">Follow-ups overdue {{ $odp['late'] }}</x-status-pill>
             </div>
-            {{-- Each movement side by side, falling behind first. A signed ODP opens its follow-up. --}}
+            {{-- Each movement side by side, falling behind first. A closed assessment opens its follow-up. --}}
             <div class="overflow-x-auto -mx-1">
                 <table class="w-full min-w-[46rem] text-[0.875rem]">
                     <thead>
                         <tr class="{{ $label }} text-left">
                             <th class="font-semibold pb-sm px-1">Movement</th>
                             <th class="font-semibold pb-sm px-1 w-[30%]">Done</th>
-                            <th class="font-semibold pb-sm px-1 text-right">Overdue</th>
-                            <th class="font-semibold pb-sm px-1 text-right">To confirm</th>
+                            <th class="font-semibold pb-sm px-1 text-right">In progress</th>
                             <th class="font-semibold pb-sm px-1 text-right">Blocked</th>
                             <th class="font-semibold pb-sm px-1 pl-md">Next follow-up</th>
                             <th class="font-semibold pb-sm px-1"><span class="sr-only">Status</span></th>
@@ -161,25 +158,24 @@
                             @php($s = $row['summary'])
                             <tr class="border-t border-[#f0eeea]">
                                 <td class="py-[11px] px-1">
-                                    <a href="{{ $row['signed'] ? route('follow-up.show', $row['assessment']) : route('timelines', ['movement' => $m->slug]) }}" class="font-semibold text-on-surface underline decoration-[#d3d0c9] underline-offset-2 hover:decoration-on-surface">{{ $short($m->name) }}</a>
+                                    <a href="{{ $row['closed'] ? route('follow-up.show', $row['assessment']) : route('timelines', ['movement' => $m->slug]) }}" class="font-semibold text-on-surface underline decoration-[#d3d0c9] underline-offset-2 hover:decoration-on-surface">{{ $short($m->name) }}</a>
                                 </td>
                                 <td class="py-[11px] px-1">
                                     <span class="flex items-center gap-sm">
-                                        <span class="flex-1 flex h-2 rounded-full overflow-hidden bg-[#dddad3]" role="img" aria-label="{{ $s['done'] }} of {{ $s['total'] }} done, {{ $s['overdue'] }} overdue">
+                                        <span class="flex-1 flex h-2 rounded-full overflow-hidden bg-[#dddad3]" role="img" aria-label="{{ $s['done'] }} of {{ $s['total'] }} done, {{ $s['blocked'] }} blocked">
                                             @if ($s['done'] > 0)<span class="bg-band-strong" style="width: {{ $s['done'] / max(1, $s['total']) * 100 }}%"></span>@endif
-                                            @if ($s['overdue'] > 0)<span class="bg-band-critical {{ $s['done'] > 0 ? 'ml-0.5' : '' }}" style="width: {{ $s['overdue'] / max(1, $s['total']) * 100 }}%"></span>@endif
+                                            @if ($s['blocked'] > 0)<span class="bg-band-critical {{ $s['done'] > 0 ? 'ml-0.5' : '' }}" style="width: {{ $s['blocked'] / max(1, $s['total']) * 100 }}%"></span>@endif
                                         </span>
                                         <span class="tabular-nums text-[0.8125rem] text-on-surface-variant whitespace-nowrap">{{ $s['done'] }} / {{ $s['total'] }} · {{ $s['pct'] }}%</span>
                                     </span>
                                 </td>
-                                <td @class(['py-[11px] px-1 text-right tabular-nums', 'font-bold text-critical-ink' => $s['overdue'] > 0])>{{ $s['overdue'] }}</td>
-                                <td @class(['py-[11px] px-1 text-right tabular-nums', 'font-semibold text-info-ink' => $s['waiting'] > 0])>{{ $s['waiting'] }}</td>
+                                <td class="py-[11px] px-1 text-right tabular-nums">{{ $s['in_progress'] }}</td>
                                 <td @class(['py-[11px] px-1 text-right tabular-nums', 'font-semibold text-critical-ink' => $s['blocked'] > 0])>{{ $s['blocked'] }}</td>
                                 <td class="py-[11px] px-1 pl-md text-[0.8125rem] whitespace-nowrap">
                                     @if ($row['meeting'])
-                                        <span @class(['font-semibold text-critical-ink' => $row['meeting']['overdue'] && ! $row['paused']])>Follow-up {{ $row['meeting']['number'] }} · {{ $row['meeting']['due_on']->asDay() }}</span>
+                                        <span @class(['font-semibold text-critical-ink' => $row['meeting']['overdue'] && ! $row['paused']])>Follow-up {{ $row['meeting']['number'] }} · {{ $row['meeting']['due_on']?->asDay() ?? 'date not set' }}</span>
                                     @else
-                                        <span class="text-on-surface-variant">{{ $row['signed'] ? 'All held' : 'Once signed' }}</span>
+                                        <span class="text-on-surface-variant">{{ $row['closed'] ? 'All held' : 'Once closed' }}</span>
                                     @endif
                                 </td>
                                 <td class="py-[11px] px-1 text-right">
@@ -187,10 +183,10 @@
                                         <x-status-pill tone="warning">Paused</x-status-pill>
                                     @elseif ($row['behind'])
                                         <x-status-pill tone="critical">Falling behind</x-status-pill>
-                                    @elseif ($row['signed'])
+                                    @elseif ($row['closed'])
                                         <x-status-pill tone="good">On track</x-status-pill>
                                     @else
-                                        <x-status-pill>Not yet signed</x-status-pill>
+                                        <x-status-pill>Not yet closed</x-status-pill>
                                     @endif
                                 </td>
                             </tr>
@@ -201,25 +197,32 @@
         @endif
     </x-panel>
 
+    {{-- Each movement's latest cycle, from Baseline 1 to its newest baseline: the biggest gains first. --}}
+    @if ($journeys['summary']['movements'] > 0)
+        @php($js = $journeys['summary'])
+        <x-panel title="Journeys this cycle" stack
+                 :subtitle="$js['followed'] === 0
+                    ? 'Each movement’s score from Baseline 1, its closed assessment. Each follow-up closed adds a baseline.'
+                    : $js['improved'].' of '.$js['followed'].' movements followed up are higher than at Baseline 1'.($js['band_up'] > 0 ? ', '.$js['band_up'].' up a band' : '').'; on average '.($js['mean_change'] > 0 ? '+' : '').number_format((float) $js['mean_change'], 1).' percentage points.'">
+            <x-slot:actions><x-more-link :href="route('journeys.index')">Every journey</x-more-link></x-slot:actions>
+            @include('journeys._rows', ['rows' => $journeys['rows'], 'limit' => 6])
+        </x-panel>
+    @endif
+
     @include('dashboard._odp-changes')
 
-    <x-panel title="Re-assessment due" subtitle="Past their re-assessment date. The band sets the cadence: weaker movements are re-assessed sooner.">
+    <x-panel title="Ready for the next assessment" subtitle="Their cycle is closed and no new assessment is under way: their assessors or an Administrator start it when ready.">
         @if ($due->isEmpty())
-            <x-empty-state icon="event_available">No movement is past its re-assessment date.</x-empty-state>
+            <x-empty-state icon="event_available">No movement is waiting for its next assessment.</x-empty-state>
         @else
             <ul class="grid gap-x-xl sm:grid-cols-2">
                 @foreach ($due as $status)
                     <li class="flex items-center gap-[12px] py-[11px] border-t border-[#f0eeea] text-[0.875rem]">
                         <a href="{{ route('movements.show', $status->movement) }}" class="flex-1 min-w-0 truncate font-semibold text-on-surface underline decoration-[#d3d0c9] underline-offset-2 hover:decoration-on-surface">{{ $status->name }}</a>
-                        @if (isset($underWay[$status->movement_id]))
-                            <x-status-pill tone="info">Assessment started</x-status-pill>
-                        @elseif ($status->band)
+                        @if ($status->band)
                             <x-status-pill :tone="Bands::tone($status->band_code)">{{ $status->band->label }}</x-status-pill>
                         @endif
-                        <span class="text-right text-[0.8125rem] whitespace-nowrap">
-                            <span class="font-semibold text-critical-ink">Was due {{ $status->next_assessment_on->asMonth() }}</span>
-                            <span class="block text-on-surface-variant">{{ $status->next_assessment_on->diffForHumans(['parts' => 1]) }}</span>
-                        </span>
+                        <span class="text-right text-[0.8125rem] text-on-surface-variant whitespace-nowrap">{{ $status->last_assessed_on ? 'Last '.$status->last_assessed_on->asMonth() : '' }}</span>
                     </li>
                 @endforeach
             </ul>

@@ -68,7 +68,7 @@ it('works out a movement’s stage from its work', function () {
         ->and(Stage::ofWork(null))->toBe(Stage::Complete)
         ->and(Stage::ofWork($work(HolderRole::Assessor->value, ArtefactKind::Report->value)))->toBe(Stage::Report)
         ->and(Stage::ofWork($work(HolderRole::Approver->value, ArtefactKind::Form->value)))->toBe(Stage::Form)
-        ->and(Stage::ofWork($work(HolderRole::Board->value, ArtefactKind::Odp->value)))->toBe(Stage::Sign)
+        ->and(Stage::ofWork($work(HolderRole::Closer->value, ArtefactKind::Odp->value)))->toBe(Stage::Close)
         ->and(Stage::Complete->label())->toBe('Stage 1 done · follow-ups ongoing')
         ->and(Stage::Complete->short())->toBe('Stage 1 done');
 });

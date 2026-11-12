@@ -47,7 +47,7 @@ final class OdpActivity
             'last' => DriveSyncRun::query()->latest('id')->first(),
             // Linked ODPs whose document could not be read on the last attempt.
             'failing' => Artefact::query()->where('kind', ArtefactKind::Odp)->whereNotNull('drive_problem')
-                ->whereDoesntHave('signature')->count(),
+                ->whereHas('assessment', fn ($a) => $a->whereNull('closed_at'))->count(),
         ];
     }
 }

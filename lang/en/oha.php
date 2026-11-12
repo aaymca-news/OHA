@@ -19,6 +19,7 @@ return [
         'movements' => 'National Movements',
         'assessments' => 'Assessments',
         'timelines' => 'Timelines',
+        'journeys' => 'Journeys',
         'users' => 'Users & Roles',
         'our_movement' => 'Our Movement',
         'resources' => 'Resources',
@@ -54,21 +55,35 @@ return [
     'holder' => [
         'assessor' => 'With the assessor',
         'approver' => 'With the Administrators for approval',
-        'board' => 'With the Board Chairperson for signature',
+        'closer' => 'Approved: ready to close',
+        // Not a holder any more: the Board Chairperson's signature is optional and holds nothing up.
+        'board' => 'Optional signature by the Board Chairperson',
     ],
 
     'work' => [
         'title' => 'My Work',
-        'subtitle' => 'One queue for everything waiting on you, whatever your role.',
+        'subtitle' => 'Everything waiting on you, across the movements you look after.',
         'groups' => [
             'start' => 'To be started',
             'started' => 'Ongoing assessments',
             'done' => 'Assessments done',
             'approve' => 'Awaiting my approval',
-            'sign' => 'Awaiting my signature',
+            'close' => 'Ready to close',
+            'sign' => 'ODP to sign (optional)',
             'gaps' => 'Missing information',
         ],
+        // One line under each group's heading: what it holds.
+        'about' => [
+            'start' => 'Movements you assess with no assessment under way: start one when it is due.',
+            'started' => 'Opened and not yet closed, with where each one stands. Once the ODP is approved, close the assessment.',
+            'done' => 'Closed and in follow-up: open each follow-up when it is time, hold it, record it and close it.',
+            'approve' => 'OHA forms, reports and ODPs submitted for approval.',
+            'close' => 'Approved ODPs on movements others assess: closing the assessment sets Baseline 1 and starts the follow-up.',
+            'sign' => 'Approved ODPs you may sign on behalf of your board. Optional: nothing waits on your signature.',
+            'gaps' => 'Forms that went forward with information still missing.',
+        ],
         'empty' => 'Nothing here.',
+        'empty_hint' => 'You are all caught up in this group.',
         'due_in' => 'Due in :days days',
         'due_tomorrow' => 'Due tomorrow',
         'due_today' => 'Due today',

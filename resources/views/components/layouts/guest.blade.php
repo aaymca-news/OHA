@@ -19,11 +19,11 @@
         <a href="{{ route('home') }}" title="About the Organisational Health Assessment">
             <img src="{{ asset('images/aaymca-logo.png') }}" alt="{{ __('oha.app.org') }}" width="1200" height="452" class="w-[16rem] max-w-full h-auto">
         </a>
-        <p class="text-[1.125rem] font-bold text-primary">{{ __('oha.app.title') }}</p>
+        <p class="text-[1.125rem] font-bold text-on-surface">{{ __('oha.app.title') }}</p>
     </div>
 
-    <main class="w-full max-w-[28rem] bg-surface-container-lowest border-[1.5px] border-outline-variant border-t-[4px] border-t-brand-red rounded-lg p-md sm:p-lg">
-        <h1 class="text-[1.25rem] font-bold text-primary mb-md">{{ $title }}</h1>
+    <main class="w-full max-w-[28rem] bg-surface-container-lowest border border-[#e7e5e0] border-t-[3px] border-t-brand-red rounded-2xl shadow-[0_8px_30px_rgba(20,20,20,0.06)] p-lg sm:p-[32px]">
+        <h1 class="text-[1.375rem] font-bold text-on-surface mb-md">{{ $title }}</h1>
         <x-flash />
         {{ $slot }}
     </main>

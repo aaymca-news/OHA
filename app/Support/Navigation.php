@@ -4,9 +4,9 @@ namespace App\Support;
 
 use App\Enums\Role;
 use App\Models\AssessmentMilestone;
+use App\Models\FollowUpWindow;
 use App\Models\Movement;
 use App\Models\MovementStatus;
-use App\Models\OdpTask;
 use App\Models\User;
 use App\Queries\MyWork;
 use Illuminate\Support\Facades\Cache;
@@ -35,7 +35,7 @@ final class Navigation
         }
 
         // "v2": entries cached before the sidebar held only plain values are never read back.
-        return Cache::remember('nav:v3:'.Cache::get('nav:version', 0).':'.$user->id, $seconds, fn () => $this->build($user));
+        return Cache::remember('nav:v4:'.Cache::get('nav:version', 0).':'.$user->id, $seconds, fn () => $this->build($user));
     }
 
     /** Every sidebar is worked out afresh on its next page: something changed. */
@@ -76,7 +76,7 @@ final class Navigation
         // assessments (Assessments) and manage the users (Users & Roles).
         $items[] = $item('my_work', 'my-work', 'inbox', $this->myWork->actionableCount($user));
         $items[] = $item('movements', 'movements.index', 'public',
-            // Reassessments overdue, apart from movements whose follow-up is paused.
+            // First assessments past the month an Administrator planned (no band-based dates since 12 Nov 2026).
             MovementStatus::query()->where('reassessment_overdue', true)
                 ->whereHas('movement', fn ($m) => $m->where(fn ($q) => $q->whereNull('follow_up_paused_until')->orWhere('follow_up_paused_until', '<', today())))
                 ->count(), 'warning', active: 'movements.*', group: 'movements');
@@ -85,6 +85,8 @@ final class Navigation
                 $this->unassigned(), 'warning', active: 'assessments.*', group: 'movements');
         }
         $items[] = $item('timelines', 'timelines', 'event_note', $this->overdue($user), group: 'movements');
+        // Each movement's latest cycle, baseline by baseline (all staff: analytics, like the dashboard).
+        $items[] = $item('journeys', 'journeys.index', 'trending_up', group: 'movements');
         $items[] = $item('resources', 'resources', 'folder_open', group: 'library');
 
         if (Gate::forUser($user)->allows('manage', User::class)) {
@@ -108,14 +110,18 @@ final class Navigation
             ->count();
     }
 
-    /** Overdue gate milestones and ODP tasks on the movements this user may see on Timelines. */
+    /**
+     * Overdue gate milestones, and follow-ups past their agreed date and not closed, on the
+     * movements this user may see on Timelines (ODP tasks have no deadlines of their own).
+     */
     private function overdue(User $user): int
     {
-        $odps = OdpTimeline::assessments($user->visibleMovementIds());
+        $mine = $user->visibleMovementIds();
 
-        return $this->overdueMilestones($user) + OdpTask::query()
-            ->whereIn('assessment_id', $odps->pluck('id'))
-            ->where('done', false)->whereNotNull('due_on')->where('due_on', '<', today())
+        return $this->overdueMilestones($user) + FollowUpWindow::query()
+            ->whereNull('locked_at')->whereNotNull('due_on')->where('due_on', '<', today())
+            ->whereHas('assessment', fn ($q) => $q->whereNotNull('closed_at')->whereNull('follow_up_closed_at')
+                ->when($mine !== null, fn ($q) => $q->whereIn('movement_id', $mine)))
             ->count();
     }
 

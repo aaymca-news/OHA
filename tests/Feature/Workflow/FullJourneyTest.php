@@ -15,14 +15,17 @@ beforeEach(function () {
     $this->j = Journey::begin();
 });
 
-it('takes Zambia from an opened assessment to an ODP signed by the Board Chairperson', function () {
-    $assessment = $this->j->assessmentAt('odp_signed');
+it('takes Zambia from an opened assessment to a closed one, with no signature needed', function () {
+    $assessment = $this->j->assessmentAt('closed');
 
     expect($this->j->form($assessment)->state)->toBe(ArtefactState::Approved)
         ->and($this->j->report($assessment)->state)->toBe(ArtefactState::Approved)
         ->and($this->j->odp($assessment)->state)->toBe(ArtefactState::Approved)
-        ->and(ArtefactStatus::query()->findOrFail($this->j->odp($assessment)->id)->validated)->toBeTrue()
-        // Stage 1 complete: nothing is waiting on anyone, and the movement has a validated ODP.
+        ->and($assessment->isClosed())->toBeTrue()
+        ->and($assessment->closer->is($this->j->assessor))->toBeTrue()
+        // The Board Chairperson's signature is optional: not given, nothing waits on it.
+        ->and(ArtefactStatus::query()->findOrFail($this->j->odp($assessment)->id)->validated)->toBeFalse()
+        // Stage 1 complete: nothing is waiting on anyone, and the movement's ODP is in follow-up.
         ->and(WorkItem::query()->find($assessment->id))->toBeNull()
         ->and(MovementStatus::query()->where('slug', 'zambia')->firstOrFail()->has_odp)->toBeTrue()
         ->and(AssessmentMilestone::query()->where('assessment_id', $assessment->id)->count())->toBe(4)
@@ -30,24 +33,24 @@ it('takes Zambia from an opened assessment to an ODP signed by the Board Chairpe
 });
 
 it('writes one audit row for every step, in order', function () {
-    $assessment = $this->j->assessmentAt('odp_signed');
+    $assessment = $this->j->assessmentAt('closed');
 
     expect(AuditEvent::query()->where('assessment_id', $assessment->id)->orderBy('id')->pluck('action')->all())->toBe([
         'assessment.opened', 'form.uploaded', 'form.submitted', 'form.approved',
         'report.version_uploaded', 'report.submitted', 'report.approved',
         'odp.version_uploaded', 'odp.drive_linked', 'odp.submitted', 'odp.approved',
-        'odp.signed_by_board',
+        'assessment.closed', 'baseline.recorded',
     ]);
 });
 
-it('moves the holder along: assessor, Administrators, Board Chairperson, then done', function () {
+it('moves the holder along: assessor, Administrators, ready to close, then done', function () {
     $holder = fn (string $stage) => WorkItem::query()->find($this->j->assessmentAt($stage)->id)?->holder_role->value;
 
     expect($holder('form_uploaded'))->toBe('assessor')
         ->and($holder('form_submitted'))->toBe('approver')
         ->and($holder('report_uploaded'))->toBe('assessor')
-        ->and($holder('odp_approved'))->toBe('board')
-        ->and($holder('odp_signed'))->toBeNull();
+        ->and($holder('odp_approved'))->toBe('closer')
+        ->and($holder('closed'))->toBeNull();
 });
 
 it('tells each person only what concerns them', function () {
@@ -60,7 +63,7 @@ it('tells each person only what concerns them', function () {
         ->and($subjects($this->j->chair))->toBe([
             'Now available: OHA form, Zambia YMCA',
             'Now available: Health assessment report (version 1), Zambia YMCA',
-            'Please sign: ODP (version 1), Zambia YMCA',
+            'Now available: ODP (version 1), Zambia YMCA',
         ])
         ->and($subjects($this->j->ghanaChair))->toBe([])
         ->and($subjects($this->j->otherStaff))->toBe([])

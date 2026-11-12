@@ -11,6 +11,7 @@ use App\Models\Artefact;
 use App\Models\Document;
 use App\Models\User;
 use App\Notifications\WorkflowNotice;
+use App\Oha\FollowUpSchedule;
 use App\Support\Audit;
 use App\Support\FileVault;
 use App\Support\Google\DriveFile;
@@ -30,7 +31,9 @@ use Illuminate\Support\Facades\Storage;
  *   (oha.drive.quiet_minutes), so one sitting of edits becomes one version.
  * - A change while the Administrators decide stays with them (they are told); a change
  *   after approval needs approval again; everyone else keeps seeing the last approved
- *   version meanwhile. Once the Board Chairperson has signed, a change is only noted.
+ *   version meanwhile. Once the assessment is closed, a change made while a follow-up
+ *   is open revises the plan (ReviseOdp); otherwise it is noted, and taken in when the
+ *   next follow-up is opened.
  * - The version records the Google account that last changed the document. If that
  *   person has an account here, the version is theirs; if not, it is recorded under
  *   whoever linked the document, with the Google address kept.
@@ -49,7 +52,7 @@ final class TakeOdpFromDrive
 
     public const FAILED = 'failed';
 
-    public function __construct(private readonly GoogleDrive $drive) {}
+    public function __construct(private readonly GoogleDrive $drive, private readonly ReviseOdp $revise) {}
 
     /**
      * @return array{outcome: string, message: string, version: Document|null}
@@ -60,7 +63,7 @@ final class TakeOdpFromDrive
             $this->ensure($requestedBy, 'syncDrive', $odp);
         }
 
-        $signed = $odp->isSigned();
+        $closed = $odp->assessment->isClosed();
         $skip = match (true) {
             $odp->kind !== ArtefactKind::Odp || $odp->drive_file_id === null => 'No Google Drive document is linked.',
             ! $this->drive->configured() => 'The platform is not connected to Google Drive yet, so changes there are not taken automatically. Upload the ODP to add a version.',
@@ -93,10 +96,15 @@ final class TakeOdpFromDrive
         $path = (string) tempnam(sys_get_temp_dir(), 'odp');
         file_put_contents($path, $bytes);
 
-        // Signed: the ODP is frozen, so a change is noted for Stage 2, never made a version.
-        if ($signed) {
+        // Closed: the Stage 1 ODP is kept as approved. While a follow-up is open, a change is a
+        // revision of the plan (ReviseOdp); otherwise it is noted, and taken in when the next opens.
+        if ($closed) {
             try {
-                return $this->noteAfterSigning($odp, $file, $path, $requestedBy);
+                $next = FollowUpSchedule::next($odp->assessment);
+
+                return ! $odp->assessment->isFollowUpClosed() && ($next['state'] ?? null) === FollowUpSchedule::OPEN
+                    ? $this->takeRevision($odp, $file, $path, $requestedBy)
+                    : $this->noteAfterClosing($odp, $file, $path, $requestedBy);
             } finally {
                 @unlink($path);
             }
@@ -145,15 +153,15 @@ final class TakeOdpFromDrive
     }
 
     /**
-     * A change made in Google Drive to the signed ODP: kept as a copy "changed after
-     * signing", with what changed since the copy before (or the signed version). The
-     * signed version stays the plan of record.
+     * A change made in Google Drive to the ODP once the assessment is closed: kept as a
+     * copy "changed after closing", with what changed since the copy before (or the
+     * approved version). The approved version stays the plan of record.
      *
      * @return array{outcome: string, message: string, version: Document|null}
      */
-    private function noteAfterSigning(Artefact $odp, DriveFile $file, string $path, ?User $requestedBy): array
+    private function noteAfterClosing(Artefact $odp, DriveFile $file, string $path, ?User $requestedBy): array
     {
-        $previous = $odp->changesAfterSigning()->reorder('id', 'desc')->first() ?? $odp->signature?->document;
+        $previous = $odp->changesAfterSigning()->reorder('id', 'desc')->first() ?? $odp->approvedVersion()->first();
         $sha = (string) hash_file('sha256', $path);
         if ($previous !== null && $previous->sha256 === $sha) {
             $this->checked($odp, version: $file->version);
@@ -175,7 +183,7 @@ final class TakeOdpFromDrive
         $editor = $file->editorEmail !== null
             ? User::query()->whereRaw('lower(email) = ?', [mb_strtolower($file->editorEmail)])->first()
             : null;
-        $owner = $editor ?? $odp->driveLinker ?? $requestedBy ?? $odp->signature->signer
+        $owner = $editor ?? $odp->driveLinker ?? $requestedBy ?? $odp->assessment->closer
             ?? throw new WorkflowRuleBroken('Nobody here can be recorded for this change. Link the document again.');
         $stored = FileVault::store($path, "documents/{$odp->assessment_id}/odp/after-signing", $format);
 
@@ -204,12 +212,47 @@ final class TakeOdpFromDrive
             default => 'the file',
         };
         Notify::send(Notify::assessorsOf($assessment), new WorkflowNotice(
-            "Signed ODP changed in Google Drive: {$assessment->movement->name}",
-            "{$who} changed {$what} of the signed ODP in Google Drive. The change is noted on the ODP tab; the signed version stays the plan of record.",
+            "ODP changed in Google Drive: {$assessment->movement->name}",
+            "{$who} changed {$what} of the ODP in Google Drive after the assessment was closed. The change is noted on the ODP tab; the approved version stays the plan of record.",
             Notify::link($assessment), 'info',
         ), except: $editor);
 
-        return $this->result(self::SAVED, 'Noted the change made after signing ('.$what.').', $noted);
+        return $this->result(self::SAVED, 'Noted the change made after closing ('.$what.').', $noted);
+    }
+
+    /**
+     * A change made in Google Drive while a follow-up is open: a revision of the plan, counted
+     * in that follow-up (see ReviseOdp). The same file as one already saved is left alone.
+     *
+     * @return array{outcome: string, message: string, version: Document|null}
+     */
+    private function takeRevision(Artefact $odp, DriveFile $file, string $path, ?User $requestedBy): array
+    {
+        if ($odp->documents()->where('sha256', hash_file('sha256', $path))->exists()) {
+            $this->checked($odp, version: $file->version);
+
+            return $this->result(self::UNCHANGED, 'The document in Google Drive is the same as an ODP already saved.');
+        }
+        $editor = $file->editorEmail !== null
+            ? User::query()->whereRaw('lower(email) = ?', [mb_strtolower($file->editorEmail)])->first()
+            : null;
+        $owner = $editor ?? $odp->driveLinker ?? $requestedBy ?? $odp->assessment->closer;
+        if ($owner === null) {
+            $this->checked($odp, 'Nobody here can be recorded for this change. Link the document again.');
+
+            return $this->result(self::FAILED, 'Nobody here can be recorded for this change. Link the document again.');
+        }
+
+        try {
+            $revision = $this->revise->fromDrive($odp, $path, $file->fileName(), $file->version, $file->editorEmail, $owner, $editor ?? $requestedBy);
+        } catch (WorkflowRuleBroken $e) {
+            $this->checked($odp, $e->getMessage());
+
+            return $this->result(self::FAILED, $e->getMessage());
+        }
+        $this->checked($odp, version: $file->version);
+
+        return $this->result(self::SAVED, 'Taken from Google Drive as a revision of the ODP for follow-up '.$revision->follow_up_number.'.', $revision);
     }
 
     /**

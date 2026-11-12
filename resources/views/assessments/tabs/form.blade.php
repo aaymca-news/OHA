@@ -2,7 +2,7 @@
     Tab 1: the OHA form. Expects $form, $upload, $uploads, $previewing, $dqa, $rows, $openGaps.
     The form is approved by an Administrator; it is never signed. What it lacks can be typed
     here, in the form its question asks for; the file itself is never changed. It can be
-    corrected after approval, until the Board Chairperson signs the ODP.
+    corrected after approval, until the assessment is closed.
 --}}
 @use('App\Oha\Interpreter')
 @use('App\Oha\FormDefinition')

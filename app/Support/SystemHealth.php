@@ -40,8 +40,8 @@ final class SystemHealth
 
         if ($withoutChair !== []) {
             $problems[] = count($withoutChair) === 1
-                ? "{$withoutChair[0]} has no Board Chairperson, so its ODP cannot be signed."
-                : count($withoutChair).' movements have no Board Chairperson, so their ODPs cannot be signed.';
+                ? "{$withoutChair[0]} has no Board Chairperson, so nobody can validate its ODP for the board."
+                : count($withoutChair).' movements have no Board Chairperson, so nobody can validate their ODPs for the board.';
             $severity ??= 'serious';
         }
 

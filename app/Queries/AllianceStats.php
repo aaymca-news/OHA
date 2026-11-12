@@ -3,6 +3,7 @@
 namespace App\Queries;
 
 use App\Enums\BandCode;
+use App\Models\Assessment;
 use App\Models\Category;
 use App\Models\HealthBand;
 use App\Models\Movement;
@@ -67,7 +68,8 @@ final class AllianceStats
      */
     public function weakestCategories(): Collection
     {
-        $averages = DB::table('category_scores as cs')
+        // Each movement's score as it stands: its newest baseline.
+        $averages = DB::table('v_current_category_scores as cs')
             ->join('v_movement_status as ms', 'ms.latest_assessment_id', '=', 'cs.assessment_id')
             ->select('cs.category_id', DB::raw('avg(cs.points * 100.0 / cs.max_points_at_scoring) as pct'), DB::raw('count(*) as n'))
             ->groupBy('cs.category_id')
@@ -80,15 +82,17 @@ final class AllianceStats
     }
 
     /**
-     * Movements whose next assessment date has passed, the longest overdue first.
+     * Movements ready for their next assessment: their latest cycle is closed and no new
+     * assessment is under way (decided 12 Nov 2026: no band-based date), the longest
+     * waiting first.
      *
      * @return Collection<int, MovementStatus>
      */
-    public function reassessmentDue(): Collection
+    public function readyForNext(): Collection
     {
-        return MovementStatus::query()->with(['band', 'movement'])
-            ->where('reassessment_overdue', true)
-            ->orderBy('next_assessment_on')->orderBy('movement_id')
-            ->get();
+        $closed = Assessment::query()->latestPerMovement()->whereNotNull('follow_up_closed_at')->pluck('follow_up_closed_at', 'movement_id');
+
+        return MovementStatus::query()->with(['band', 'movement'])->whereIn('movement_id', $closed->keys())->get()
+            ->sortBy(fn (MovementStatus $s) => [$closed[$s->movement_id], $s->name])->values();
     }
 }

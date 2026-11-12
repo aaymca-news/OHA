@@ -12,9 +12,13 @@ use App\Exceptions\WorkflowRuleBroken;
 use App\Http\Middleware\UseDemoSandbox;
 use App\Models\Artefact;
 use App\Models\Assessment;
+use App\Models\Baseline;
 use App\Models\BoardSignature;
+use App\Models\FollowUpWindow;
 use App\Models\Movement;
 use App\Models\User;
+use App\Oha\Rescoring;
+use App\Oha\ScoreGaps;
 use Carbon\Carbon;
 use Database\Seeders\DemoSeeder;
 use Database\Seeders\DemoStorySeeder;
@@ -441,10 +445,13 @@ it('gives every visitor a copy of the showcase’s work: one signs Zambia’s OD
     $as()->get(route('dashboard'))->assertOk();
     $as()->post(route('artefacts.sign', $odp), ['signature' => 'Ama Mensah', 'confirm' => '1'])->assertSessionHasNoErrors();
 
-    // Signing out goes back to "Choose who to be"; as the Administrator, A sees it signed.
+    // Signing out goes back to "Choose who to be"; as the Administrator, A sees it signed,
+    // ready to close (signing is optional: closing ends Stage 1), and closes it.
     $as()->post(route('logout'))->assertRedirect(route('login'));
     $as()->post(route('demo.sign-in'), ['role' => 'admin'])->assertRedirect(route('dashboard'));
     $as()->get(route('dashboard'))->assertOk();
+    $as()->get(route('my-work', ['group' => 'started']))->assertOk()->assertSee('Ready to close');
+    $as()->post(route('assessments.close', $assessment))->assertSessionHasNoErrors();
     // The Administrator, on every movement like the assessor, has it among the assessments done.
     $as()->get(route('my-work', ['group' => 'done']))->assertOk()->assertSee('Zambia YMCA');
     Sandboxes::use($a);
@@ -662,10 +669,11 @@ it('puts every visitor in one shared demo with the Super Administrator: what one
     $this->withUnencryptedCookie(Sandboxes::COOKIE, Sandboxes::SHOWCASE)->get(route('assessments.show', Assessment::query()->firstOrFail()))->assertOk();
 });
 
-it('shows Zambia done on the Super Administrator’s side once a visitor signs its ODP as the Board Chairperson', function () {
+it('shows Zambia done on the Super Administrator’s side once a visitor signs its ODP and closes the assessment', function () {
     config(['oha.demo_shared' => true]);
     $ray = makeSuperAdmin();
-    $odp = prepareInShowcase('zambia', $ray)->odp()->firstOrFail();
+    $assessment = prepareInShowcase('zambia', $ray);
+    $odp = $assessment->odp()->firstOrFail();
     $key = register();
     $as = fn () => $this->withUnencryptedCookie(Sandboxes::COOKIE, $key);
 
@@ -673,8 +681,9 @@ it('shows Zambia done on the Super Administrator’s side once a visitor signs i
     $as()->post(route('artefacts.sign', $odp), ['signature' => 'Ama Mensah', 'confirm' => '1'])->assertSessionHasNoErrors();
     $as()->post(route('demo.choose'));
 
-    // The visitor's Administrator, and the Super Administrator in the showcase: done.
+    // The visitor's Administrator closes it; then, and for the Super Administrator in the showcase: done.
     $as()->post(route('demo.sign-in'), ['role' => 'admin']);
+    $as()->post(route('assessments.close', $assessment))->assertSessionHasNoErrors();
     $as()->get(route('my-work', ['group' => 'done']))->assertOk()->assertSee('Zambia YMCA');
     $as()->post(route('demo.choose'));
     $this->withUnencryptedCookie(Sandboxes::COOKIE, Sandboxes::SHOWCASE)->post(route('login'), ['email' => $ray->email, 'password' => 'Showcase-Pass-2026']);
@@ -841,11 +850,15 @@ it('undoes a deleted visitor’s follow-up work too: a dropped task, the overall
     $caleb = register('caleb@example.com');
     $as = fn () => $this->withUnencryptedCookie(Sandboxes::COOKIE, $caleb);
 
-    // Caleb, as the AAYMCA assessor, drops a task, writes the overall review and closes the cycle.
+    // Caleb, as the AAYMCA assessor, drops a task and writes the overall review; as the
+    // Administrator, closes the cycle early (before its three follow-ups), saying why.
     $as()->post(route('demo.sign-in'), ['role' => 'assessor']);
     $as()->post(route('follow-up.drop', $task), ['reason' => 'No longer relevant.'])->assertSessionHasNoErrors();
     $as()->post(route('follow-up.review', $assessment), ['achieved' => 'The plan was approved.', 'not_achieved' => 'The reserve fund, for lack of income.'])->assertSessionHasNoErrors();
-    $as()->post(route('follow-up.close', $assessment))->assertSessionHasNoErrors();
+    $as()->post(route('demo.choose'));
+    $as()->post(route('demo.sign-in'), ['role' => 'admin']);
+    $as()->post(route('follow-up.close', $assessment))->assertSessionHasErrors();
+    $as()->post(route('follow-up.close', $assessment), ['reason' => 'Trying out an early close.'])->assertSessionHasNoErrors();
     $as()->post(route('demo.choose'));
     expect($assessment->refresh()->isFollowUpClosed())->toBeTrue()->and($task->refresh()->isDropped())->toBeTrue();
 
@@ -858,6 +871,39 @@ it('undoes a deleted visitor’s follow-up work too: a dropped task, the overall
     expect($assessment->refresh()->isFollowUpClosed())->toBeFalse()
         ->and($assessment->odpReview()->exists())->toBeFalse()
         ->and($task->refresh()->isDropped())->toBeFalse();
+});
+
+it('undoes a deleted visitor’s re-scoring too: the follow-up they opened and closed, and the baseline it recorded', function () {
+    config(['oha.demo_shared' => true]);
+    $ray = makeSuperAdmin();
+    $assessment = prepareInShowcase('zambia', $ray, 'signed');
+    $gap = collect(ScoreGaps::for(Rescoring::inForce($assessment, 1)->answers))->flatten(1)
+        ->first(fn (array $i) => ($i['options'] ?? []) !== [] && $i['points'] === 0);
+    $before = (float) $assessment->score()->value('points_achieved');
+    $caleb = register('caleb@example.com');
+    $as = fn () => $this->withUnencryptedCookie(Sandboxes::COOKIE, $caleb);
+
+    // Caleb, as the AAYMCA assessor, opens follow-up 1, re-scores an answer, records the meeting and closes it.
+    $as()->post(route('demo.sign-in'), ['role' => 'assessor']);
+    $as()->post(route('follow-up.open', $assessment))->assertSessionHasNoErrors();
+    $as()->post(route('baselines.change', $assessment), ['ref' => 'q:'.$gap['code'], 'value' => $gap['options'][0], 'reason' => 'Adopted by the board.'])->assertSessionHasNoErrors();
+    $as()->post(route('follow-up.meetings.store', $assessment), ['number' => 1, 'held_on' => today()->toDateString(), 'summary' => 'Reviewed.'])->assertSessionHasNoErrors();
+    $as()->post(route('follow-up.lock', ['assessment' => $assessment, 'number' => 1]))->assertSessionHasNoErrors();
+    $as()->post(route('demo.choose'));
+    expect(Rescoring::inForce($assessment, 2))->not->toBeNull()
+        ->and((float) $assessment->score()->value('points_achieved'))->toBe($before + $gap['max']);
+
+    // The Super Administrator deletes Caleb's account: the follow-up and Baseline 2 are undone.
+    $showcase = fn () => $this->withUnencryptedCookie(Sandboxes::COOKIE, Sandboxes::SHOWCASE);
+    $showcase()->post(route('login'), ['email' => $ray->email, 'password' => 'Showcase-Pass-2026']);
+    $showcase()->delete(route('demo.showcase.visitors.destroy', DemoVisitor::query()->email('caleb@example.com')->firstOrFail()))
+        ->assertRedirect(route('admin.users.index', ['show' => 'visitors']));
+
+    expect(Baseline::query()->where('assessment_id', $assessment->id)->pluck('number')->all())->toBe([1])
+        ->and(FollowUpWindow::query()->where('assessment_id', $assessment->id)->whereNotNull('opened_at')->exists())->toBeFalse()
+        ->and((float) $assessment->score()->value('points_achieved'))->toBe($before);
+    // The guards are back: a baseline is never edited.
+    expect(fn () => DB::table('baselines')->update(['number' => 4]))->toThrow(QueryException::class);
 });
 
 it('keeps the demo’s own people for everyone: a visitor cannot deactivate, delete or replace them', function () {

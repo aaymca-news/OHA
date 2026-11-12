@@ -3,12 +3,12 @@
 @props(['href', 'active' => false, 'icon' => null])
 <a href="{{ $href }}" @if ($active) aria-current="page" @endif {{ $attributes->class([
     'inline-flex items-center gap-xs',
-    'px-md py-1.5 rounded-full border-[1.5px]' => $variant === 'pills',
-    'border-primary bg-primary text-on-primary font-semibold' => $variant === 'pills' && $active,
-    'border-outline-variant hover:border-primary' => $variant === 'pills' && ! $active,
-    'px-sm py-1.5' => $variant === 'joined',
-    'bg-primary text-on-primary' => $variant === 'joined' && $active,
-    'hover:bg-surface-container' => $variant === 'joined' && ! $active,
+    'min-h-9 px-[14px] rounded-full border font-semibold text-[0.84375rem]' => $variant === 'pills',
+    'border-on-surface bg-on-surface text-white' => $variant === 'pills' && $active,
+    'border-[#e7e5e0] bg-surface-container-lowest text-on-surface-variant hover:bg-surface-container-low' => $variant === 'pills' && ! $active,
+    'min-h-8 px-[12px] rounded-full font-semibold' => $variant === 'joined',
+    'bg-surface-container-lowest text-on-surface shadow-[0_1px_2px_rgba(20,20,20,0.08)]' => $variant === 'joined' && $active,
+    'text-on-surface-variant hover:text-on-surface' => $variant === 'joined' && ! $active,
 ]) }}>
     @if ($icon)<span class="material-symbols-outlined text-[1.125rem]" aria-hidden="true">{{ $icon }}</span>@endif{{ $slot }}
 </a>

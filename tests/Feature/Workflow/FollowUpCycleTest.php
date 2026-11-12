@@ -2,11 +2,10 @@
 
 use App\Actions\Oha\CloseFollowUp;
 use App\Actions\Oha\DropTask;
+use App\Actions\Oha\NoteOnTask;
 use App\Actions\Oha\RecordFollowUp;
 use App\Actions\Oha\RecordOdpReview;
-use App\Actions\Oha\ReportTaskProgress;
 use App\Enums\Stage;
-use App\Enums\TaskProgress;
 use App\Exceptions\WorkflowRuleBroken;
 use App\Models\Evidence;
 use App\Models\OdpTask;
@@ -31,7 +30,7 @@ beforeEach(function () {
     Notification::fake();
     $this->j = Journey::begin();
     $this->ngs = User::factory()->generalSecretary($this->j->zambia)->create(['name' => 'Mwila Banda']);
-    $this->assessment = $this->j->assessmentAt('odp_signed');
+    $this->assessment = $this->j->assessmentAt('closed');
     $this->task = OdpTask::query()->create([
         'assessment_id' => $this->assessment->id, 'source' => OdpTask::TYPED, 'ref' => '1.1',
         'priority' => 'FINANCIAL STABILITY', 'task' => 'Approve a resource mobilisation plan', 'due_on' => now()->addMonths(2)->toDateString(),
@@ -42,7 +41,7 @@ beforeEach(function () {
 function holdTheYear(object $test): void
 {
     foreach ([1, 2, 3] as $n) {
-        app(RecordFollowUp::class)->handle($test->assessment, $test->j->assessor, $n, today()->toDateString(), 'Mwila Banda', "Meeting {$n}: tasks reviewed.");
+        $test->j->holdFollowUp($test->assessment, $n, "Meeting {$n}: tasks reviewed.");
     }
     app(RecordOdpReview::class)->handle($test->assessment, $test->j->assessor, 'The board was trained.', 'The fund was not raised: no donor yet.');
 }
@@ -105,27 +104,35 @@ it('closes the cycle once the overall review is written; then it is a read-only 
     Notification::assertSentTo($this->ngs, WorkflowNotice::class, fn (WorkflowNotice $n) => str_contains($n->subject, 'ODP cycle complete'));
 
     // Read-only from now on.
-    expect(fn () => app(ReportTaskProgress::class)->handle($this->task->refresh(), $this->ngs, TaskProgress::InProgress))->toThrow(WorkflowRuleBroken::class)
+    expect(fn () => app(NoteOnTask::class)->handle($this->task->refresh(), $this->ngs, 'Too late.'))->toThrow(WorkflowRuleBroken::class)
         ->and(fn () => app(RecordFollowUp::class)->handle($assessment, $this->j->assessor, 1, today()->toDateString(), null, 'Again.'))->toThrow(WorkflowRuleBroken::class)
         ->and(fn () => app(CloseFollowUp::class)->handle($assessment, $this->j->assessor))->toThrow(WorkflowRuleBroken::class);
     $this->actingAs($this->ngs)->get(route('follow-up.show', $assessment))->assertOk()
-        ->assertSee('Cycle complete')->assertDontSee('Where it stands')->assertDontSee('Record this meeting');
+        ->assertSee('Cycle complete')->assertDontSee('Save the note')->assertDontSee('Record the meeting');
 });
 
-it('closes a cycle after one meeting, with a task still open: on the record, and still carried into the next assessment', function () {
-    app(RecordFollowUp::class)->handle($this->assessment, $this->j->assessor, 1, today()->toDateString(), 'Mwila Banda', 'Tasks reviewed.');
+it('closes a cycle early only as an Administrator, with a reason: a task still open stays on the record, and is still carried into the next assessment', function () {
+    $this->j->holdFollowUp($this->assessment, 1);
     app(RecordOdpReview::class)->handle($this->assessment, $this->j->assessor, 'The board was trained.', 'The fund was not raised: no donor yet.');
     expect(CloseFollowUp::missing($this->assessment))->toBe([])
-        ->and(CloseFollowUp::leftOpen($this->assessment))->toBe(['1 of 3 follow-up meetings held', '1 task not done']);
+        ->and(CloseFollowUp::leftOpen($this->assessment))->toBe(['1 of 3 follow-ups closed', '1 task not done']);
+
+    // Early (two follow-ups not closed): not the assessor; an Administrator, saying why.
+    expect(CloseFollowUp::isEarly($this->assessment))->toBeTrue()
+        ->and(fn () => app(CloseFollowUp::class)->handle($this->assessment, $this->j->assessor))->toThrow(WorkflowRuleBroken::class, 'Close the three follow-ups first')
+        ->and(fn () => app(CloseFollowUp::class)->handle($this->assessment, $this->j->admin))->toThrow(WorkflowRuleBroken::class, 'Say why');
+    $this->actingAs($this->j->assessor)->get(route('follow-up.show', $this->assessment))->assertOk()
+        ->assertSee('Only an Administrator can close the cycle before them')->assertDontSee('Close the cycle early');
 
     // The page says what stays open, before closing.
-    $this->actingAs($this->j->assessor)->get(route('follow-up.show', $this->assessment))->assertOk()
-        ->assertSee('It closes with 1 of 3 follow-up meetings held and 1 task not done', false);
+    $this->actingAs($this->j->admin)->get(route('follow-up.show', $this->assessment))->assertOk()
+        ->assertSee('Close the cycle early')->assertSee('It closes with 1 of 3 follow-ups closed and 1 task not done', false);
 
-    app(CloseFollowUp::class)->handle($this->assessment, $this->j->assessor);
-    expect($this->assessment->refresh()->isFollowUpClosed())->toBeTrue();
-    Notification::assertSentTo($this->ngs, WorkflowNotice::class, fn (WorkflowNotice $n) => str_contains($n->body, 'with 1 of 3 follow-up meetings held and 1 task not done'));
-    $this->actingAs($this->ngs)->get(route('follow-up.show', $this->assessment))->assertOk()->assertSee('Not held');
+    app(CloseFollowUp::class)->handle($this->assessment, $this->j->admin, 'The movement merged its programmes; the next assessment starts now.');
+    expect($this->assessment->refresh()->isFollowUpClosed())->toBeTrue()
+        ->and($this->assessment->follow_up_closed_reason)->toBe('The movement merged its programmes; the next assessment starts now.');
+    Notification::assertSentTo($this->ngs, WorkflowNotice::class, fn (WorkflowNotice $n) => str_contains($n->body, 'with 1 of 3 follow-ups closed and 1 task not done') && str_contains($n->body, 'merged its programmes'));
+    $this->actingAs($this->ngs)->get(route('follow-up.show', $this->assessment))->assertOk()->assertSee('Not held')->assertSee('merged its programmes');
 
     // The open task can still go into the next assessment, once it is opened.
     $next = Journey::open($this->j->assessor, $this->j->zambia, 'Mar 2028', now());
@@ -147,7 +154,8 @@ it('lets the movement’s assessors and the Administrators close the cycle, not 
 });
 
 it('counts a closed cycle in the alliance pipeline, and leaves it out of the weekly digest', function () {
-    $this->task->update(['due_on' => now()->subWeek()->toDateString()]);
+    // An open follow-up is in the digest.
+    $this->j->openFollowUp($this->assessment);
     expect(app(FollowUpDigest::class)->for($this->ngs))->not->toBe([]);
 
     holdTheYear($this);
@@ -158,14 +166,14 @@ it('counts a closed cycle in the alliance pipeline, and leaves it out of the wee
         ->and(app(FollowUpDigest::class)->for($this->ngs))->toBe([]);
 });
 
-it('lets the Super Administrator write the overall review and close the cycle from the page, without being an assessor', function () {
-    expect($this->j->superAdmin->canAssess($this->j->zambia))->toBeFalse();
+it('lets the Super Administrator write the overall review and close the cycle from the page, without being assigned', function () {
+    expect($this->j->superAdmin->isAssignedTo($this->j->zambia))->toBeFalse();
     $this->actingAs($this->j->superAdmin)->get(route('follow-up.show', $this->assessment))->assertOk()->assertSee('Save the review');
     $this->actingAs($this->j->superAdmin)->post(route('follow-up.review', $this->assessment), ['achieved' => 'The board was trained.', 'not_achieved' => 'The fund was not raised.'])
         ->assertSessionHasNoErrors();
 
     $this->actingAs($this->j->superAdmin)->get(route('follow-up.show', $this->assessment))->assertOk()
         ->assertSee(route('follow-up.close', $this->assessment));
-    $this->actingAs($this->j->superAdmin)->post(route('follow-up.close', $this->assessment))->assertRedirect(route('follow-up.show', $this->assessment));
+    $this->actingAs($this->j->superAdmin)->post(route('follow-up.close', $this->assessment), ['reason' => 'Board elections: the next assessment comes first.'])->assertRedirect(route('follow-up.show', $this->assessment));
     expect($this->assessment->refresh()->follow_up_closed_by)->toBe($this->j->superAdmin->id);
 });

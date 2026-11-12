@@ -17,7 +17,7 @@ use Illuminate\Support\Facades\Storage;
  * ODP, the last approved version (what everyone sees), the newest (what is being worked
  * on) and, until the newest is approved, the one it replaced, so that a version uploaded by
  * mistake, perhaps over a colleague's, can be withdrawn and theirs is current again. Older
- * ones are removed, with their files once nothing else uses them. What happened stays in the audit trail. When the ODP is signed, only what was
+ * ones are removed, with their files once nothing else uses them. What happened stays in the audit trail. When the assessment is closed, only what was
  * approved is kept (finalise()); from then on the record is frozen.
  */
 final class VersionPruner
@@ -75,7 +75,7 @@ final class VersionPruner
     }
 
     /**
-     * When the Board Chairperson signs the ODP, the OHA form and report it rests on are
+     * When the assessment is closed, the OHA form and report the ODP rests on are
      * final as approved: any work on them since (newer uploads or versions, a submission
      * waiting for approval) is removed, and both go back to approved. Answers typed into
      * the approved upload since are dropped by SupplyAnswer::restoreApproved(). Returns

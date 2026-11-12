@@ -14,7 +14,7 @@ use Throwable;
 
 /**
  * Takes the changes made in Google Drive to every linked ODP as new versions; once
- * the ODP is signed, notes them as changes after signing instead. Scheduled every five
+ * the assessment is closed, notes them as changes after closing instead. Scheduled every five
  * minutes once the platform has access to Google Drive; each run is recorded, so the
  * dashboard can show when it last worked.
  */
@@ -33,7 +33,7 @@ class SyncOdpsFromDrive extends Command
             return self::SUCCESS;
         }
 
-        // Signed ODPs too: a change after signing is noted for Stage 2 (never a version).
+        // Closed assessments' ODPs too: a change after closing is noted for Stage 2 (never a version).
         $odps = Artefact::query()->where('kind', ArtefactKind::Odp)->whereNotNull('drive_file_id')
             ->with('assessment.movement')->orderBy('id')->get();
 

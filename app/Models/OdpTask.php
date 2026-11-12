@@ -4,15 +4,17 @@ namespace App\Models;
 
 use App\Enums\TaskProgress;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Support\Carbon;
 
 /**
- * One task of a movement's ODP and its deadline: read from the ODP workbook, or typed
- * in by an assessor when the ODP could not be read. In Stage 2 (ODP follow-up) its
- * progress is reported by the movement's General Secretary or its assessors; a Done is
- * counted ($done) once an assessor has confirmed it.
+ * One task of a movement's ODP: read from the ODP workbook, or typed in by an assessor
+ * when the ODP could not be read. In Stage 2 (ODP follow-up) where it stands is set at
+ * each follow-up meeting. A task a revised ODP no longer has is REMOVED (removed_at): kept
+ * for the record but out of the plan, so every query of the tasks leaves it out unless it
+ * asks for it (withoutGlobalScope(self::IN_PLAN)).
  *
  * @property TaskProgress $progress
  * @property bool $done
@@ -20,12 +22,16 @@ use Illuminate\Support\Carbon;
  * @property Carbon|null $edited_at
  * @property Carbon|null $reported_at
  * @property Carbon|null $confirmed_at
+ * @property Carbon|null $removed_at
  */
 #[Fillable(['assessment_id', 'document_id', 'source', 'ref', 'priority', 'task', 'deadline_text', 'due_on', 'date_guessed', 'responsible', 'done', 'sort_order', 'edited_by', 'edited_at',
     'progress', 'progress_note', 'evidence_id', 'reported_by', 'reported_at', 'confirmed_by', 'confirmed_at', 'returned_reason',
-    'carried_from_task_id', 'carried_to_assessment_id', 'dropped_at', 'dropped_by', 'dropped_reason'])]
+    'carried_from_task_id', 'carried_to_assessment_id', 'dropped_at', 'dropped_by', 'dropped_reason', 'removed_at', 'removed_in_document_id'])]
 class OdpTask extends Model
 {
+    /** The global scope that keeps removed tasks out of the plan. */
+    public const IN_PLAN = 'in_plan';
+
     public const FROM_ODP = 'odp';
 
     public const TYPED = 'typed';
@@ -93,6 +99,17 @@ class OdpTask extends Model
         return $this->belongsTo(Assessment::class, 'carried_to_assessment_id');
     }
 
+    protected static function booted(): void
+    {
+        static::addGlobalScope(self::IN_PLAN, fn (Builder $q) => $q->whereNull($q->qualifyColumn('removed_at')));
+    }
+
+    /** No longer in the revised ODP: kept for the record, out of the plan. */
+    public function isRemoved(): bool
+    {
+        return $this->removed_at !== null;
+    }
+
     /** Dropped from the follow-up, with a reason, instead of being carried over. */
     public function isDropped(): bool
     {
@@ -102,7 +119,7 @@ class OdpTask extends Model
     /** Nothing more to do on it before the cycle closes: done, carried over, or dropped. */
     public function isSettled(): bool
     {
-        return $this->done || $this->carried_to_assessment_id !== null || $this->isDropped();
+        return $this->done || $this->carried_to_assessment_id !== null || $this->isDropped() || $this->isRemoved();
     }
 
     /**
@@ -116,40 +133,23 @@ class OdpTask extends Model
     }
 
     /**
-     * Where it stands on the follow-up page, in the site's one status language: the filter
-     * it falls under (overdue, waiting, progress, done, other), its words and its tone.
+     * Where it stands, in the site's one status language: the filter it falls under
+     * (blocked, progress, done, other), its words and its tone. Its status is set at each
+     * follow-up meeting, for every task together (decided 12 Nov 2026); tasks have no
+     * deadlines of their own (the follow-ups have dates).
      *
      * @return array{key: string, label: string, tone: string}
      */
     public function followUpStatus(): array
     {
         return match (true) {
+            $this->isRemoved() => ['key' => 'other', 'label' => 'Removed in the revised ODP', 'tone' => 'neutral'],
             $this->isDropped() => ['key' => 'other', 'label' => 'Dropped', 'tone' => 'neutral'],
             $this->carried_to_assessment_id !== null => ['key' => 'other', 'label' => 'Carried over', 'tone' => 'info'],
             $this->done => ['key' => 'done', 'label' => 'Done', 'tone' => 'good'],
-            $this->awaitsConfirmation() => ['key' => 'waiting', 'label' => 'Waiting to confirm', 'tone' => 'info'],
-            $this->state() === 'overdue' => ['key' => 'overdue', 'label' => 'Overdue', 'tone' => 'critical'],
-            $this->progress === TaskProgress::Blocked => ['key' => 'overdue', 'label' => 'Blocked', 'tone' => 'critical'],
+            $this->progress === TaskProgress::Blocked => ['key' => 'blocked', 'label' => 'Blocked', 'tone' => 'critical'],
             $this->progress === TaskProgress::InProgress => ['key' => 'progress', 'label' => 'In progress', 'tone' => 'warning'],
             default => ['key' => 'progress', 'label' => 'Not started', 'tone' => 'neutral'],
-        };
-    }
-
-    /** Reported Done, and waiting for an assessor to confirm it. */
-    public function awaitsConfirmation(): bool
-    {
-        return $this->progress === TaskProgress::Done && ! $this->done;
-    }
-
-    /** done, overdue, soon (within config oha.due_soon_days.odp_tasks, 30 days), upcoming, or undated (no date could be read or was given). */
-    public function state(): string
-    {
-        return match (true) {
-            $this->done => 'done',
-            $this->due_on === null => 'undated',
-            $this->due_on->lt(today()) => 'overdue',
-            $this->due_on->lte(today()->addDays(config('oha.due_soon_days.odp_tasks'))) => 'soon',
-            default => 'upcoming',
         };
     }
 
@@ -164,6 +164,7 @@ class OdpTask extends Model
             'reported_at' => 'datetime',
             'confirmed_at' => 'datetime',
             'dropped_at' => 'datetime',
+            'removed_at' => 'datetime',
         ];
     }
 }

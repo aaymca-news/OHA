@@ -6,27 +6,27 @@ use App\Actions\Movements\PauseFollowUp;
 use App\Actions\Oha\AttachTaskEvidence;
 use App\Actions\Oha\CarryOverTasks;
 use App\Actions\Oha\CloseFollowUp;
-use App\Actions\Oha\ConfirmTask;
 use App\Actions\Oha\DropTask;
+use App\Actions\Oha\FollowUpWindows;
+use App\Actions\Oha\NoteOnTask;
 use App\Actions\Oha\RecordFollowUp;
 use App\Actions\Oha\RecordOdpReview;
-use App\Actions\Oha\ReportTaskProgress;
+use App\Actions\Oha\ReviseOdp;
+use App\Enums\DocumentPurpose;
 use App\Enums\TaskProgress;
 use App\Models\Assessment;
 use App\Models\Evidence;
-use App\Models\MovementStatus;
 use App\Models\OdpTask;
 use App\Oha\FollowUpSchedule;
 use App\Support\UploadLimit;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Validation\Rule;
 use Illuminate\View\View;
 
 /**
- * Stage 2, ODP follow-up: a signed assessment's ODP tasks, where each stands, and
+ * Stage 2, ODP follow-up: a closed assessment's ODP tasks, where each stands, and
  * reporting and confirming their progress.
  */
 class FollowUpController extends Controller
@@ -47,15 +47,23 @@ class FollowUpController extends Controller
             'counts' => [
                 'total' => $tasks->count(),
                 'done' => $tasks->where('done', true)->count(),
-                'waiting' => $tasks->filter(fn (OdpTask $t) => $t->awaitsConfirmation())->count(),
-                'overdue' => $tasks->filter(fn (OdpTask $t) => $t->state() === 'overdue')->count(),
-                'blocked' => $tasks->where('progress', TaskProgress::Blocked)->count(),
+                'blocked' => $tasks->filter(fn (OdpTask $t) => ! $t->done && $t->progress === TaskProgress::Blocked)->count(),
             ],
-            'canReport' => $tasks->isNotEmpty() && $gate->allows('report', $tasks->first()),
-            'canConfirm' => $user->canAssess($assessment->movement),
-            // The follow-up meetings: 3 a year from the signing, each with its record if held.
+            // Between the follow-ups: a note or evidence on a task (the General Secretary, the assessors).
+            'canNote' => $tasks->isNotEmpty() && $gate->allows('note', $tasks->first()),
+            // The three follow-ups, each with its date, state and meeting record.
             'meetings' => FollowUpSchedule::for($assessment),
             'canRecord' => $gate->allows('recordFollowUp', $assessment),
+            // Each follow-up's window: closing it (assessors, Administrators), opening early or reopening (Administrators).
+            'canRun' => $gate->allows('runFollowUps', $assessment),
+            'canManageWindows' => $gate->allows('manageFollowUps', $assessment),
+            // The ODP revised during the follow-ups (newest first), and who may revise it now.
+            'revisions' => ($odp = $assessment->odp()->first()) !== null
+                ? $odp->documents()->where('purpose', DocumentPurpose::Revision)->with('creator')->latest('id')->get() : collect(),
+            'canRevise' => $odp !== null && $gate->allows('revise', $odp),
+            // How many documents each follow-up counts (or will), by its number.
+            'evidenceCounts' => Evidence::query()->where('assessment_id', $assessment->id)->whereNotNull('counted_in')
+                ->selectRaw('counted_in, count(*) AS n')->groupBy('counted_in')->pluck('n', 'counted_in')->all(),
             // Step 5: the overall review, and the next assessment unfinished tasks can be carried into.
             'review' => $assessment->odpReview()->with('recorder')->first(),
             'next' => $assessment->nextAssessment(),
@@ -63,13 +71,15 @@ class FollowUpController extends Controller
             'canCarry' => $gate->allows('carryOdpTasks', $assessment),
             'tasks' => $tasks,
             'evidence' => Evidence::query()->where('assessment_id', $assessment->id)->orderBy('title')->pluck('title', 'id')->all(),
-            // The year's timeline: from the signing to the next assessment.
-            'signedOn' => ($signed = $assessment->odp()->first()?->signature()->value('signed_at')) !== null ? Carbon::parse($signed) : null,
-            'nextAssessmentOn' => ($nextOn = MovementStatus::query()->whereKey($assessment->movement_id)->value('next_assessment_on')) !== null ? Carbon::parse($nextOn) : null,
+            // The year's timeline: from the closing (Baseline 1) to the next assessment.
+            'closedOn' => $assessment->closed_at,
+
             // Closing the cycle: what still stands in the way, and who may close it.
             'closing' => CloseFollowUp::missing($assessment),
             'leftOpen' => CloseFollowUp::leftOpen($assessment),
             'canClose' => $gate->allows('closeFollowUp', $assessment),
+            // Closing before the three follow-ups are closed: an Administrator only, with a reason.
+            'early' => CloseFollowUp::isEarly($assessment),
             'canDrop' => $user->canAssess($assessment->movement) && ! $assessment->isFollowUpClosed(),
         ]);
     }
@@ -102,38 +112,26 @@ class FollowUpController extends Controller
         return $this->back($task, $undo ? 'The task is back in the follow-up.' : 'Dropped from the follow-up. The reason is kept with it.');
     }
 
-    /** An assessor or an Administrator closes the follow-up cycle (Stage 2 done). */
+    /** An assessor or an Administrator closes the follow-up cycle (Stage 2 done); early, only an Administrator, with a reason. */
     public function close(Request $request, Assessment $assessment, CloseFollowUp $close): RedirectResponse
     {
-        $close->handle($assessment, $request->user());
+        $data = $request->validate(['reason' => ['nullable', 'string', 'max:2000']]);
+        $close->handle($assessment, $request->user(), $data['reason'] ?? null);
 
         return redirect()->route('follow-up.show', $assessment)
             ->with('status', 'The cycle is closed: the follow-up is kept as a record, and the movement is ready for its next assessment.');
     }
 
-    public function progress(Request $request, OdpTask $odpTask, ReportTaskProgress $report): RedirectResponse
+    /** Between the follow-ups: a note on a task, or evidence from the library linked to it. */
+    public function note(Request $request, OdpTask $odpTask, NoteOnTask $note): RedirectResponse
     {
         $data = $request->validate([
-            'progress' => ['required', Rule::enum(TaskProgress::class)],
             'note' => ['nullable', 'string', 'max:2000'],
             'evidence_id' => ['nullable', 'integer'],
         ]);
-        $task = $report->handle($odpTask, $request->user(), TaskProgress::from($data['progress']), $data['note'] ?? null, isset($data['evidence_id']) ? (int) $data['evidence_id'] : null);
+        $task = $note->handle($odpTask, $request->user(), $data['note'] ?? null, isset($data['evidence_id']) ? (int) $data['evidence_id'] : null);
 
-        return $this->back($task, $task->awaitsConfirmation()
-            ? 'Reported done. The assessors are asked to confirm it.'
-            : 'Saved: '.$task->progress->label().($task->done ? ', confirmed.' : '.'));
-    }
-
-    public function confirm(Request $request, OdpTask $odpTask, ConfirmTask $confirm): RedirectResponse
-    {
-        $data = $request->validate([
-            'confirmed' => ['required', 'boolean'],
-            'reason' => ['nullable', 'string', 'max:2000'],
-        ]);
-        $task = $confirm->handle($odpTask, $request->user(), (bool) $data['confirmed'], $data['reason'] ?? null);
-
-        return $this->back($task, $task->done ? 'Confirmed done.' : 'Sent back as still in progress. The person who reported it is told why.');
+        return $this->back($task, 'Saved. Where the task stands is set at the next follow-up.');
     }
 
     /** An assessor records a follow-up meeting (or corrects one). */
@@ -146,11 +144,66 @@ class FollowUpController extends Controller
             'summary' => ['required', 'string', 'max:10000'],
             'updates' => ['array'],
             'updates.*' => ['nullable', 'string', 'max:2000'],
+            'statuses' => ['array'],
+            'statuses.*' => [Rule::enum(TaskProgress::class)],
         ], ['summary.required' => 'Say what was discussed and agreed at the meeting.']);
-        $meeting = $record->handle($assessment, $request->user(), (int) $data['number'], $data['held_on'], $data['attendees'] ?? null, $data['summary'], $data['updates'] ?? []);
+        $meeting = $record->handle($assessment, $request->user(), (int) $data['number'], $data['held_on'], $data['attendees'] ?? null, $data['summary'], $data['updates'] ?? [], $data['statuses'] ?? []);
 
         return redirect()->to(route('follow-up.show', $assessment).'#meeting-'.$meeting->number)
             ->with('status', "Follow-up meeting {$meeting->number} recorded. The movement and the other assessors are told.");
+    }
+
+    /** Its assessors or an Administrator set (or change, or clear) a follow-up's date, as agreed with the movement. */
+    public function plan(Request $request, Assessment $assessment, int $number, FollowUpWindows $windows): RedirectResponse
+    {
+        $data = $request->validate(['due_on' => ['nullable', 'date_format:Y-m-d']], ['due_on.date_format' => 'Choose a real date for the follow-up.']);
+        $windows->plan($assessment, $request->user(), $number, $data['due_on'] ?? null);
+
+        return redirect()->to(route('follow-up.show', $assessment).'#meeting-'.$number)
+            ->with('status', isset($data['due_on']) ? "Follow-up {$number}’s date is saved. The General Secretary and the assessors are told." : "Follow-up {$number}’s date is cleared.");
+    }
+
+    /** An assessor or an Administrator closes (and so locks) one follow-up, once its meeting is recorded, and may date the next. */
+    public function lock(Request $request, Assessment $assessment, int $number, FollowUpWindows $windows): RedirectResponse
+    {
+        $data = $request->validate(['next_due_on' => ['nullable', 'date_format:Y-m-d']], ['next_due_on.date_format' => 'Choose a real date for the next follow-up.']);
+        $windows->close($assessment, $request->user(), $number, $data['next_due_on'] ?? null);
+
+        return redirect()->to(route('follow-up.show', $assessment).'#meeting-'.$number)
+            ->with('status', "Follow-up {$number} is closed. What it counted is locked; the movement and the other assessors are told.");
+    }
+
+    /** Its assessors or an Administrator upload the revised ODP while a follow-up is open. */
+    public function reviseOdp(Request $request, Assessment $assessment, ReviseOdp $revise): RedirectResponse
+    {
+        $data = $request->validate([
+            'odp' => UploadLimit::rule(),
+            'note' => ['nullable', 'string', 'max:2000'],
+        ], ['odp.required' => 'Choose the revised ODP file.'] + UploadLimit::messages('odp'));
+        $file = $request->file('odp');
+        $revision = $revise->upload($assessment->odp()->firstOrFail(), (string) $file->getRealPath(), $file->getClientOriginalName(), $request->user(), $data['note'] ?? null);
+
+        return redirect()->to(route('follow-up.show', $assessment).'#odp-revisions')
+            ->with('status', 'The revised ODP is saved for follow-up '.$revision->follow_up_number.'. Its tasks are matched against the plan; what changed is listed below.');
+    }
+
+    /** Its assessors or an Administrator open the next follow-up. */
+    public function open(Request $request, Assessment $assessment, FollowUpWindows $windows): RedirectResponse
+    {
+        $window = $windows->open($assessment, $request->user());
+
+        return redirect()->to(route('follow-up.show', $assessment).'#meeting-'.$window->number)
+            ->with('status', "Follow-up {$window->number} is open. The General Secretary and the assessors are told.");
+    }
+
+    /** An Administrator reopens the last follow-up closed, with a reason. */
+    public function reopen(Request $request, Assessment $assessment, int $number, FollowUpWindows $windows): RedirectResponse
+    {
+        $data = $request->validate(['reason' => ['required', 'string', 'max:2000']], ['reason.required' => 'Say why the follow-up is reopened.']);
+        $windows->reopen($assessment, $request->user(), $number, $data['reason']);
+
+        return redirect()->to(route('follow-up.show', $assessment).'#meeting-'.$number)
+            ->with('status', "Follow-up {$number} is reopened. Correct it, then close it again.");
     }
 
     /** An assessor writes (or corrects) the overall review of the ODP. */

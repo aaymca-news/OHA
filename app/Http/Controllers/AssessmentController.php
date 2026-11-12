@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Actions\Oha\CloseAssessment;
 use App\Actions\Oha\DeleteAssessment;
 use App\Actions\Oha\HandBackAssessment;
 use App\Actions\Oha\OpenAssessment;
@@ -74,6 +75,16 @@ class AssessmentController extends Controller
 
         return redirect()->route('movements.show', $assessment->movement)
             ->with('status', 'You no longer work on this assessment. The Administrators have been asked to assign an assessor.');
+    }
+
+    /** Its assessors or an Administrator close the assessment once its ODP is approved (Stage 1 done, Baseline 1). */
+    public function close(Request $request, Assessment $assessment, CloseAssessment $close): RedirectResponse
+    {
+        $data = $request->validate(['first_follow_up_on' => ['nullable', 'date_format:Y-m-d']], ['first_follow_up_on.date_format' => 'Choose a real date for the first follow-up.']);
+        $close->handle($assessment, $request->user(), $data['first_follow_up_on'] ?? null);
+
+        return redirect()->route('follow-up.show', $assessment)
+            ->with('status', 'The assessment is closed. Its scores are Baseline 1, and the follow-up has begun.');
     }
 
     /** The Super Administrator deletes the whole assessment. */

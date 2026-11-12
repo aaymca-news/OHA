@@ -10,6 +10,7 @@ use App\Models\Evidence;
 use App\Models\User;
 use App\Notifications\WorkflowNotice;
 use App\Oha\EvidenceQuestions;
+use App\Oha\FollowUpSchedule;
 use App\Support\Audit;
 use App\Support\FileVault;
 use App\Support\Notify;
@@ -126,6 +127,8 @@ final class UploadEvidence
                 'uploaded_at' => now(),
                 'shared_at' => $share ? now() : null,
                 'shared_by' => $share ? $by->id : null,
+                // What it counts in: the assessment, or the follow-up under way (see FollowUpSchedule).
+                'counted_in' => FollowUpSchedule::countedIn($assessment),
             ]);
 
             DB::table('evidence_questions')->insert(array_map(fn (string $code) => ['evidence_id' => $evidence->id, 'question_code' => $code], $questionCodes));

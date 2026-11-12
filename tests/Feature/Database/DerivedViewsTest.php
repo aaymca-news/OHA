@@ -91,7 +91,7 @@ it('lets a deadline a person set override both clocks', function () {
         ->and($item->due_on->toDateString())->toBe('2026-10-30');
 });
 
-it('sends an approved ODP straight to the Board Chairperson for signature', function () {
+it('puts an approved ODP with whoever closes the assessment', function () {
     $toSign = assessmentOpened('2026-06-01', [
         'form' => ['state' => ArtefactState::Approved],
         'report' => ['state' => ArtefactState::Approved],
@@ -99,13 +99,13 @@ it('sends an approved ODP straight to the Board Chairperson for signature', func
     ]);
     $item = WorkItem::query()->findOrFail($toSign->id);
 
-    // Board turnaround: 21 days from approval; board gate: opened + 98 days. The sooner wins.
-    expect($item->holder_role)->toBe(HolderRole::Board)
-        ->and($item->gate_code)->toBe('board')
-        ->and($item->due_on->toDateString())->toBe('2026-08-22');
+    // Closing turnaround: 7 days from approval; closing gate: opened + 98 days. The sooner wins.
+    expect($item->holder_role)->toBe(HolderRole::Closer)
+        ->and($item->gate_code)->toBe('close')
+        ->and($item->due_on->toDateString())->toBe('2026-08-08');
 });
 
-it('closes the work item once the board has signed the ODP', function () {
+it('keeps the work item when only the board has signed, and ends it once the assessment is closed', function () {
     $assessment = assessmentOpened('2026-06-01', [
         'form' => ['state' => ArtefactState::Approved],
         'report' => ['state' => ArtefactState::Approved],
@@ -116,7 +116,10 @@ it('closes the work item once the board has signed the ODP', function () {
         'signed_name' => 'Chair', 'signature_disk' => 'oha', 'signature_path' => 's.png',
         'signature_sha256' => str_repeat('a', 64), 'document_sha256' => str_repeat('b', 64), 'signed_at' => now(),
     ]);
+    // The signature is optional: it holds nothing up, nor does it end Stage 1.
+    expect(WorkItem::query()->find($assessment->id)?->holder_role)->toBe(HolderRole::Closer);
 
+    $assessment->forceFill(['closed_at' => now()])->save();
     expect(WorkItem::query()->find($assessment->id))->toBeNull();
 });
 

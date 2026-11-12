@@ -1,42 +1,44 @@
-{{-- Who assesses the movement. Expects $movement, $assessors, $canAssign, $assignmentHistory, $assignedSince. --}}
-<x-card title="Assessed by" :subtitle="$canAssign ? 'The Administrators assign and change assessors on the Assessments page. Every change is in the audit trail.' : null">
+{{-- Who assesses the movement (AAYMCA staff only). Expects $movement, $assessors, $canAssign, $assignmentHistory, $assignedSince. --}}
+<x-panel title="Assessed by" :subtitle="$canAssign ? 'Assigned on the Assessments page. Every change is in the audit trail.' : null">
     @if ($assessors->isNotEmpty())
-        <ul class="flex flex-col gap-xs">
+        <ul class="flex flex-col">
             @foreach ($assessors as $person)
-                <li class="flex flex-wrap items-center gap-sm text-[0.875rem]">
+                <li class="flex items-center gap-sm py-[10px] border-t border-[#f0eeea] first:border-0 first:pt-0">
                     <x-avatar :user="$person" />
-                    <span class="flex-1 min-w-40">
-                        <span class="font-semibold">{{ $person->name }}</span>
-                        <span class="block text-[0.8125rem] text-on-surface-variant">
-                            {{ $person->role->label() }}{{ $person->title ? ' · '.$person->title : '' }}{{ isset($assignedSince[$person->id]) ? ' · since '.$assignedSince[$person->id]->asDay() : '' }}
+                    <span class="flex-1 min-w-0">
+                        <span class="block text-[0.875rem] font-semibold truncate">{{ $person->name }}</span>
+                        <span class="block text-[0.78125rem] text-on-surface-variant">
+                            {{ $person->title ?: $person->role->label() }}{{ isset($assignedSince[$person->id]) ? ' · since '.$assignedSince[$person->id]->asDay() : '' }}
                         </span>
                     </span>
-                    <x-chip tone="good" icon="person_check">Current assessor</x-chip>
+                    <x-status-pill tone="good">Current assessor</x-status-pill>
                 </li>
             @endforeach
         </ul>
     @elseif ($assignmentHistory->isEmpty())
-        <x-empty-state icon="person_off">No assessor has ever been assigned to {{ $movement->name }}.</x-empty-state>
+        <p class="text-[0.875rem] text-on-surface-variant">No assessor has ever been assigned to {{ $movement->name }}.</p>
     @else
         @php($last = $assignmentHistory->first())
-        <x-empty-state icon="person_off">
+        <p class="text-[0.875rem] text-on-surface-variant">
             Nobody is assessing {{ $movement->name }} at the moment.
             @if ($last && ($last->payload['removed_names'] ?? []) !== [])
                 Last: {{ implode(', ', $last->payload['removed_names']) }}, until {{ $last->occurred_at->asDay() }}{{ ($last->payload['handed_back'] ?? false) ? ' (handed back: '.$last->payload['reason'].')' : '' }}.
             @endif
-        </x-empty-state>
+        </p>
     @endif
 
     @if ($canAssign)
         {{-- Assessors are handed out in one place: the Assessments page. --}}
-        <x-button variant="link" icon="person_add" :href="route('assessments.index').'#assessors-'.$movement->slug" class="self-start text-[0.875rem] font-semibold">{{ $assessors->isEmpty() ? 'Assign an assessor' : 'Change the assessors' }} on the Assessments page</x-button>
+        <a href="{{ route('assessments.index').'#assessors-'.$movement->slug }}" class="mt-md inline-flex items-center gap-[6px] text-[0.84375rem] font-semibold text-on-surface hover:underline">
+            <span class="material-symbols-outlined text-[1.125rem]" aria-hidden="true">person_add</span>{{ $assessors->isEmpty() ? 'Assign an assessor' : 'Change the assessors' }} on the Assessments page
+        </a>
 
         @if ($assignmentHistory->isNotEmpty())
-            <details class="border-t border-surface-container pt-sm">
-                <summary class="cursor-pointer text-[0.875rem] font-semibold text-primary">Assignment history ({{ $assignmentHistory->count() }})</summary>
-                <ol class="flex flex-col gap-xs mt-sm text-[0.8125rem]">
+            <details class="mt-md border-t border-[#f0eeea] pt-sm">
+                <summary class="cursor-pointer text-[0.84375rem] font-semibold">Assignment history ({{ $assignmentHistory->count() }})</summary>
+                <ol class="flex flex-col gap-sm mt-sm text-[0.8125rem]">
                     @foreach ($assignmentHistory as $event)
-                        <li class="border-l-4 border-outline-variant pl-sm">
+                        <li class="border-l-2 border-[#e4e1db] pl-sm">
                             <span class="text-on-surface-variant">{{ $event->occurred_at->asStamp() }} · {{ $event->actor?->name ?? 'System' }}</span>
                             <span class="block">
                                 @if ($event->payload['handed_back'] ?? false)
@@ -52,4 +54,4 @@
             </details>
         @endif
     @endif
-</x-card>
+</x-panel>

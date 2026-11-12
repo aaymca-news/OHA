@@ -7,9 +7,9 @@
 @php($maxKb = \App\Support\UploadLimit::kb())
 <div x-data="fileDrop({ accept: @js($accept), maxKb: @js($maxKb), required: @js((bool) $required), label: @js($label) })" class="flex flex-col gap-xs">
     <label x-on:dragenter.prevent="over = true" x-on:dragover.prevent="over = true" x-on:dragleave.prevent="over = false" x-on:drop.prevent="drop($event)"
-           :class="problem ? 'border-error bg-error-container' : (over ? 'border-primary bg-surface-container-low' : 'border-outline-variant')"
-           class="flex flex-col items-center gap-xs p-lg rounded-lg border-2 border-dashed text-[0.875rem] cursor-pointer text-center">
-        <span class="material-symbols-outlined text-[2rem] text-primary" aria-hidden="true" x-text="name ? 'task' : 'upload_file'">upload_file</span>
+           :class="problem ? '!border-error !bg-error-container' : (over ? '!border-on-surface !bg-surface-container-low' : '')"
+           class="flex flex-col items-center gap-xs p-lg rounded-2xl border-[1.5px] border-dashed border-[#d3d0c9] bg-[#fafaf8] text-[0.875rem] cursor-pointer text-center transition-colors hover:border-on-surface">
+        <span class="material-symbols-outlined text-[2rem] text-on-surface-variant" aria-hidden="true" x-text="name ? 'task' : 'upload_file'">upload_file</span>
         <span class="font-semibold" x-show="name" x-text="name" x-cloak></span>
         <span x-show="! name">{{ $prompt }}</span>
         <span class="text-[0.8125rem] text-on-surface-variant" x-text="name ? 'Click to choose another file.' : @js('Up to '.\App\Support\UploadLimit::label().'.')">Up to {{ \App\Support\UploadLimit::label() }}.</span>

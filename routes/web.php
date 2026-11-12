@@ -4,6 +4,7 @@ use App\Http\Controllers\Admin\MovementController as AdminMovementController;
 use App\Http\Controllers\Admin\UserController;
 use App\Http\Controllers\ArtefactController;
 use App\Http\Controllers\AssessmentController;
+use App\Http\Controllers\BaselineController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\DemoAccountController;
 use App\Http\Controllers\DemoShowcaseController;
@@ -13,6 +14,7 @@ use App\Http\Controllers\EvidenceController;
 use App\Http\Controllers\FollowUpController;
 use App\Http\Controllers\GapController;
 use App\Http\Controllers\InvitationController;
+use App\Http\Controllers\JourneyController;
 use App\Http\Controllers\LandingController;
 use App\Http\Controllers\MovementController;
 use App\Http\Controllers\MyWorkController;
@@ -79,6 +81,8 @@ Route::middleware('auth')->group(function () {
     Route::get('people/{user}/photo', [ProfileController::class, 'photo'])->name('avatars.show');
 
     Route::get('dashboard', DashboardController::class)->name('dashboard');
+    // Each movement's latest cycle, from Baseline 1 to its newest baseline (AAYMCA staff).
+    Route::get('journeys', JourneyController::class)->name('journeys.index');
     Route::get('my-work', MyWorkController::class)->name('my-work');
     Route::get('search', SearchController::class)->name('search');
     Route::get('timelines', [TimelineController::class, 'index'])->name('timelines');
@@ -94,6 +98,7 @@ Route::middleware('auth')->group(function () {
     Route::get('assessments', [AssessmentController::class, 'index'])->name('assessments.index');
     Route::get('assessments/{assessment}', [AssessmentController::class, 'show'])->name('assessments.show');
     Route::post('assessments/{assessment}/hand-back', [AssessmentController::class, 'handBack'])->name('assessments.hand-back');
+    Route::post('assessments/{assessment}/close', [AssessmentController::class, 'close'])->name('assessments.close');
     Route::delete('assessments/{assessment}', [AssessmentController::class, 'destroy'])->name('assessments.destroy');
 
     // Workflow steps. Each action checks its own policy and says why if it refuses.
@@ -156,17 +161,30 @@ Route::middleware('auth')->group(function () {
     Route::put('odp-tasks/{odpTask}', [TimelineController::class, 'updateTask'])->name('timeline.tasks.update');
     Route::delete('odp-tasks/{odpTask}', [TimelineController::class, 'removeTask'])->name('timeline.tasks.destroy');
 
-    // Stage 2, ODP follow-up: each task's progress, reported and confirmed.
+    // Stage 2, ODP follow-up: the follow-ups, and notes and evidence on the tasks in between.
     Route::get('assessments/{assessment}/follow-up', [FollowUpController::class, 'show'])->name('follow-up.show');
-    Route::post('odp-tasks/{odpTask}/progress', [FollowUpController::class, 'progress'])->name('follow-up.progress');
-    Route::post('odp-tasks/{odpTask}/confirm', [FollowUpController::class, 'confirm'])->name('follow-up.confirm');
+    Route::post('odp-tasks/{odpTask}/note', [FollowUpController::class, 'note'])->name('follow-up.note');
     Route::post('assessments/{assessment}/follow-up/meetings', [FollowUpController::class, 'record'])->name('follow-up.meetings.store');
+    // The follow-ups, in turn: dated, opened, closed (locked); reopened by an Administrator.
+    Route::put('assessments/{assessment}/follow-ups/{number}/date', [FollowUpController::class, 'plan'])->whereNumber('number')->name('follow-up.plan');
+    Route::post('assessments/{assessment}/follow-ups/open', [FollowUpController::class, 'open'])->name('follow-up.open');
+    // The ODP revised during an open follow-up (also taken from Google Drive by itself).
+    Route::post('assessments/{assessment}/follow-up/odp', [FollowUpController::class, 'reviseOdp'])->name('follow-up.odp');
+    Route::post('assessments/{assessment}/follow-ups/{number}/close', [FollowUpController::class, 'lock'])->whereNumber('number')->name('follow-up.lock');
+    Route::post('assessments/{assessment}/follow-ups/{number}/reopen', [FollowUpController::class, 'reopen'])->whereNumber('number')->name('follow-up.reopen');
     Route::put('assessments/{assessment}/follow-up/pause', [FollowUpController::class, 'pause'])->name('follow-up.pause');
     Route::post('assessments/{assessment}/follow-up/review', [FollowUpController::class, 'review'])->name('follow-up.review');
     Route::post('assessments/{assessment}/follow-up/carry', [FollowUpController::class, 'carry'])->name('follow-up.carry');
     Route::post('odp-tasks/{odpTask}/evidence', [FollowUpController::class, 'evidence'])->middleware('throttle:30,1')->name('follow-up.evidence');
     Route::post('odp-tasks/{odpTask}/drop', [FollowUpController::class, 'drop'])->name('follow-up.drop');
     Route::post('assessments/{assessment}/follow-up/close', [FollowUpController::class, 'close'])->name('follow-up.close');
+    // Baselines 1–4, and re-scoring the answers while a follow-up is open.
+    Route::get('assessments/{assessment}/baselines', [BaselineController::class, 'show'])->name('baselines.show');
+    Route::get('assessments/{assessment}/journey.pdf', [BaselineController::class, 'pdf'])->middleware('throttle:30,1')->name('baselines.pdf');
+    Route::get('assessments/{assessment}/journey.xlsx', [BaselineController::class, 'workbook'])->middleware('throttle:30,1')->name('baselines.workbook');
+    Route::post('assessments/{assessment}/baselines/answers', [BaselineController::class, 'change'])->name('baselines.change');
+    Route::post('assessments/{assessment}/baselines/answers/undo', [BaselineController::class, 'undo'])->name('baselines.undo');
+    Route::post('assessments/{assessment}/baselines/form', [BaselineController::class, 'upload'])->middleware('throttle:30,1')->name('baselines.upload');
 
     Route::prefix('downloads')->name('downloads.')->group(function () {
         Route::get('blank-oha-form', [DownloadController::class, 'blankForm'])->name('blank-form');

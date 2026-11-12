@@ -7,7 +7,7 @@
 @props(['variant' => 'pills', 'label'])
 <nav aria-label="{{ $label }}" {{ $attributes->class([
     'flex flex-wrap gap-xs text-[0.875rem]' => $variant === 'pills',
-    'flex rounded border-[1.5px] border-outline-variant overflow-hidden text-[0.8125rem]' => $variant === 'joined',
+    'flex gap-xs rounded-full bg-[#f2f1ee] p-[3px] text-[0.8125rem]' => $variant === 'joined',
 ]) }}>
     {{ $slot }}
 </nav>

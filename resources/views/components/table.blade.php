@@ -8,14 +8,14 @@
 @props(['caption' => null, 'bare' => false])
 <div @class([
     'relative overflow-x-auto',
-    'bg-surface-container-lowest border-[1.5px] border-outline-variant rounded-lg' => ! $bare,
+    'bg-surface-container-lowest border border-[#e7e5e0] rounded-2xl shadow-[0_1px_2px_rgba(20,20,20,0.04)]' => ! $bare,
 ])>
     <table {{ $attributes->class('oha-table w-full text-[0.875rem]') }}>
         @if ($caption)
-            <caption class="text-left px-md pt-md text-[1rem] font-bold text-primary">{{ $caption }}</caption>
+            <caption class="text-left px-md pt-md text-[1.125rem] font-bold text-on-surface">{{ $caption }}</caption>
         @endif
         @isset($head)
-            <thead class="text-left text-[0.8125rem] uppercase tracking-wider text-on-surface-variant">
+            <thead class="text-left text-[0.75rem] font-semibold uppercase tracking-[0.06em] text-on-surface-variant">
                 {{ $head }}
             </thead>
         @endisset

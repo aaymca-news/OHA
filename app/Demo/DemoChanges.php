@@ -153,6 +153,9 @@ final class DemoChanges
             foreach ($changes as $c) {
                 self::reverse($db, $c);
             }
+            // The links between tables are checked now: a table with checks still pending
+            // cannot have its guards switched back on.
+            $db->statement('set constraints all immediate');
             foreach ($tables as $t) {
                 $db->statement("alter table public.\"{$t}\" enable trigger user");
             }

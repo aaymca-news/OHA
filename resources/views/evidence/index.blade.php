@@ -30,15 +30,15 @@
         @php($needed = collect($checklist)->flatten(1))
         @php($backed = $needed->filter(fn ($q) => $q['documents'] !== [])->count())
         <div class="grid sm:grid-cols-3 gap-md">
-            <x-stat-tile label="Assessment" :value="$assessment->period_label">
-                <x-slot:sub>Each assessment gathers its own evidence.</x-slot:sub>
-            </x-stat-tile>
-            <x-stat-tile label="“Yes” answers with evidence" :value="$needed->isEmpty() ? '—' : $backed.' / '.$needed->count()">
-                <x-slot:sub>{{ $needed->isEmpty() ? 'Shown once the OHA form is '.(auth()->user()->isSecretariat() ? 'uploaded' : 'approved').'.' : ($needed->count() - $backed).' still missing' }}</x-slot:sub>
-            </x-stat-tile>
-            <x-stat-tile label="Evidence in the library" :value="(string) $documents->count()">
-                <x-slot:sub>{{ $documents->filter(fn ($r) => $r['evidence']->isLink())->count() }} links · {{ $documents->reject(fn ($r) => $r['evidence']->isLink())->count() }} files</x-slot:sub>
-            </x-stat-tile>
+            <x-kpi label="Assessment" :value="$assessment->period_label">
+                Each assessment gathers its own evidence.
+            </x-kpi>
+            <x-kpi label="“Yes” answers with evidence" :value="$needed->isEmpty() ? '—' : $backed.' / '.$needed->count()">
+                {{ $needed->isEmpty() ? 'Shown once the OHA form is '.(auth()->user()->isSecretariat() ? 'uploaded' : 'approved').'.' : ($needed->count() - $backed).' still missing' }}
+            </x-kpi>
+            <x-kpi label="Evidence in the library" :value="(string) $documents->count()">
+                {{ $documents->filter(fn ($r) => $r['evidence']->isLink())->count() }} links · {{ $documents->reject(fn ($r) => $r['evidence']->isLink())->count() }} files
+            </x-kpi>
         </div>
 
         @if ($canUpload)
@@ -66,7 +66,7 @@
                         <x-field label="File" name="file" x-show="kind === 'file'"
                                  :hint="'PDF, Word, Excel, PowerPoint, images or text, up to '.\App\Support\UploadLimit::label().'.'">
                             <input type="file" name="file" :required="kind === 'file'" :disabled="kind !== 'file'" accept="{{ '.'.implode(',.', Evidence::FORMATS) }}"
-                                   class="text-[0.875rem] file:mr-sm file:px-md file:py-1.5 file:rounded file:border-[1.5px] file:border-outline-variant file:bg-surface-container-lowest file:text-primary file:font-semibold hover:file:border-primary">
+                                   class="text-[0.875rem] file:mr-sm file:px-md file:py-1.5 file:rounded-[10px] file:border file:border-[#e7e5e0] file:bg-surface-container-lowest file:text-on-surface file:font-semibold hover:file:bg-surface-container-low">
                         </x-field>
                         <div x-show="kind === 'link'" x-cloak>
                             <x-input name="url" type="url" label="Link" placeholder="https://" x-bind:required="kind === 'link'" x-bind:disabled="kind !== 'link'"
@@ -125,22 +125,23 @@
                 @php($rows = $documents->filter(fn ($r) => $r['evidence']->category_id === $folder['id']))
                 @php($asks = $checklist[$folder['code']] ?? [])
                 @php($missing = collect($asks)->where('documents', [])->count())
-                <details class="bg-surface-container-lowest border-[1.5px] border-outline-variant rounded-lg text-[0.875rem]" @if ($forCategory === $folder['code']) open @endif>
-                    <summary class="cursor-pointer px-md py-sm flex flex-wrap items-center gap-sm">
-                        <span class="material-symbols-outlined text-[1.25rem] text-primary" aria-hidden="true">{{ $rows->isEmpty() ? 'folder' : 'folder_open' }}</span>
-                        <span class="font-semibold flex-1 min-w-[min(10rem,100%)]">{{ $folder['name'] }}</span>
+                <details class="group rounded-2xl border border-[#e7e5e0] bg-surface-container-lowest shadow-[0_1px_2px_rgba(20,20,20,0.04)] text-[0.875rem]" @if ($forCategory === $folder['code']) open @endif>
+                    <summary class="oha-summary list-none cursor-pointer px-lg py-md flex flex-wrap items-center gap-sm rounded-2xl hover:bg-[#fafaf8] group-open:rounded-b-none">
+                        <span class="grid size-9 flex-none place-items-center rounded-[10px] bg-[#f2f1ee]" aria-hidden="true"><span class="material-symbols-outlined text-[1.125rem]">{{ $rows->isEmpty() ? 'folder' : 'folder_open' }}</span></span>
+                        <span class="text-[0.9375rem] font-semibold flex-1 min-w-[min(10rem,100%)]">{{ $folder['name'] }}</span>
+                        <span class="material-symbols-outlined text-on-surface-variant transition-transform group-open:rotate-180 order-last" aria-hidden="true">expand_more</span>
                         @if ($missing > 0)
-                            <x-chip tone="warning" icon="pending">{{ $missing }} missing</x-chip>
+                            <x-status-pill tone="warning">{{ $missing }} missing</x-status-pill>
                         @elseif ($asks !== [])
-                            <x-chip tone="good" icon="task_alt">All supplied</x-chip>
+                            <x-status-pill tone="good">All supplied</x-status-pill>
                         @endif
-                        <x-chip tone="neutral">{{ $rows->count() }} {{ \Illuminate\Support\Str::plural('item', $rows->count()) }}</x-chip>
+                        <span class="text-[0.8125rem] text-on-surface-variant tabular-nums">{{ $rows->count() }} {{ \Illuminate\Support\Str::plural('item', $rows->count()) }}</span>
                     </summary>
 
-                    <div class="flex flex-col gap-md px-md pb-md">
+                    <div class="flex flex-col gap-md border-t border-[#efede8] px-lg pt-md pb-lg">
                         @if ($asks !== [])
                             <div class="flex flex-col gap-xs">
-                                <p class="text-[0.8125rem] font-semibold uppercase tracking-wider text-on-surface-variant">Needed for the form’s “Yes” answers</p>
+                                <p class="text-[0.75rem] font-semibold uppercase tracking-[0.06em] text-on-surface-variant">Needed for the form’s “Yes” answers</p>
                                 <ul class="flex flex-col gap-xs">
                                     @foreach ($asks as $q)
                                         @include('evidence._requirement', [
@@ -153,14 +154,19 @@
                         @endif
 
                         <div class="flex flex-col gap-xs">
-                            <p class="text-[0.8125rem] font-semibold uppercase tracking-wider text-on-surface-variant">Evidence filed here</p>
+                            <p class="text-[0.75rem] font-semibold uppercase tracking-[0.06em] text-on-surface-variant">Evidence filed here</p>
                             @forelse ($rows as $row)
                                 @php($doc = $row['evidence'])
-                                <div class="flex flex-col gap-xs p-sm rounded bg-surface-container-low">
+                                <div class="flex flex-col gap-xs rounded-xl border border-[#ebe9e4] p-md">
                                     <div class="flex flex-wrap items-start gap-sm">
                                         <x-evidence-link :doc="$doc" class="font-semibold flex-1 min-w-[min(12rem,100%)]" />
                                         @if ($doc->isShared())
-                                            <x-chip tone="info" icon="share">Shared with other movements</x-chip>
+                                            <x-status-pill tone="info">Shared with other movements</x-status-pill>
+                                        @endif
+                                        {{-- Once the assessment is closed: what it counts in (the assessment, or a follow-up), or is waiting for. --}}
+                                        @if ($assessment->isClosed())
+                                            @php([$countTone, $countLabel] = $doc->countedPill($assessment))
+                                            <x-status-pill :tone="$countTone">{{ $countLabel }}</x-status-pill>
                                         @endif
                                     </div>
                                     <p class="text-[0.8125rem] text-on-surface-variant break-words">
@@ -192,7 +198,7 @@
                                                             <option value="{{ $target['code'] }}">{{ $target['name'] }}</option>
                                                         @endforeach
                                                     </select>
-                                                    <x-button variant="secondary">Move</x-button>
+                                                    <x-button variant="secondary" size="sm">Move</x-button>
                                                 </form>
                                             @endcan
                                             @can('share', $doc)
@@ -200,12 +206,12 @@
                                                     @csrf
                                                     @method('PUT')
                                                     <input type="hidden" name="shared" value="{{ $doc->isShared() ? 0 : 1 }}">
-                                                    <x-button variant="secondary">{{ $doc->isShared() ? 'Stop sharing' : 'Share with other movements' }}</x-button>
+                                                    <x-button variant="secondary" size="sm">{{ $doc->isShared() ? 'Stop sharing' : 'Share with other movements' }}</x-button>
                                                 </form>
                                             @endcan
                                             @can('remove', $doc)
                                                 <x-confirm-form :action="route('evidence.destroy', $doc)" method="DELETE" :confirm="'Remove “'.$doc->title.'” from the evidence?'">
-                                                    <x-button variant="danger">Remove</x-button>
+                                                    <x-button variant="danger" size="sm">Remove</x-button>
                                                 </x-confirm-form>
                                             @endcan
                                         </div>
