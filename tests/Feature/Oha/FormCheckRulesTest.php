@@ -80,6 +80,33 @@ it('accepts a country’s official long name', function () {
         ->and(rules(($this->check)(['Q102' => 'Federal Republic of Nigeria'], 'ghana')))->toContain(FindingRule::MovementMismatch);
 });
 
+it('accepts the movement’s own name as its country, numbers and all (the demo’s Sample YMCAs)', function () {
+    Movement::query()->where('slug', 'ghana')->firstOrFail()->update(['name' => 'Sample YMCA 10']);
+    Movement::query()->where('slug', 'zambia')->firstOrFail()->update(['name' => 'Sample YMCA 1']);
+
+    expect(rules(($this->check)(['Q102' => 'Sample YMCA 1'])))->not->toContain(FindingRule::MovementMismatch)
+        ->and(rules(($this->check)(['Q102' => 'SAMPLE YMCA 1'])))->not->toContain(FindingRule::MovementMismatch)
+        ->and(rules(($this->check)(['Q102' => 'Sample YMCA 10'])))->toContain(FindingRule::MovementMismatch)
+        ->and(rules(($this->check)(['Q102' => 'Sample YMCA 1'], 'ghana')))->toContain(FindingRule::MovementMismatch)
+        // With Q102 blank, the legal name naming the movement will do, and only the right one.
+        ->and(rules(($this->check)(['Q102' => null, 'Q101' => 'Sample YMCA 1'])))->not->toContain(FindingRule::MovementMismatch)
+        ->and(rules(($this->check)(['Q102' => null, 'Q101' => 'Sample YMCA 10'])))->toContain(FindingRule::MovementMismatch)
+        // A real country still works as before.
+        ->and(rules(($this->check)(['Q102' => 'Zambia'])))->not->toContain(FindingRule::MovementMismatch);
+});
+
+it('tells the demo’s made-up countries apart by their number', function () {
+    Movement::query()->where('slug', 'zambia')->firstOrFail()->update(['name' => 'Sample YMCA 1', 'country' => 'Country 1', 'city' => 'City 1']);
+    Movement::query()->where('slug', 'ghana')->firstOrFail()->update(['name' => 'Sample YMCA 10', 'country' => 'Country 10', 'city' => 'City 10']);
+
+    expect(rules(($this->check)(['Q102' => 'Country 1'])))->not->toContain(FindingRule::MovementMismatch)
+        ->and(rules(($this->check)(['Q102' => 'Country 10'])))->toContain(FindingRule::MovementMismatch)
+        ->and(rules(($this->check)(['Q102' => 'Country 1'], 'ghana')))->toContain(FindingRule::MovementMismatch)
+        ->and(rules(($this->check)(['Q102' => 'Zambia'])))->toContain(FindingRule::MovementMismatch)
+        ->and(rules(($this->check)(['Q102' => null, 'Q101' => 'Young Men’s Christian Association of Country 1'])))->not->toContain(FindingRule::MovementMismatch)
+        ->and(rules(($this->check)(['Q102' => null, 'Q101' => 'Young Men’s Christian Association of Country 10'])))->toContain(FindingRule::MovementMismatch);
+});
+
 it('refuses a spreadsheet that is not the OHA form, naming what it found', function () {
     $junk = new Spreadsheet;
     $junk->getActiveSheet()->setTitle('Sheet1')->setCellValue('A1', 'hello');

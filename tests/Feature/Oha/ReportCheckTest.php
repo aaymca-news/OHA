@@ -3,6 +3,7 @@
 use App\Actions\Oha\SubmitForApproval;
 use App\Actions\Oha\UploadReportVersion;
 use App\Enums\ArtefactState;
+use App\Models\Movement;
 use App\Notifications\WorkflowNotice;
 use App\Oha\FindingRule;
 use App\Oha\Report\ReadReport;
@@ -89,6 +90,28 @@ it('flags a title that names another movement or another year', function () {
 
     expect($messages)->toContain('The report’s title names Malawi, not Zambia.')
         ->and($messages)->toContain('The report’s title says 2025, but this assessment is for 2026.');
+});
+
+it('knows the demo’s Sample YMCAs by name, and tells Sample YMCA 1 from Sample YMCA 10', function () {
+    $assessment = $this->j->assessmentAt('form_approved');
+    $assessment->movement->update(['name' => 'Sample YMCA 1', 'country' => 'Country 1', 'city' => 'City 1']);
+    Movement::query()->where('slug', 'ghana')->firstOrFail()->update(['name' => 'Sample YMCA 10', 'country' => 'Country 10', 'city' => 'City 10']);
+    $identity = function (string $title, string $body) use ($assessment): array {
+        $report = new ReadReport('docx', [
+            ['text' => $title, 'heading' => 1, 'bold' => true, 'list' => false],
+            ['text' => $body, 'heading' => null, 'bold' => false, 'list' => false],
+            // Enough ordinary text to be read at all (a report under 50 words is not checked).
+            ['text' => str_repeat('The movement keeps its accounts and holds its meetings as planned. ', 8), 'heading' => null, 'bold' => false, 'list' => false],
+        ]);
+
+        return collect(app(ReportChecker::class)->check($report, $assessment->refresh())['findings'])
+            ->filter(fn ($f) => $f->rule === FindingRule::MovementMismatch)->pluck('message')->values()->all();
+    };
+
+    expect($identity('Sample YMCA 1 – Organisational Health Assessment Report 2026', 'The Sample YMCA 1’s board met in March.'))->toBe([])
+        ->and($identity('Sample YMCA 10 – Organisational Health Assessment Report 2026', 'The Sample YMCA 10’s board met in March.'))->toBe(['The report never names Sample YMCA 1.'])
+        ->and($identity('Sample YMCA 10 – Organisational Health Assessment Report 2026', 'The Sample YMCA 1’s board met in March.'))->toBe(['The report’s title names Sample YMCA 10, not Sample YMCA 1.'])
+        ->and($identity('Country 10 – Organisational Health Assessment Report 2026', 'The Sample YMCA 1’s board met in March.'))->toBe(['The report’s title names Country 10, not Country 1.']);
 });
 
 it('says when the category scores are only in a picture', function () {

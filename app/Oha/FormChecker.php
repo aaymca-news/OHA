@@ -108,22 +108,28 @@ final class FormChecker
      * Exact on the country (Q102), ignoring spacing, accents and hyphens: a loose
      * "contains" would let a Guinea-Bissau form through against Guinea. Country
      * plus capital ("Guinea Conakry") is accepted too, and so is the country's official
-     * long name ("Federal Republic of Nigeria"). Only when Q102 is blank does it fall
-     * back to the legal name (Q101).
+     * long name ("Federal Republic of Nigeria"), and so is the movement's own name
+     * ("Sample YMCA 1" on the demo), numbers kept, so Sample YMCA 10 is not Sample YMCA 1.
+     * Only when Q102 is blank does it fall back to the legal name (Q101).
      */
     private function checkMovement(ReadForm $form, Movement $expected): void
     {
-        $normalise = fn (mixed $v) => (string) preg_replace('/[^a-z]/', '', (string) Normalizer::normalize(Answer::lower($v), Normalizer::FORM_D));
+        // Lower case, accents off; numbers are kept, so "Country 10" is not "Country 1".
+        $plain = fn (mixed $v) => (string) preg_replace('/\p{Mn}/u', '', (string) Normalizer::normalize(Answer::lower($v), Normalizer::FORM_D));
+        $normalise = fn (mixed $v) => (string) preg_replace('/[^a-z0-9]/', '', $plain($v));
+        $words = fn (mixed $v) => ' '.trim((string) preg_replace('/[^a-z0-9]+/', ' ', $plain($v))).' ';
         $shortName = fn (mixed $v) => preg_replace('/^\s*(the\s+)?(((federal|democratic|united|islamic)\s+)*(republic|kingdom|state)\s+of\s+(the\s+)?)?/i', '', (string) $v);
 
         $want = $normalise($expected->country);
         $accepted = [$want, $want.$normalise($expected->city)];
         $country = $form->answers['Q102'] ?? null;
         $legalName = $form->answers['Q101'] ?? null;
+        $namesCountry = fn (mixed $v) => preg_match('/(?<![0-9])'.preg_quote($want, '/').'(?![0-9])/', $normalise($v)) === 1;
+        $namesMovement = fn (mixed $v) => str_contains($words($v), $words($expected->name));
 
         $mismatch = Answer::has($country)
-            ? ! in_array($normalise($shortName($country)), $accepted, true)
-            : Answer::has($legalName) && ! str_contains($normalise($legalName), $want);
+            ? ! in_array($normalise($shortName($country)), $accepted, true) && $words($country) !== $words($expected->name)
+            : Answer::has($legalName) && ! $namesCountry($legalName) && ! $namesMovement($legalName);
 
         if ($want !== '' && $mismatch) {
             $this->add(FindingSeverity::Error, FindingRule::MovementMismatch,

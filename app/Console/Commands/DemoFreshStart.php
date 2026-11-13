@@ -42,7 +42,7 @@ class DemoFreshStart extends Command
 
             return self::FAILURE;
         }
-        $this->line('This renames the movements Sample YMCA 1 to 23 and clears every assessment, uploaded file, notification and history entry in the demo.');
+        $this->line('This renames the movements Sample YMCA 1 to 23 (in Country 1 to 23, City 1 to 23) and clears every assessment, uploaded file, notification and history entry in the demo.');
         $this->line('It keeps the demo people, the visitors’ accounts and the Super Administrator.');
         if (! $this->option('force') && ! $this->confirm('Go ahead?')) {
             return self::SUCCESS;
@@ -82,7 +82,7 @@ class DemoFreshStart extends Command
         // The menus' counts were worked out from what is now gone.
         Navigation::forget();
 
-        $this->info("Done: {$renamed} movements renamed, {$assessments} assessments cleared with their files. The accounts are as they were.");
+        $this->info("Done: {$renamed} movements given their sample name, country and city, {$assessments} assessments cleared with their files. The accounts are as they were.");
 
         return self::SUCCESS;
     }

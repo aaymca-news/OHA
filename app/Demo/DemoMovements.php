@@ -10,8 +10,10 @@ use Illuminate\Support\Facades\DB;
  * The demo site's National Movements go by made-up names, "Sample YMCA 1" to "Sample YMCA
  * 23", so no real YMCA is shown with invented scores. The numbers do not follow the
  * alphabet (or any order of the real names), so a number does not give a movement away.
- * Their other details (country, city, zone, membership) stay as loaded. The demo's own
- * people for each movement (at example.org) take the new name in their title and email.
+ * Their country and city go the same way, "Country 1" and "City 1", as a real country or
+ * capital would give the movement away; their zone and membership stay as loaded. The
+ * demo's own people for each movement (at example.org) take the new name in their title
+ * and email.
  * Demo site only (config oha.demo, and oha.demo_sample_names); never on the live site.
  */
 final class DemoMovements
@@ -53,11 +55,22 @@ final class DemoMovements
         return Movement::query()->whereIn('slug', array_filter([$realSlug, self::slugFor($realSlug)]))->first();
     }
 
+    public static function country(int $number): string
+    {
+        return 'Country '.$number;
+    }
+
+    public static function city(int $number): string
+    {
+        return 'City '.$number;
+    }
+
     /**
-     * Renames the movements still under their real names, and their demo people's titles
-     * and emails with them. Safe to run again: a movement already renamed is left alone.
+     * Gives the movements their sample name, country and city, and their demo people's
+     * titles and emails the new name. Safe to run again: what is already made up is left
+     * alone (a movement renamed before its country and city were, gets those now).
      *
-     * @return int how many movements were renamed
+     * @return int how many movements were changed
      */
     public static function anonymise(): int
     {
@@ -66,14 +79,24 @@ final class DemoMovements
         }
 
         return DB::transaction(function (): int {
-            $renamed = 0;
+            $changed = 0;
             foreach (self::ORDER as $i => $realSlug) {
-                $movement = Movement::query()->where('slug', $realSlug)->first();
+                $number = $i + 1;
+                $movement = Movement::query()->whereIn('slug', [$realSlug, self::slug($number)])->first();
                 if ($movement === null) {
                     continue;
                 }
+                $place = ['country' => self::country($number), 'city' => self::city($number)];
+                if ($movement->slug !== $realSlug) {
+                    if ($movement->only(['country', 'city']) !== $place) {
+                        $movement->update($place);
+                        $changed++;
+                    }
+
+                    continue;
+                }
                 $old = ['slug' => $movement->slug, 'name' => $movement->name];
-                $movement->update(['name' => self::name($i + 1), 'slug' => self::slug($i + 1)]);
+                $movement->update(['name' => self::name($number), 'slug' => self::slug($number)] + $place);
 
                 // The demo's own people for this movement: "…, Zambia YMCA (demo)" and
                 // "name.zambia@example.org" become the sample name and slug.
@@ -82,10 +105,10 @@ final class DemoMovements
                         'title' => $person->title !== null ? str_replace($old['name'], $movement->name, $person->title) : null,
                         'email' => str_replace('.'.$old['slug'].'@example.org', '.'.$movement->slug.'@example.org', $person->email),
                     ]));
-                $renamed++;
+                $changed++;
             }
 
-            return $renamed;
+            return $changed;
         });
     }
 }

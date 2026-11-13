@@ -138,17 +138,22 @@ final class ReportChecker
         $titleLines = implode(' ', array_column(array_filter(array_slice($report->paragraphs, 0, 6), fn ($p) => ReadReport::isTitle($p)
             || (mb_strlen($p['text']) <= 200 && preg_match('/report|assessment/i', $p['text']) === 1)), 'text'));
         $country = $movement->country;
+        // Anywhere in the text, but not followed by a digit: on the demo, "Country 1" is not "Country 10".
+        $mentions = fn (string $needle, string $text) => preg_match('/'.preg_quote($needle, '/').'(?![0-9])/iu', $text) === 1;
+        // A movement's full name, as whole words ("Sample YMCA 1" on the demo, not "Sample YMCA 10").
+        $names = fn (string $name, string $text) => preg_match('/(?<![\p{L}\p{N}])'.preg_quote($name, '/').'(?![\p{L}\p{N}])/iu', $text) === 1;
 
-        if (stripos($report->text(), $country) === false && stripos($report->text(), str_replace(' YMCA', '', $movement->name)) === false) {
+        if (! $mentions($country, $report->text()) && ! $mentions(str_replace(' YMCA', '', $movement->name), $report->text()) && ! $names($movement->name, $report->text())) {
             $this->add(FindingSeverity::Warning, FindingRule::MovementMismatch,
                 "The report never names {$movement->name}.",
                 hint: 'Check this is the right report for this movement.');
-        } elseif (stripos($titleLines, $country) === false) {
-            $other = Movement::query()->where('id', '!=', $movement->id)->pluck('country')
-                ->first(fn ($c) => preg_match('/\b'.preg_quote($c, '/').'\b/i', $titleLines) === 1);
+        } elseif (! $mentions($country, $titleLines) && ! $names($movement->name, $titleLines)) {
+            $others = Movement::query()->where('id', '!=', $movement->id)->get(['name', 'country']);
+            $other = $others->pluck('country')->first(fn ($c) => preg_match('/\b'.preg_quote($c, '/').'\b/i', $titleLines) === 1)
+                ?? $others->pluck('name')->first(fn ($n) => $names($n, $titleLines));
             if ($other !== null) {
                 $this->add(FindingSeverity::Warning, FindingRule::MovementMismatch,
-                    "The report’s title names {$other}, not {$country}.",
+                    "The report’s title names {$other}, not ".($others->contains('country', $other) ? $country : $movement->name).'.',
                     hint: 'It may be another movement’s report, or copied from one without changing the title.');
             }
         }

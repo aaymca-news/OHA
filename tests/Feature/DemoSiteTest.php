@@ -80,10 +80,11 @@ it('gives the demo’s movements made-up names, Sample YMCA 1 to 23, with their 
     $names = Movement::query()->pluck('name')->sort(SORT_NATURAL)->values()->all();
     expect($names)->toBe(collect(range(1, 23))->map(fn ($n) => "Sample YMCA {$n}")->all());
 
-    // The rest as loaded; the demo people for it take the sample name, and no real name is left.
+    // Its country and city made up too, the rest as loaded; the demo people for it take the sample name, and no real name is left.
     $sample = Movement::query()->where('slug', DemoMovements::slugFor('zambia'))->firstOrFail();
     $chair = DemoPeople::find('chair', $sample);
-    expect($sample->name)->toBe('Sample YMCA 16')->and($sample->country)->toBe('Zambia')
+    expect($sample->name)->toBe('Sample YMCA 16')->and($sample->country)->toBe('Country 16')->and($sample->city)->toBe('City 16')
+        ->and($sample->zone->name)->not->toBe('')
         ->and($chair->title)->toBe('Board Chairperson, Sample YMCA 16 (demo)')
         ->and($chair->email)->toEndWith('.sample-ymca-16@example.org')
         ->and(User::query()->where('title', 'like', '%Zambia YMCA%')->orWhere('email', 'like', '%.zambia@example.org')->exists())->toBeFalse();
@@ -91,6 +92,12 @@ it('gives the demo’s movements made-up names, Sample YMCA 1 to 23, with their 
     // Seeding again adds nothing (no real-named movements come back).
     $this->seed(DemoSeeder::class);
     expect(Movement::query()->count())->toBe(23)->and(User::query()->count())->toBe(48);
+
+    // A demo renamed before countries were made up (as the demo site was) gets them on the next run; nothing else changes.
+    $sample->update(['country' => 'Zambia', 'city' => 'Lusaka']);
+    expect(DemoMovements::anonymise())->toBe(1)
+        ->and($sample->refresh()->only(['name', 'country', 'city']))->toBe(['name' => 'Sample YMCA 16', 'country' => 'Country 16', 'city' => 'City 16'])
+        ->and(DemoMovements::anonymise())->toBe(0);
 
     // "Choose who to be" lists the sample names only.
     $this->get(route('login'))->assertOk()->assertSee('Sample YMCA 16')->assertDontSee('Zambia YMCA');
