@@ -135,3 +135,27 @@ it('never starts the demo afresh outside the demo site', function () {
 
     $this->artisan('oha:demo-fresh-start', ['--force' => true])->assertFailed();
 });
+
+it('never loads the sample data outside the demo site', function () {
+    config(['oha.demo' => false]);
+
+    $this->artisan('oha:demo-sample-data', ['folder' => sys_get_temp_dir(), '--force' => true])->assertFailed();
+    expect(Assessment::query()->count())->toBe(0);
+});
+
+it('checks the sample data folder before changing anything', function () {
+    config(['oha.demo' => true]);
+    $this->seed(DemoSeeder::class);
+    $folder = sys_get_temp_dir().'/oha-sample-'.uniqid();
+
+    $this->artisan('oha:demo-sample-data', ['folder' => $folder, '--force' => true])
+        ->expectsOutputToContain('No folder at')->assertFailed();
+
+    // A folder without the movements' files: refused, as a whole, before the first movement.
+    mkdir($folder);
+    $this->artisan('oha:demo-sample-data', ['folder' => $folder, '--force' => true])
+        ->expectsOutputToContain('Sample YMCA 1 is missing a file')->assertFailed();
+    rmdir($folder);
+
+    expect(Assessment::query()->count())->toBe(0);
+});
