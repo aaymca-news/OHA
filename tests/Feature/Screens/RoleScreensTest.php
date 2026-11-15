@@ -123,10 +123,13 @@ it('shows AAYMCA the region, and the movement its own dashboard', function () {
     $this->j->assessmentAt('odp_approved');
 
     $this->actingAs($this->j->assessor)->get(route('dashboard'))->assertOk()
-        ->assertSee('Stage 1 across the region')->assertSee('How the ODPs are being carried out')->assertSee('By zone');
+        ->assertSee('Every movement, every area')->assertSee('By zone')
+        ->assertDontSee('Stage 1 across the region')->assertDontSee('How the ODPs are being carried out');
 
+    // Analytics only (decided 15 Nov 2026): the movement's scores and figures, never its work or tasks.
     $this->actingAs($this->j->chair)->get(route('dashboard'))->assertOk()
-        ->assertSee('Welcome back')->assertSee('Your assessment cycle')->assertSee('Your ODP')
+        ->assertSee('Welcome back')->assertSee('Current score')->assertSee('Our areas')->assertSee('Against the region')
+        ->assertDontSee('Your assessment cycle')->assertDontSee('Your ODP')->assertDontSee('Blocked')
         ->assertSee('Your contacts at AAYMCA')->assertSee('Tendai Moyo')->assertDontSee('By zone')
         // Signing is optional: never a prompt on the dashboard (it is in My Work).
         ->assertDontSee('ready for your signature')->assertDontSee('Review and sign')->assertDontSee('in My Work');
@@ -173,7 +176,7 @@ it('keeps AAYMCA’s dashboard to analytics, the same for every staff role: thei
 
     foreach ([$this->j->assessor, $this->j->admin, $this->j->superAdmin] as $staff) {
         $this->actingAs($staff)->get(route('dashboard'))->assertOk()
-            ->assertSee('Movements rated')->assertSee('Stage 1 across the region')
+            ->assertSee('Movements assessed')->assertSee('Average current score')->assertDontSee('Stage 1 across the region')
             ->assertDontSee('Outstanding actions')->assertDontSee('Open My Work')->assertDontSee('Approve the OHA form');
     }
 });

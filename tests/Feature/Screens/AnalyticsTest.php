@@ -1,6 +1,8 @@
 <?php
 
 use App\Models\User;
+use App\Models\Zone;
+use App\Oha\ScoreGaps;
 use Illuminate\Support\Facades\Notification;
 use Tests\Support\Journey;
 use Tests\Support\ValidHtml;
@@ -15,12 +17,12 @@ beforeEach(function () {
     $this->j = Journey::begin();
 });
 
-it('shows the Stage 1 pipeline and a clear empty state before any form is approved', function () {
+it('shows a clear empty state before any form is approved, and no work on the dashboard', function () {
     $this->j->assessmentAt('form_submitted');
 
     $this->actingAs($this->j->admin)->get(route('dashboard'))->assertOk()
-        ->assertSee('Stage 1 across the region')->assertSee('Not yet assessed')
-        ->assertSee('No movement is rated yet')->assertDontSee('Every movement, every category');
+        ->assertSee('Movements assessed')->assertSee('No movement is assessed yet')
+        ->assertDontSee('Every movement, every area')->assertDontSee('Stage 1 across the region');
 });
 
 it('fills the dashboard from the approved forms', function () {
@@ -29,12 +31,32 @@ it('fills the dashboard from the approved forms', function () {
     $response = $this->actingAs($this->j->otherStaff)->get(route('dashboard'))->assertOk();
     ValidHtml::assert($response->getContent(), 'dashboard with analytics');
 
-    $response->assertSee('Every movement, every category')->assertSee('Zambia')
+    $response->assertSee('Who needs support')->assertSee('Every movement, every area')->assertSee('Zambia')
+        ->assertSee('Most often missed')->assertSee('Areas, weakest first')
         ->assertSee('Where the money comes from')->assertSee('Paid services')
-        ->assertSee('Reliance on international funding')->assertSee('23%')
+        ->assertSee('Financial resilience')->assertSee('23%')
         ->assertSee('Operating margin')->assertSee('+15.2%')
         ->assertSee('Policies in place')->assertSee('Vision 2030 in the Strategic Plan')
         ->assertSee('50,000');
+});
+
+it('filters the dashboard by zone, and keeps every zone side by side', function () {
+    $this->j->assessmentAt('form_approved');
+    $home = $this->j->zambia->zone;
+    $other = Zone::query()->whereKeyNot($home->id)->orderBy('name')->firstOrFail();
+
+    $this->actingAs($this->j->admin)->get(route('dashboard', ['zone' => $home->id]))->assertOk()
+        ->assertSee('Who needs support')->assertSee('Zambia')->assertSee('By zone')->assertSee($other->name);
+    $this->actingAs($this->j->admin)->get(route('dashboard', ['zone' => $other->id]))->assertOk()
+        ->assertSee('Movements assessed')->assertSee('No movement in '.$other->name.' is assessed yet')->assertDontSee('Who needs support');
+});
+
+it('names every scored question shortly, for the points most often missed', function () {
+    foreach (ScoreGaps::scored() as $items) {
+        foreach ($items as $item) {
+            expect(ScoreGaps::name($item['code']))->not->toBe($item['code']);
+        }
+    }
 });
 
 it('shows every movement as a card, grouped by zone, with its stage and assessors', function () {

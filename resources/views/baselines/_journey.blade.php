@@ -1,8 +1,8 @@
 {{--
-    One cycle's journey (decided 12 Nov 2026): the overall score at each baseline as a
-    growth curve, then each category at each baseline, with the ODP tasks done, the evidence
+    One cycle's journey (decided 12 Nov 2026): the overall score at the baseline and at each
+    follow-up as a growth curve, then each category at each, with the ODP tasks done, the evidence
     counted and the answers changed at each. Expects $assessment and $journey (from
-    App\Queries\Journeys::of), and optionally $link (true: a link to Scores and baselines).
+    App\Queries\Journeys::of), and optionally $link (true: a link to the score history).
 --}}
 @php
     $steps = collect($journey);
@@ -11,13 +11,13 @@
 @endphp
 <x-panel id="journey" stack :title="'The '.$assessment->period_label.' cycle’s journey'"
          :subtitle="$steps->count() === 1
-            ? 'Baseline 1, from the closed assessment. Each follow-up closed adds the next baseline.'
-            : 'From Baseline 1 to Baseline '.$newest['number'].': '.($gain > 0 ? '+' : '').number_format((float) $gain, 1).' percentage points.'">
+            ? 'The baseline, from the closed assessment. Each follow-up closed adds its score.'
+            : 'From the baseline to the '.\App\Models\Baseline::name($newest['number']).': '.($gain > 0 ? '+' : '').number_format((float) $gain, 1).' points.'">
     <x-slot:actions>
         <x-row-action :href="route('baselines.pdf', $assessment)">Download PDF</x-row-action>
         <x-row-action :href="route('baselines.workbook', $assessment)">Excel</x-row-action>
         @if ($link ?? false)
-            <x-more-link :href="route('baselines.show', $assessment)">Scores and baselines</x-more-link>
+            <x-more-link :href="route('baselines.show', $assessment)">Score history</x-more-link>
         @endif
     </x-slot:actions>
     <x-viz.growth-curve :points="\App\Queries\Journeys::curve($steps)" />

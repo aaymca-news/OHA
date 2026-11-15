@@ -10,9 +10,9 @@
         <p class="text-[0.8125rem] text-on-surface-variant">Gates past their deadline</p>
     </x-panel>
     <x-panel class="!px-[20px] !py-[16px] flex-1 min-w-[10rem]">
-        <p class="text-[0.75rem] font-semibold uppercase tracking-[0.06em] text-on-surface-variant">Due within 7 days</p>
+        <p class="text-[0.75rem] font-semibold uppercase tracking-[0.06em] text-on-surface-variant">Due within {{ config('oha.due_soon_days.deadlines') }} days</p>
         <p class="text-[1.75rem] font-bold leading-tight tabular-nums">{{ $dueSoon }}</p>
-        <p class="text-[0.8125rem] text-on-surface-variant">Coming up this week</p>
+        <p class="text-[0.8125rem] text-on-surface-variant">Coming up soon</p>
     </x-panel>
     <x-segmented label="View" variant="joined" class="self-end ml-auto">
         <x-segmented.link :href="route('timelines', ['tab' => 'gates'])" :active="$view === 'chart'" icon="timeline">Chart</x-segmented.link>

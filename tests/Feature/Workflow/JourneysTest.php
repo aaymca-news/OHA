@@ -10,10 +10,11 @@ use Illuminate\Support\Facades\Notification;
 use Tests\Support\Journey;
 
 /*
- * The journey of a cycle (decided 12 Nov 2026): each baseline's score, band and scores by
- * category, from Baseline 1 to the newest. On the movement page and the Scores and
- * baselines page for those who follow it up (never the Board Chairperson), and across the
- * Alliance for AAYMCA staff (Journeys, and the dashboard).
+ * The journey of a cycle (decided 12 Nov 2026): the score, band and scores by category at
+ * the baseline and at each follow-up. On the movement page and the score history page for
+ * those who follow it up, and across the Alliance for AAYMCA staff (Journeys, and the
+ * dashboard). The Board Chairperson sees the score trend on the dashboard (15 Nov 2026),
+ * nothing else of the follow-ups.
  */
 
 beforeEach(function () {
@@ -48,12 +49,15 @@ it('follows the cycle baseline by baseline, as recorded', function () {
 
 it('shows the journey to those who follow the cycle up, and the Alliance’s to AAYMCA staff', function () {
     $movement = route('movements.show', $this->j->zambia);
-    $this->actingAs($this->j->assessor)->get($movement)->assertOk()->assertSee('cycle’s journey', false)->assertSee('Baseline 2');
+    $this->actingAs($this->j->assessor)->get($movement)->assertOk()->assertSee('cycle’s journey', false)->assertSee('Follow-up 1 score');
     $this->actingAs($this->ngs)->get($movement)->assertOk()->assertSee('cycle’s journey', false);
     $this->actingAs($this->j->chair)->get($movement)->assertOk()->assertDontSee('cycle’s journey', false);
 
     $this->actingAs($this->j->otherStaff)->get(route('journeys.index'))->assertOk()->assertSee('Zambia YMCA')->assertSee('Moved up a band');
-    $this->actingAs($this->j->admin)->get(route('dashboard'))->assertOk()->assertSee('Journeys this cycle');
+    $this->actingAs($this->j->admin)->get(route('dashboard'))->assertOk()->assertSee('Growth over the cycle')->assertSee('Biggest gains');
+    foreach ([$this->ngs, $this->j->chair] as $user) {
+        $this->actingAs($user)->get(route('dashboard'))->assertOk()->assertSee('Our score over the cycle')->assertSee('Follow-up 1 score')->assertSee('points since baseline');
+    }
     $this->actingAs($this->ngs)->get(route('journeys.index'))->assertForbidden();
     $this->actingAs($this->j->chair)->get(route('journeys.index'))->assertForbidden();
 });

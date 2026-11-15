@@ -2,7 +2,7 @@
     <x-card padding="lg" class="max-w-3xl">
         <form method="POST" action="{{ route('admin.users.store') }}" x-data="{ role: '{{ old('role', 'staff') }}' }" class="flex flex-col gap-md">
             @csrf
-            <p class="text-[0.875rem] text-on-surface-variant">They will get an email with a link to set their password. The link works once and expires in 7 days.</p>
+            <p class="text-[0.875rem] text-on-surface-variant">They will get an email with a link to set their password. The link works once and expires in {{ \App\Notifications\InvitationNotice::validDays() }} days.</p>
 
             <div class="grid sm:grid-cols-2 gap-md">
                 <x-input name="name" label="Full name" required />

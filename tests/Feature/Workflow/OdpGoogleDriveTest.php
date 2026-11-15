@@ -249,14 +249,15 @@ it('checks every linked, unsigned ODP on a schedule and records each run', funct
     expect(DriveSyncRun::query()->latest('id')->value('error'))->toContain('Not connected');
 });
 
-it('shows the latest ODP changes on the dashboard', function () {
+it('shows the latest ODP changes on the timelines (moved from the dashboard, 15 Nov 2026)', function () {
     $assessment = $this->j->assessmentAt('odp_uploaded');
     $this->drive->edit('changed in Drive', $this->j->assessor->email);
     ($this->take)($assessment);
 
-    $this->actingAs($this->j->admin)->get(route('dashboard'))->assertOk()
+    $this->actingAs($this->j->admin)->get(route('timelines', ['tab' => 'odp']))->assertOk()
         ->assertSee('ODP changes')->assertSee('Zambia YMCA · version 2')->assertSee('Changed in Google Drive by '.$this->j->assessor->email, escape: false)
         ->assertSee('Google Drive connected, not checked yet');
     // Not approved yet: staff not on Zambia do not see the work in progress.
-    $this->actingAs($this->j->otherStaff)->get(route('dashboard'))->assertOk()->assertDontSee('Zambia YMCA · version');
+    $this->actingAs($this->j->otherStaff)->get(route('timelines', ['tab' => 'odp']))->assertOk()->assertDontSee('Zambia YMCA · version');
+    $this->actingAs($this->j->admin)->get(route('dashboard'))->assertOk()->assertDontSee('ODP changes');
 });

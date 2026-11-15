@@ -21,13 +21,26 @@ use Illuminate\Support\Facades\DB;
  */
 final class AllianceInsights
 {
-    /** @var Collection<int, array{movement: Movement, status: MovementStatus, profile: array<string, mixed>}>|null */
+    /** @var Collection<int, array{movement: Movement, status: MovementStatus, profile: array<string, mixed>, answers: array<mixed>}>|null */
     private ?Collection $rated = null;
 
+    /** Only the movements of this zone; null for every zone. */
+    private ?int $zoneId = null;
+
+    /** The same insights for one zone's movements only (null: every zone). */
+    public function inZone(?int $zoneId): self
+    {
+        $insights = new self;
+        $insights->zoneId = $zoneId;
+
+        return $insights;
+    }
+
     /**
-     * Each rated movement with its status and form profile, keyed by movement id.
+     * Each rated movement with its status, form profile and answers as they stand, keyed by
+     * movement id.
      *
-     * @return Collection<int, array{movement: Movement, status: MovementStatus, profile: array<string, mixed>}>
+     * @return Collection<int, array{movement: Movement, status: MovementStatus, profile: array<string, mixed>, answers: array<mixed>}>
      */
     public function rated(): Collection
     {
@@ -35,7 +48,9 @@ final class AllianceInsights
             return $this->rated;
         }
 
-        $statuses = MovementStatus::query()->with(['movement.zone', 'band'])->whereNotNull('latest_assessment_id')->orderBy('name')->get();
+        $statuses = MovementStatus::query()->with(['movement.zone', 'band'])->whereNotNull('latest_assessment_id')
+            ->when($this->zoneId, fn ($q, int $zone) => $q->whereIn('movement_id', Movement::query()->where('zone_id', $zone)->select('id')))
+            ->orderBy('name')->get();
         $uploads = DB::table('category_scores as cs')
             ->join('form_uploads as fu', 'fu.id', '=', 'cs.form_upload_id')
             ->whereIn('cs.assessment_id', $statuses->pluck('latest_assessment_id'))
@@ -55,7 +70,7 @@ final class AllianceInsights
                 ? (new Profile($answers ?? [], json_decode($upload->form_meta, true) ?? []))->toArray()
                 : [];
 
-            $rated[$movement->id] = ['movement' => $movement, 'status' => $status, 'profile' => $profile];
+            $rated[$movement->id] = ['movement' => $movement, 'status' => $status, 'profile' => $profile, 'answers' => $upload !== null && is_array($answers) ? $answers : []];
         }
 
         return $this->rated = collect($rated);

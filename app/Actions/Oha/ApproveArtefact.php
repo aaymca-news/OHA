@@ -100,7 +100,7 @@ final class ApproveArtefact
             $onwards = match ($artefact->kind) {
                 ArtefactKind::Form => 'Its score is now recorded, and the movement’s Board Chairperson and National General Secretary can see it.',
                 ArtefactKind::Report => 'All AAYMCA staff and the movement’s Board Chairperson and National General Secretary can now see it.',
-                ArtefactKind::Odp => 'All AAYMCA staff and the movement’s Board Chairperson and National General Secretary can now see it. The assessment can now be closed, which sets Baseline 1 and starts the follow-up.',
+                ArtefactKind::Odp => 'All AAYMCA staff and the movement’s Board Chairperson and National General Secretary can now see it. The assessment can now be closed, which sets the baseline and starts the follow-up.',
             };
             Notify::send([$artefact->submitter], new WorkflowNotice(
                 "Approved: {$name}, {$movement}",

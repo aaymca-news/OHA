@@ -78,7 +78,7 @@ return [
             'started' => 'Opened and not yet closed, with where each one stands. Once the ODP is approved, close the assessment.',
             'done' => 'Closed and in follow-up: open each follow-up when it is time, hold it, record it and close it.',
             'approve' => 'OHA forms, reports and ODPs submitted for approval.',
-            'close' => 'Approved ODPs on movements others assess: closing the assessment sets Baseline 1 and starts the follow-up.',
+            'close' => 'Approved ODPs on movements others assess: closing the assessment sets the baseline and starts the follow-up.',
             'sign' => 'Approved ODPs you may sign on behalf of your board. Optional: nothing waits on your signature.',
             'gaps' => 'Forms that went forward with information still missing.',
         ],

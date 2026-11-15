@@ -72,12 +72,12 @@ final class CloseAssessment
         $when = $first !== null ? ' The first follow-up is planned for '.$first->format(DateFormats::DAY).'.' : '';
         Notify::send(Notify::assessorsOf($assessment), new WorkflowNotice(
             "Assessment closed: {$movement->name}",
-            "{$by->name} closed the {$movement->name} assessment ({$assessment->period_label}). Its scores are Baseline 1, and the OHA form, report and ODP are frozen as approved.{$when}",
+            "{$by->name} closed the {$movement->name} assessment ({$assessment->period_label}). Its scores are the baseline, and the OHA form, report and ODP are frozen as approved.{$when}",
             route('follow-up.show', $assessment, false), 'good',
         ), except: $by);
         Notify::send([$movement->generalSecretary], new WorkflowNotice(
             "Follow-up begins: {$movement->name}",
-            "AAYMCA has closed your {$assessment->period_label} assessment. Its scores are your starting point (Baseline 1), and the follow-up of your ODP begins.{$when} You can report progress on the ODP tasks and add evidence.",
+            "AAYMCA has closed your {$assessment->period_label} assessment. Its scores are your starting point, the baseline, and the follow-up of your ODP begins.{$when} You can report progress on the ODP tasks and add evidence.",
             route('follow-up.show', $assessment, false), 'info',
         ));
 

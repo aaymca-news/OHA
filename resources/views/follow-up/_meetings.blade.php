@@ -68,11 +68,11 @@
                         @if ($canRecord && $isCurrent && $open)
                             <x-button type="button" :variant="$meeting ? 'secondary' : 'outline'" size="sm" x-on:click="record = ! record">{{ $meeting ? 'Correct the meeting' : 'Record the meeting' }}</x-button>
                         @endif
-                        {{-- Re-scoring while it is open; once closed, the baseline it recorded. --}}
+                        {{-- Re-scoring while it is open; once closed, the follow-up score it recorded. --}}
                         @if ($isCurrent && $open)
-                            <x-row-action :href="route('baselines.show', $assessment).'#rescore'">{{ $canRun ? 'Re-score' : 'Scores' }} · Baseline {{ $slot['number'] + 1 }}</x-row-action>
+                            <x-row-action :href="route('baselines.show', $assessment).'#rescore'">{{ $canRun ? 'Re-score' : 'Score' }} · Follow-up {{ $slot['number'] }}</x-row-action>
                         @elseif ($state === \App\Oha\FollowUpSchedule::LOCKED)
-                            <x-row-action :href="route('baselines.show', $assessment)">Baseline {{ $slot['number'] + 1 }}</x-row-action>
+                            <x-row-action :href="route('baselines.show', $assessment)">Follow-up {{ $slot['number'] }} score</x-row-action>
                         @endif
                     </div>
 
@@ -98,7 +98,7 @@
                     {{-- Closing it, once its meeting is recorded; the next follow-up's date can be set here too. --}}
                     @if ($canRun && $open && $meeting)
                         <x-confirm-form :action="route('follow-up.lock', ['assessment' => $assessment, 'number' => $slot['number']])"
-                                        :confirm="'Close follow-up '.$slot['number'].'? Its meeting record, where each task stood and the evidence counted in it are locked, and the answers re-scored during it become Baseline '.($slot['number'] + 1).'. Only an Administrator can reopen it.'"
+                                        :confirm="'Close follow-up '.$slot['number'].'? Its meeting record, where each task stood and the evidence counted in it are locked, and the answers re-scored during it become its follow-up score. Only an Administrator can reopen it.'"
                                         class="flex flex-wrap items-end gap-sm p-md rounded-xl border border-[#e7e5e0] bg-[#fafaf8]">
                             @if ($slot['number'] < $total)
                                 <x-field :label="'Follow-up '.($slot['number'] + 1).'’s date (optional)'" size="sm">

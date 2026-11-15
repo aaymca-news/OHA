@@ -106,7 +106,7 @@ final class WorkRow
 
         return [
             'url' => route('assessments.show', ['assessment' => $odp->assessment_id, 'tab' => 'odp']).'#close',
-            'meta' => collect(['ODP approved'.($odp->approved_at ? ' '.$odp->approved_at->format(DateFormats::DAY) : ''), 'closing it sets Baseline 1 and starts the follow-up'])->join(' · '),
+            'meta' => collect(['ODP approved'.($odp->approved_at ? ' '.$odp->approved_at->format(DateFormats::DAY) : ''), 'closing it sets the baseline and starts the follow-up'])->join(' · '),
             'pill' => ['warning', 'Ready to close'],
             'button' => $entry['actionable'] ? 'Close the assessment' : 'Open',
             'primary' => (bool) $entry['actionable'],

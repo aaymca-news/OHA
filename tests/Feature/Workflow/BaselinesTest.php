@@ -174,8 +174,8 @@ it('lets the assessors and Administrators re-score only while a follow-up is ope
         ->toThrow(WorkflowRuleBroken::class, 'Say why');
 
     $page = route('baselines.show', $this->assessment);
-    $this->actingAs($this->j->assessor)->get($page)->assertOk()->assertSee('Re-scoring for Baseline 2')->assertSee('Points still open')->assertSee('Re-score from this form');
-    $this->actingAs($this->ngs)->get($page)->assertOk()->assertSee('Baseline 1')->assertDontSee('Re-score from this form');
+    $this->actingAs($this->j->assessor)->get($page)->assertOk()->assertSee('Re-scoring for the Follow-up 1 score')->assertSee('Points still open')->assertSee('Re-score from this form');
+    $this->actingAs($this->ngs)->get($page)->assertOk()->assertSee('Score history')->assertSee('Current score · Baseline')->assertDontSee('Re-score from this form');
     $this->actingAs($this->j->chair)->get($page)->assertForbidden();
 });
 

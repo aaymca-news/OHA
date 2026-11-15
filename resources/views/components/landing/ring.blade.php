@@ -1,6 +1,7 @@
 @props(['id', 'areas', 'why' => [], 'centre' => 'mark', 'label' => null])
 {{--
-    The nine areas of health as one ring: a segment per area, drawn one after another
+    The areas of health as one ring: a segment per area (each an equal share of the circle,
+    with a 5° gap), drawn one after another
     when the ring comes into view. A symbol of a whole, healthy movement; it never shows
     a real score. Pointing at (or tapping) a segment lifts it out of the ring and names
     its area in the centre. $centre: 'mark' (the Africa Alliance mark, which makes way
@@ -19,18 +20,20 @@
         </defs>
         <circle class="ring-orbit" cx="200" cy="200" r="190" fill="none" stroke="#b1b3b6" stroke-width="2" stroke-dasharray="1 11" stroke-linecap="round"/>
         <circle cx="200" cy="200" r="126" fill="none" stroke="#e2e2e3" stroke-width="1.5"/>
-        <g class="ring-body">
+        @php($step = 360 / max(1, count($areas)))
+        @php($arc = round($step - 5, 2))
+        <g class="ring-body" style="--arc: {{ $arc }}">
             {{-- The slots. They also take the pointer, so a lifted segment never slips out from under it. --}}
             @foreach ($areas as $i => $area)
                 <circle class="ring-slot" data-hit="{{ $i }}" data-name="{{ $area->name }}" cx="200" cy="200" r="160" fill="none" stroke="#e9e9ea" stroke-width="30" pathLength="360"
-                        stroke-dasharray="35 400" transform="rotate({{ -90 + $i * 40 + 2.5 }} 200 200)"/>
+                        stroke-dasharray="{{ $arc }} 400" transform="rotate({{ round(-90 + $i * $step + 2.5, 2) }} 200 200)"/>
             @endforeach
             @foreach ($areas as $i => $area)
                 {{-- Lifted outward along the middle of its own arc. --}}
-                @php($mid = deg2rad(-70 + $i * 40))
+                @php($mid = deg2rad(-90 + 2.5 + $arc / 2 + $i * $step))
                 <g class="ring-lift" data-lift="{{ $i }}" style="--dx: {{ round(cos($mid) * 12, 2) }}px; --dy: {{ round(sin($mid) * 12, 2) }}px">
                     <circle class="ring-seg" style="--i: {{ $i }}" data-seg="{{ $i }}" cx="200" cy="200" r="160" fill="none" stroke="#ef3340" stroke-width="30" pathLength="360"
-                            stroke-dasharray="35 400" transform="rotate({{ -90 + $i * 40 + 2.5 }} 200 200)"/>
+                            stroke-dasharray="{{ $arc }} 400" transform="rotate({{ round(-90 + $i * $step + 2.5, 2) }} 200 200)"/>
                 </g>
             @endforeach
         </g>

@@ -5,6 +5,7 @@ namespace App\Support;
 use App\Enums\ArtefactKind;
 use App\Enums\Stage;
 use App\Models\Assessment;
+use App\Models\Baseline;
 use App\Models\Category;
 use App\Models\Movement;
 use App\Models\MovementStatus;
@@ -37,7 +38,7 @@ final class ScoresCsv
         $scores = DB::table('v_current_category_scores')->whereIn('assessment_id', $assessments->pluck('id'))->get()
             ->groupBy('assessment_id')->map(fn (Collection $s) => $s->keyBy('category_id'));
         $byMovement = $assessments->groupBy('movement_id');
-        // Each closed assessment's Baseline 1 score, to show how far it moved since.
+        // Each closed assessment's baseline score, to show how far it moved since.
         $firsts = DB::table('v_baseline_scores as t')->join('baselines as b', 'b.id', '=', 't.baseline_id')
             ->whereNull('b.superseded_at')->where('t.number', 1)->whereIn('t.assessment_id', $assessments->pluck('id'))
             ->pluck('t.pct', 't.assessment_id');
@@ -48,8 +49,8 @@ final class ScoresCsv
             'Movement', 'Country', 'Zone', 'Membership', 'Assessment', 'Assessed (month)',
             ...$categories->map(fn (Category $c) => $c->name.' (%)')->all(),
             'Points', 'Out of', 'Score (%)', 'Band', 'ODP validated', 'Next assessment',
-            // The baseline the score is (decided 12 Nov 2026), and how far it moved from Baseline 1.
-            'Baseline', 'Baseline 1 (%)', 'Change since Baseline 1 (pts)',
+            // Which score it is (decided 12 Nov 2026; named 15 Nov 2026), and how far it moved from the baseline.
+            'Score from', 'Baseline (%)', 'Change since baseline (pts)',
         ]];
 
         foreach ($movements as $movement) {
@@ -84,7 +85,7 @@ final class ScoresCsv
                     $odp?->signature !== null ? 'Yes' : 'No',
                     // Only on the latest assessment's row.
                     $i === 0 ? $next : null,
-                    $assessment->score->baseline,
+                    Baseline::name($assessment->score->baseline),
                     isset($firsts[$assessment->id]) ? (float) $firsts[$assessment->id] : null,
                     isset($firsts[$assessment->id]) ? round((float) $assessment->score->pct - (float) $firsts[$assessment->id], 1) : null,
                 ];

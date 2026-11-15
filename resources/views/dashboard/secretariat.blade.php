@@ -2,123 +2,214 @@
 @use('App\Support\Viz')
 @use('App\Support\Bands')
 {{--
-    AAYMCA's dashboard (staff and Administrators, the same for all), in the site's newer
-    style (design standard of 10 Nov 2026), built from the same pieces as a movement's own
-    dashboard. Analytics only: six key figures; Stage 1 across the region; every movement's
-    score, the bands and the zones; how the ODPs are carried out; ODP changes; what is due
-    for re-assessment; people and money; and the detail by category, folded away.
+    AAYMCA's dashboard (staff, Administrators and Super Administrators alike), analytics only
+    (decided 15 Nov 2026): nothing about work, tasks or what is due, which live in My Work,
+    Timelines and the follow-ups. For the region or one zone: the key figures; who needs
+    support; the bands then and now; growth over the cycle and the biggest gains; every area
+    for every movement; the points most often missed and the weakest areas; money; the zones;
+    the least adopted policies, people, and what finished cycles delivered. The full detail
+    (funding mixes, every policy and practice, Vision 2030) is folded away at the end.
 --}}
 @php
-    $me = auth()->user();
-    $rated = $insights->rated();
-    $n = $rated->count();
-    $underWayCount = $pipeline['form'] + $pipeline['report'] + $pipeline['odp'] + $pipeline['close'];
-    $meanBand = $headline['mean'] !== null ? Bands::at((float) $headline['mean']) : null;
+    $f = $data['figures'];
+    $meanBand = $f['mean'] !== null ? Bands::at((float) $f['mean']) : null;
     $short = fn (string $name) => str_replace(' YMCA', '', $name);
-    $label = 'text-[0.75rem] font-semibold uppercase tracking-[0.06em] text-on-surface-variant';
+    $th = 'text-[0.75rem] font-semibold uppercase tracking-[0.06em] text-on-surface-variant pb-sm px-1';
+    $link = 'font-semibold text-on-surface underline decoration-[#d3d0c9] underline-offset-2 hover:decoration-on-surface';
+    $people = $data['people'];
+    $boardShare = fn (string $key) => $people['board']['total'] > 0 ? (int) round($people[$key]['total'] * 100 / $people['board']['total']) : null;
 @endphp
-<x-layouts.app title="Dashboard" :subtitle="'Welcome back, '.\Illuminate\Support\Str::before($me->name, ' ').' · the region at a glance. Scores come from approved OHA forms only.'">
-    {{-- Analytics only: each person's own work is in My Work (its count on the menu badge), never here;
-         on the demo, that includes what waits for approval in visitors' demos. --}}
+<x-layouts.app title="Dashboard" :subtitle="($zone ? $zone->name : 'The region').' · scores from approved OHA forms and follow-ups'">
+    <x-segmented label="Zone">
+        <x-segmented.link :href="route('dashboard')" :active="$zone === null">All zones</x-segmented.link>
+        @foreach ($zones as $z)
+            <x-segmented.link :href="route('dashboard', ['zone' => $z->id])" :active="$zone?->id === $z->id">{{ $z->name }}</x-segmented.link>
+        @endforeach
+    </x-segmented>
 
     {{-- Key figures --}}
-    <section aria-label="Key figures" class="grid gap-md sm:grid-cols-2 xl:grid-cols-3">
-        <x-kpi label="Movements rated" :value="$headline['assessed']" :unit="' / '.$headline['total']">
-            <x-slot:visual><x-progress-ring :value="$headline['assessed']" :max="$headline['total']" :size="72" /></x-slot:visual>
-            {{ $headline['total'] - $headline['assessed'] }} not yet rated
+    <section aria-label="Key figures" class="grid gap-md sm:grid-cols-2 xl:grid-cols-5">
+        <x-kpi label="Movements assessed" :value="$f['assessed']" :unit="' / '.$f['total']">
+            <x-slot:visual><x-progress-ring :value="$f['assessed']" :max="max(1, $f['total'])" :size="64" /></x-slot:visual>
+            {{ $f['total'] - $f['assessed'] }} not assessed yet
         </x-kpi>
-        <x-kpi label="Mean health score" :value="$headline['mean'] !== null ? number_format((float) $headline['mean'], 1) : '—'" :unit="$headline['mean'] !== null ? '%' : null">
+        <x-kpi label="Average current score" :value="$f['mean'] !== null ? number_format((float) $f['mean'], 1) : '—'" :unit="$f['mean'] !== null ? '%' : null">
             @if ($meanBand)
                 <x-slot:badge><x-status-pill :tone="Bands::tone($meanBand['code'])">{{ $meanBand['label'] }}</x-status-pill></x-slot:badge>
-                <x-band-scale :pct="$headline['mean']" class="mt-1" />
-                <span class="block mt-1">Across {{ $n }} rated {{ \Illuminate\Support\Str::plural('movement', $n) }}</span>
+            @endif
+            @if ($f['mean_change'] !== null)
+                <span class="font-semibold text-good-ink">{{ Viz::signed($f['mean_change']) }}</span> points since baseline, on average
             @else
-                No movement is rated yet
+                No follow-up score yet
             @endif
         </x-kpi>
-        <x-kpi label="At Risk or Critical" :value="$headline['at_risk']" :tone="$headline['at_risk'] > 0 ? 'critical' : null">
-            Movements below 50%, calling for support
+        <x-kpi label="Improving" :value="$f['improved']" :unit="' of '.$f['followed']">
+            followed up · {{ $f['band_up'] }} moved up a band
         </x-kpi>
-        <x-kpi label="Assessments under way" :value="$underWayCount">
-            At the form, report, ODP or closing
+        <x-kpi label="At Risk or Critical" :value="$f['at_risk']" :tone="$f['at_risk'] > 0 ? 'critical' : null">
+            {{ $f['at_risk_baseline'] }} at baseline
         </x-kpi>
-        <x-kpi label="Assessments closed" :value="$headline['with_odp']">
-            Baseline 1 set, the ODP in follow-up
-        </x-kpi>
-        <x-kpi label="Follow-ups overdue" :value="$odp['late']" :tone="$odp['late'] > 0 ? 'critical' : null">
-            Past their agreed date, of {{ count($odp['rows']) }} {{ count($odp['rows']) === 1 ? 'ODP' : 'ODPs' }} followed up
+        <x-kpi label="Backed by evidence" :value="$f['evidence'] !== null ? $f['evidence'] : '—'" :unit="$f['evidence'] !== null ? '%' : null">
+            {{ $f['evidence_yes'] > 0 ? 'of '.$f['evidence_yes'].' “Yes” answers evidence can prove' : 'How far the scores are proven' }}
         </x-kpi>
     </section>
 
-    <x-panel title="Stage 1 across the region" :subtitle="'Where each of the '.$pipeline['total'].' National Movements is: from not yet assessed to a closed assessment.'">
-        <x-viz.pipeline :pipeline="$pipeline" />
-    </x-panel>
+    @if ($f['assessed'] === 0)
+        <x-panel>
+            <x-empty-state icon="insights">No movement {{ $zone ? 'in '.$zone->name.' ' : '' }}is assessed yet. Its figures appear here once its first OHA form is approved.</x-empty-state>
+        </x-panel>
+    @else
+        <div class="grid gap-md lg:grid-cols-[1.7fr_1fr] items-start">
+            <x-panel title="Who needs support" subtitle="Current score against the change since baseline. Hollow: no follow-up yet.">
+                <x-viz.support-matrix :matrix="$data['matrix']" />
+            </x-panel>
 
-    <div class="grid gap-md lg:grid-cols-[1.4fr_1fr] items-start">
-        <x-panel title="Every movement’s health score" subtitle="Its overall score as it stands (its newest baseline), highest first">
-            <x-slot:actions><x-more-link :href="route('movements.index')">National Movements</x-more-link></x-slot:actions>
-            @if ($n === 0)
-                <x-empty-state icon="insights">No movement is rated yet. Each one appears here once its OHA form is approved.</x-empty-state>
-            @else
-                @php($unrated = $ranked->whereNull('latest_assessment_id'))
-                <x-score-bars label-width="10rem" :rows="$ranked->whereNotNull('latest_assessment_id')->map(fn ($s) => [
-                    'label' => $short($s->name), 'href' => route('movements.show', $s->movement), 'pct' => (float) $s->pct,
-                    'band_code' => $s->band_code, 'band' => $s->band->label,
-                ])->values()->all()">
-                    @if ($unrated->isNotEmpty())
-                        <span>Not yet rated ({{ $unrated->count() }}): {{ $unrated->map(fn ($s) => $short($s->name))->join(', ') }}</span>
-                    @endif
-                </x-score-bars>
-            @endif
+            <x-panel title="Health bands" subtitle="Movements with a baseline: then and now" stack>
+                @php($bandMax = max(1, collect($data['bands'])->max(fn ($b) => max($b['baseline'], $b['now']))))
+                <ul class="flex flex-col gap-md">
+                    @foreach ($data['bands'] as $row)
+                        <li class="flex flex-col gap-[6px] text-[0.875rem]">
+                            <span class="flex items-center justify-between gap-sm">
+                                <x-status-pill :tone="Bands::tone($row['band']->code)">{{ $row['band']->label }}</x-status-pill>
+                                <span class="tabular-nums text-on-surface-variant">{{ $row['baseline'] }} → <span class="font-bold text-on-surface">{{ $row['now'] }}</span></span>
+                            </span>
+                            <span class="h-1.5 rounded-full bg-[#f0eeea] overflow-hidden" aria-hidden="true"><span class="block h-full rounded-full bg-outline-variant" style="width: {{ $row['baseline'] / $bandMax * 100 }}%"></span></span>
+                            <span class="h-2.5 rounded-full bg-[#f0eeea] overflow-hidden" aria-hidden="true"><span class="block h-full rounded-full {{ Bands::fill($row['band']->code) }}" style="width: {{ $row['now'] / $bandMax * 100 }}%"></span></span>
+                        </li>
+                    @endforeach
+                </ul>
+                <p class="flex flex-wrap gap-x-md gap-y-xs text-[0.8125rem] text-on-surface-variant">
+                    <span class="inline-flex items-center gap-xs"><span class="w-4 h-1.5 rounded-full bg-outline-variant" aria-hidden="true"></span>Baseline</span>
+                    <span class="inline-flex items-center gap-xs"><span class="w-4 h-2.5 rounded-full bg-on-surface" aria-hidden="true"></span>Now, in the band’s colour</span>
+                </p>
+            </x-panel>
+        </div>
+
+        @if ($data['growth']['lines'] !== [])
+            <div class="grid gap-md lg:grid-cols-[1.7fr_1fr] items-start">
+                <x-panel title="Growth over the cycle" subtitle="Each movement followed up, from its baseline to its newest follow-up score">
+                    <x-slot:actions><x-more-link :href="route('journeys.index')">Every journey</x-more-link></x-slot:actions>
+                    <x-viz.growth-lines :lines="$data['growth']['lines']" :slots="$data['growth']['slots']" />
+                </x-panel>
+
+                <x-panel title="Biggest gains" subtitle="Points since baseline">
+                    <ul class="flex flex-col">
+                        @foreach ($data['gains'] as $m)
+                            <li class="flex items-center gap-[12px] py-[10px] border-t border-[#f0eeea] first:border-t-0 first:pt-0 text-[0.875rem]">
+                                <span class="flex-1 min-w-0">
+                                    <a href="{{ route('movements.show', $m['movement']) }}" class="block truncate {{ $link }}">{{ $short($m['movement']->name) }}</a>
+                                    <span class="block text-[0.78125rem] text-on-surface-variant tabular-nums">{{ Viz::pct($m['journey']['first']) }} → {{ Viz::pct($m['journey']['now']) }}</span>
+                                </span>
+                                @if ($m['band'])
+                                    <x-status-pill :tone="Bands::tone($m['band']->code)">{{ $m['band']->label }}</x-status-pill>
+                                @endif
+                                <span @class(['w-14 text-right font-bold tabular-nums', 'text-good-ink' => $m['change'] > 0, 'text-critical-ink' => $m['change'] < 0])>{{ Viz::signed($m['change']) }}</span>
+                            </li>
+                        @endforeach
+                    </ul>
+                </x-panel>
+            </div>
+        @endif
+
+        <x-panel title="Every movement, every area" subtitle="Hover an area for its full name">
+            <x-viz.heatmap :categories="$data['categories']" :rows="$data['heatmap']" />
         </x-panel>
 
-        <div class="flex flex-col gap-md">
-            <x-panel title="Health bands" subtitle="How many movements are in each band">
-                @php($bandMax = max(1, $bands->max('count')))
-                <ul class="flex flex-col gap-[12px]">
-                    @foreach ($bands as $row)
-                        <li class="grid grid-cols-[9.5rem_minmax(0,1fr)_2rem] items-center gap-[12px] text-[0.875rem]">
-                            @if ($row['underWay'])
-                                <x-status-pill tone="info" class="justify-self-start">Assessment started</x-status-pill>
-                            @else
-                                <x-status-pill :tone="Bands::tone($row['band']->code)" class="justify-self-start">{{ $row['band']->label }}</x-status-pill>
-                            @endif
-                            <span class="h-2.5 rounded-full bg-[#f0eeea] overflow-hidden" role="img" aria-label="{{ $row['count'] }} {{ \Illuminate\Support\Str::plural('movement', $row['count']) }}">
-                                <span class="block h-full rounded-full {{ $row['underWay'] ? 'bg-info-ink' : Bands::fill($row['band']->code) }}" style="width: {{ $row['count'] > 0 ? max(4, $row['count'] / $bandMax * 100) : 0 }}%"></span>
-                            </span>
-                            <span class="text-right font-bold tabular-nums">{{ $row['count'] }}</span>
+        <div class="grid gap-md lg:grid-cols-2 items-start">
+            <x-panel title="Most often missed" :subtitle="'Points most movements still lose, across the '.$f['assessed'].' assessed · a guide for support across the region'">
+                <ul class="flex flex-col gap-[12px] text-[0.875rem]">
+                    @foreach ($data['missed'] as $item)
+                        <li class="grid grid-cols-[minmax(0,1fr)_7rem_4.5rem] items-center gap-[12px]">
+                            <span class="min-w-0"><span class="font-semibold">{{ $item['name'] }}</span> <span class="text-on-surface-variant">· {{ $item['category'] }}</span></span>
+                            <span class="h-2 rounded-full bg-[#f0eeea] overflow-hidden" aria-hidden="true"><span class="block h-full rounded-full bg-serious-ink" style="width: {{ $item['missed'] / max(1, $item['of']) * 100 }}%"></span></span>
+                            <span class="text-right tabular-nums font-semibold">{{ $item['missed'] }} of {{ $item['of'] }}</span>
                         </li>
                     @endforeach
                 </ul>
             </x-panel>
 
-            <x-panel title="By zone" subtitle="Movements rated, their average score, and how many are At Risk or Critical">
+            <x-panel title="Areas, weakest first" subtitle="Average current score in each area">
+                <x-score-bars label-width="8rem" :rows="collect($data['areas'])->map(fn ($a) => [
+                    'label' => $a['category']->short_name, 'title' => $a['category']->name, 'pct' => $a['pct'],
+                    'band_code' => Bands::at($a['pct'])['code'] ?? null, 'band' => Bands::at($a['pct'])['label'] ?? '—',
+                ])->all()" />
+            </x-panel>
+        </div>
+
+        <div class="grid gap-md lg:grid-cols-[1.7fr_1fr] items-start">
+            <x-panel title="Financial resilience"
+                     :subtitle="'Ratios only, as currencies differ · '.collect($data['money'])->filter(fn ($r) => ($r['international'] ?? 0) > $data['limit'])->count().' of '.count($data['money']).' above the form’s '.$data['limit'].'% line for international funding'">
                 <div class="overflow-x-auto -mx-1">
-                    <table class="w-full text-[0.875rem]">
+                    <table class="w-full min-w-[38rem] text-[0.875rem]">
                         <thead>
-                            <tr class="{{ $label }} text-left">
-                                <th class="font-semibold pb-sm px-1">Zone</th>
-                                <th class="font-semibold pb-sm px-1 text-right">Rated</th>
-                                <th class="font-semibold pb-sm px-1 w-2/5">Average</th>
-                                <th class="font-semibold pb-sm px-1 text-right">At risk</th>
+                            <tr class="text-left">
+                                <th class="{{ $th }}">Movement</th>
+                                <th class="{{ $th }} w-[32%]">International funding</th>
+                                <th class="{{ $th }} text-right">Restricted</th>
+                                <th class="{{ $th }} w-[24%]">Operating margin</th>
+                                <th class="{{ $th }} text-right">Reserve</th>
                             </tr>
                         </thead>
                         <tbody>
-                            @foreach ($zones as $zone)
+                            @foreach ($data['money'] as $r)
                                 <tr class="border-t border-[#f0eeea]">
-                                    <td class="py-[10px] px-1 font-medium">{{ $zone['zone'] }}</td>
-                                    <td class="py-[10px] px-1 text-right tabular-nums text-on-surface-variant">{{ $zone['rated'] }} / {{ $zone['movements'] }}</td>
-                                    <td class="py-[10px] px-1">
-                                        @if ($zone['pct'] !== null)
+                                    <td class="py-[9px] px-1"><a href="{{ route('movements.show', $r['movement']) }}" class="{{ $link }}">{{ $short($r['movement']->name) }}</a></td>
+                                    <td class="py-[9px] px-1">
+                                        @if ($r['international'] !== null)
                                             <span class="flex items-center gap-sm">
-                                                <span class="flex-1 h-2 rounded-full bg-[#f0eeea] overflow-hidden"><span class="block h-full rounded-full {{ Bands::fill(Bands::at($zone['pct'])['code'] ?? null) }}" style="width: {{ $zone['pct'] }}%"></span></span>
-                                                <span class="tabular-nums font-semibold w-12 text-right">{{ number_format($zone['pct'], 1) }}%</span>
+                                                <span class="relative flex-1 h-2 rounded-full bg-[#f0eeea]">
+                                                    <span class="absolute inset-y-0 left-0 rounded-full {{ $r['international'] > $data['limit'] ? 'bg-serious-ink' : 'bg-outline' }}" style="width: {{ min(100, $r['international']) }}%"></span>
+                                                    <span class="absolute -top-1 -bottom-1 w-0.5 bg-on-surface" style="left: {{ $data['limit'] }}%" title="The form’s {{ $data['limit'] }}% line"></span>
+                                                </span>
+                                                <span class="w-11 text-right tabular-nums">{{ Viz::number($r['international']) }}%</span>
                                             </span>
                                         @else
-                                            <span class="text-on-surface-variant">None rated</span>
+                                            <span class="text-on-surface-variant">Not given</span>
                                         @endif
                                     </td>
-                                    <td @class(['py-[10px] px-1 text-right tabular-nums', 'font-bold text-critical-ink' => $zone['at_risk'] > 0])>{{ $zone['at_risk'] }}</td>
+                                    <td class="py-[9px] px-1 text-right tabular-nums">{{ $r['restricted'] !== null ? Viz::number($r['restricted']).'%' : '—' }}</td>
+                                    <td class="py-[9px] px-1">
+                                        @if ($r['margin'] !== null)
+                                            @php($w = min(50, abs($r['margin']) * 2))
+                                            <span class="flex items-center gap-sm">
+                                                <span class="relative flex-1 h-2 rounded-full bg-[#f0eeea]">
+                                                    <span class="absolute -top-1 -bottom-1 left-1/2 w-px bg-outline" aria-hidden="true"></span>
+                                                    <span class="absolute inset-y-0 rounded-full {{ $r['margin'] < 0 ? 'bg-band-critical' : 'bg-info-ink' }}" style="{{ $r['margin'] < 0 ? 'right: 50%' : 'left: 50%' }}; width: {{ max(1, $w) }}%"></span>
+                                                </span>
+                                                <span class="w-12 text-right tabular-nums">{{ $r['margin'] > 0 ? '+' : '' }}{{ Viz::number($r['margin'], 1) }}%</span>
+                                            </span>
+                                        @else
+                                            <span class="text-on-surface-variant">Not given</span>
+                                        @endif
+                                    </td>
+                                    <td class="py-[9px] px-1 text-right tabular-nums whitespace-nowrap">{{ $r['reserve_months'] !== null ? Viz::number($r['reserve_months']).' months' : 'None' }}</td>
+                                </tr>
+                            @endforeach
+                        </tbody>
+                    </table>
+                </div>
+            </x-panel>
+
+            <x-panel title="By zone" subtitle="Every zone, whatever the filter">
+                <div class="overflow-x-auto -mx-1">
+                    <table class="w-full text-[0.875rem]">
+                        <thead>
+                            <tr class="text-left">
+                                <th class="{{ $th }}">Zone</th>
+                                <th class="{{ $th }} text-right">Assessed</th>
+                                <th class="{{ $th }} text-right">Average</th>
+                                <th class="{{ $th }} text-right">Change</th>
+                                <th class="{{ $th }} text-right">At risk</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach ($data['zones'] as $z)
+                                <tr class="border-t border-[#f0eeea]">
+                                    <td class="py-[10px] px-1"><a href="{{ route('dashboard', ['zone' => $z['zone']->id]) }}" class="{{ $link }}">{{ $z['zone']->name }}</a></td>
+                                    <td class="py-[10px] px-1 text-right tabular-nums text-on-surface-variant">{{ $z['assessed'] }} / {{ $z['movements'] }}</td>
+                                    <td class="py-[10px] px-1 text-right tabular-nums font-semibold">{{ $z['mean'] !== null ? Viz::pct($z['mean']) : '—' }}</td>
+                                    <td @class(['py-[10px] px-1 text-right tabular-nums font-semibold', 'text-good-ink' => ($z['change'] ?? 0) > 0])>{{ Viz::signed($z['change']) }}</td>
+                                    <td @class(['py-[10px] px-1 text-right tabular-nums', 'font-bold text-critical-ink' => $z['at_risk'] > 0])>{{ $z['at_risk'] }}</td>
                                 </tr>
                             @endforeach
                         </tbody>
@@ -126,181 +217,72 @@
                 </div>
             </x-panel>
         </div>
-    </div>
 
-    <x-panel title="How the ODPs are being carried out" subtitle="The tasks in each movement’s newest ODP, as set at its last follow-up, and its next follow-up" stack>
-        <x-slot:actions><x-more-link :href="route('timelines')">Open Timelines</x-more-link></x-slot:actions>
-        @if ($odp['total'] === 0)
-            <x-empty-state icon="checklist">No ODP has tasks yet. They appear once an ODP is uploaded.</x-empty-state>
-        @else
-            <div class="flex flex-wrap gap-sm">
-                <x-status-pill tone="good">Done {{ collect($odp['rows'])->sum(fn ($r) => $r['summary']['done']) }}</x-status-pill>
-                <x-status-pill tone="warning">In progress {{ collect($odp['rows'])->sum(fn ($r) => $r['summary']['in_progress']) }}</x-status-pill>
-                <x-status-pill tone="critical">Blocked {{ $odp['blocked'] }}</x-status-pill>
-                <x-status-pill tone="critical">Follow-ups overdue {{ $odp['late'] }}</x-status-pill>
-            </div>
-            {{-- Each movement side by side, falling behind first. A closed assessment opens its follow-up. --}}
-            <div class="overflow-x-auto -mx-1">
-                <table class="w-full min-w-[46rem] text-[0.875rem]">
-                    <thead>
-                        <tr class="{{ $label }} text-left">
-                            <th class="font-semibold pb-sm px-1">Movement</th>
-                            <th class="font-semibold pb-sm px-1 w-[30%]">Done</th>
-                            <th class="font-semibold pb-sm px-1 text-right">In progress</th>
-                            <th class="font-semibold pb-sm px-1 text-right">Blocked</th>
-                            <th class="font-semibold pb-sm px-1 pl-md">Next follow-up</th>
-                            <th class="font-semibold pb-sm px-1"><span class="sr-only">Status</span></th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        @foreach ($odp['rows'] as $row)
-                            @php($m = $row['assessment']->movement)
-                            @php($s = $row['summary'])
-                            <tr class="border-t border-[#f0eeea]">
-                                <td class="py-[11px] px-1">
-                                    <a href="{{ $row['closed'] ? route('follow-up.show', $row['assessment']) : route('timelines', ['movement' => $m->slug]) }}" class="font-semibold text-on-surface underline decoration-[#d3d0c9] underline-offset-2 hover:decoration-on-surface">{{ $short($m->name) }}</a>
-                                </td>
-                                <td class="py-[11px] px-1">
-                                    <span class="flex items-center gap-sm">
-                                        <span class="flex-1 flex h-2 rounded-full overflow-hidden bg-[#dddad3]" role="img" aria-label="{{ $s['done'] }} of {{ $s['total'] }} done, {{ $s['blocked'] }} blocked">
-                                            @if ($s['done'] > 0)<span class="bg-band-strong" style="width: {{ $s['done'] / max(1, $s['total']) * 100 }}%"></span>@endif
-                                            @if ($s['blocked'] > 0)<span class="bg-band-critical {{ $s['done'] > 0 ? 'ml-0.5' : '' }}" style="width: {{ $s['blocked'] / max(1, $s['total']) * 100 }}%"></span>@endif
-                                        </span>
-                                        <span class="tabular-nums text-[0.8125rem] text-on-surface-variant whitespace-nowrap">{{ $s['done'] }} / {{ $s['total'] }} · {{ $s['pct'] }}%</span>
-                                    </span>
-                                </td>
-                                <td class="py-[11px] px-1 text-right tabular-nums">{{ $s['in_progress'] }}</td>
-                                <td @class(['py-[11px] px-1 text-right tabular-nums', 'font-semibold text-critical-ink' => $s['blocked'] > 0])>{{ $s['blocked'] }}</td>
-                                <td class="py-[11px] px-1 pl-md text-[0.8125rem] whitespace-nowrap">
-                                    @if ($row['meeting'])
-                                        <span @class(['font-semibold text-critical-ink' => $row['meeting']['overdue'] && ! $row['paused']])>Follow-up {{ $row['meeting']['number'] }} · {{ $row['meeting']['due_on']?->asDay() ?? 'date not set' }}</span>
-                                    @else
-                                        <span class="text-on-surface-variant">{{ $row['closed'] ? 'All held' : 'Once closed' }}</span>
-                                    @endif
-                                </td>
-                                <td class="py-[11px] px-1 text-right">
-                                    @if ($row['paused'])
-                                        <x-status-pill tone="warning">Paused</x-status-pill>
-                                    @elseif ($row['behind'])
-                                        <x-status-pill tone="critical">Falling behind</x-status-pill>
-                                    @elseif ($row['closed'])
-                                        <x-status-pill tone="good">On track</x-status-pill>
-                                    @else
-                                        <x-status-pill>Not yet closed</x-status-pill>
-                                    @endif
-                                </td>
-                            </tr>
-                        @endforeach
-                    </tbody>
-                </table>
-            </div>
-        @endif
-    </x-panel>
-
-    {{-- Each movement's latest cycle, from Baseline 1 to its newest baseline: the biggest gains first. --}}
-    @if ($journeys['summary']['movements'] > 0)
-        @php($js = $journeys['summary'])
-        <x-panel title="Journeys this cycle" stack
-                 :subtitle="$js['followed'] === 0
-                    ? 'Each movement’s score from Baseline 1, its closed assessment. Each follow-up closed adds a baseline.'
-                    : $js['improved'].' of '.$js['followed'].' movements followed up are higher than at Baseline 1'.($js['band_up'] > 0 ? ', '.$js['band_up'].' up a band' : '').'; on average '.($js['mean_change'] > 0 ? '+' : '').number_format((float) $js['mean_change'], 1).' percentage points.'">
-            <x-slot:actions><x-more-link :href="route('journeys.index')">Every journey</x-more-link></x-slot:actions>
-            @include('journeys._rows', ['rows' => $journeys['rows'], 'limit' => 6])
-        </x-panel>
-    @endif
-
-    @include('dashboard._odp-changes')
-
-    <x-panel title="Ready for the next assessment" subtitle="Their cycle is closed and no new assessment is under way: their assessors or an Administrator start it when ready.">
-        @if ($due->isEmpty())
-            <x-empty-state icon="event_available">No movement is waiting for its next assessment.</x-empty-state>
-        @else
-            <ul class="grid gap-x-xl sm:grid-cols-2">
-                @foreach ($due as $status)
-                    <li class="flex items-center gap-[12px] py-[11px] border-t border-[#f0eeea] text-[0.875rem]">
-                        <a href="{{ route('movements.show', $status->movement) }}" class="flex-1 min-w-0 truncate font-semibold text-on-surface underline decoration-[#d3d0c9] underline-offset-2 hover:decoration-on-surface">{{ $status->name }}</a>
-                        @if ($status->band)
-                            <x-status-pill :tone="Bands::tone($status->band_code)">{{ $status->band->label }}</x-status-pill>
-                        @endif
-                        <span class="text-right text-[0.8125rem] text-on-surface-variant whitespace-nowrap">{{ $status->last_assessed_on ? 'Last '.$status->last_assessed_on->asMonth() : '' }}</span>
-                    </li>
-                @endforeach
-            </ul>
-        @endif
-    </x-panel>
-
-    @if ($n > 0)
-        @php($people = $insights->people())
-        @php($finance = collect($insights->finance()))
         <div class="grid gap-md lg:grid-cols-2 items-start">
-            <x-panel title="People across the region" subtitle="Added up across the movements that reported each figure" stack>
-                <dl class="grid grid-cols-2 sm:grid-cols-4 gap-x-sm gap-y-md">
-                    @foreach ([['staff', 'Staff'], ['volunteers', 'Volunteers'], ['beneficiaries', 'People reached a year'], ['branches', 'Branches']] as [$key, $text])
-                        <div>
-                            <dt class="text-[0.78125rem] text-on-surface-variant">{{ $text }}</dt>
-                            <dd class="mt-0.5 text-[1.375rem] font-bold tabular-nums">{{ Viz::number($people[$key]['total']) }}</dd>
-                            <dd class="text-[0.75rem] text-on-surface-variant">{{ $people[$key]['reporting'] }} of {{ $n }} reporting</dd>
-                        </div>
-                    @endforeach
-                </dl>
-                @if ($people['board']['total'] > 0)
-                    <div class="flex flex-col gap-sm border-t border-[#f0eeea] pt-md">
-                        <p class="text-[0.84375rem] font-semibold">Boards: {{ Viz::number($people['board']['total']) }} members across {{ $people['board']['reporting'] }} movements</p>
-                        @foreach ([[$people['board_women']['total'], 'women'], [$people['board_under_30']['total'], 'under 30']] as [$count, $who])
-                            @php($share = round($count * 100 / $people['board']['total']))
-                            <div class="grid grid-cols-[5rem_1fr_3rem] items-center gap-sm text-[0.8125rem]">
-                                <span class="text-on-surface-variant">{{ ucfirst($who) }}</span>
-                                <span class="h-2 rounded-full bg-[#f0eeea] overflow-hidden"><span class="block h-full rounded-full bg-on-surface" style="width: {{ $share }}%"></span></span>
-                                <span class="text-right font-semibold tabular-nums">{{ $share }}%</span>
+            <x-panel title="Least adopted policies and practices" subtitle="Share of assessed movements that have each one">
+                <x-viz.adoption :rows="collect($data['adoption'])->map(fn ($r) => $r + ['label' => $r['label'].' · '.$r['kind']])->all()" labelWidth="15rem" />
+            </x-panel>
+
+            <div class="flex flex-col gap-md">
+                <x-panel title="People and reach" subtitle="Added up across the movements that reported each figure">
+                    <dl class="grid grid-cols-2 sm:grid-cols-3 gap-x-sm gap-y-md">
+                        @foreach ([['staff', 'Staff'], ['volunteers', 'Volunteers'], ['beneficiaries', 'People reached a year'], ['board', 'Board members']] as [$key, $text])
+                            <div>
+                                <dt class="text-[0.78125rem] text-on-surface-variant">{{ $text }}</dt>
+                                <dd class="mt-0.5 text-[1.375rem] font-bold tabular-nums">{{ $people[$key]['reporting'] > 0 ? Viz::number($people[$key]['total']) : '—' }}</dd>
                             </div>
                         @endforeach
-                    </div>
-                @endif
-            </x-panel>
-            <x-panel title="Reliance on international funding" subtitle="Share of income from outside the country (Q224). The form warns above 75%.">
-                <x-viz.threshold-bars :rows="$finance->map(fn ($f) => ['label' => $short($f['movement']->name), 'value' => $f['international']])->sortByDesc('value')->values()->all()"
-                                      :limit="75" limitLabel="75% — the form’s risk line" />
-            </x-panel>
-        </div>
-        <x-panel title="Operating margin" subtitle="Surplus or deficit as a share of income, from each movement’s own figures (Q211–Q212). Currencies differ, so only the ratio is compared.">
-            <x-viz.diverging :rows="$finance->map(fn ($f) => ['label' => $short($f['movement']->name), 'value' => $f['margin']])->sortByDesc('value')->values()->all()" />
-        </x-panel>
+                        @foreach ([['board_women', 'Women on Boards'], ['board_under_30', 'Under 30 on Boards']] as [$key, $text])
+                            <div>
+                                <dt class="text-[0.78125rem] text-on-surface-variant">{{ $text }}</dt>
+                                <dd class="mt-0.5 text-[1.375rem] font-bold tabular-nums">{{ $boardShare($key) !== null ? $boardShare($key).'%' : '—' }}</dd>
+                            </div>
+                        @endforeach
+                    </dl>
+                </x-panel>
 
-        {{-- The detail by category and topic: there for whoever wants it, out of the way of the regional picture. --}}
+                @if ($data['cycles'] !== [])
+                    <x-panel title="Finished cycles" subtitle="Share of the ODP done by the end of the cycle, beside the points gained">
+                        <ul class="flex flex-col gap-[12px] text-[0.875rem]">
+                            @foreach ($data['cycles'] as $c)
+                                <li class="grid grid-cols-[minmax(6rem,9rem)_1fr_4.5rem_3.5rem] items-center gap-[12px]">
+                                    <a href="{{ route('movements.show', $c['movement']) }}" class="truncate {{ $link }}">{{ $short($c['movement']->name) }}</a>
+                                    <span class="h-2 rounded-full bg-[#f0eeea] overflow-hidden" aria-hidden="true"><span class="block h-full rounded-full bg-on-surface" style="width: {{ $c['plan'] ?? 0 }}%"></span></span>
+                                    <span class="text-right tabular-nums text-on-surface-variant">{{ $c['plan'] !== null ? $c['plan'].'% done' : '—' }}</span>
+                                    <span @class(['text-right tabular-nums font-bold', 'text-good-ink' => $c['change'] > 0])>{{ Viz::signed($c['change']) }}</span>
+                                </li>
+                            @endforeach
+                        </ul>
+                    </x-panel>
+                @endif
+            </div>
+        </div>
+
+        {{-- The full detail, out of the way of the regional picture. --}}
+        @php($detail = $data['detail'])
         <details class="group bg-surface-container-lowest border border-[#e7e5e0] rounded-2xl shadow-[0_1px_2px_rgba(20,20,20,0.04)]">
             <summary class="oha-summary flex items-center gap-md p-lg cursor-pointer list-none">
                 <span class="flex-1 min-w-0">
-                    <span class="block text-[1.125rem] font-bold">Detail by category and topic</span>
-                    <span class="block text-[0.875rem] text-on-surface-variant">Every category for every movement, where the region is weakest, funding and spending, policies, governance and Vision 2030.</span>
+                    <span class="block text-[1.125rem] font-bold">More detail</span>
+                    <span class="block text-[0.875rem] text-on-surface-variant">Where the money comes from and goes, every policy and practice, Vision 2030.</span>
                 </span>
                 <span class="flex-none size-9 rounded-full border border-[#e4e1db] grid place-items-center text-[#4a4950] transition-transform group-open:rotate-180" aria-hidden="true">
                     <svg class="size-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>
                 </span>
             </summary>
             <div class="px-lg pb-lg flex flex-col gap-lg">
-                @php($sub = 'border-t border-[#f0eeea] pt-lg flex flex-col gap-md')
-                <section class="{{ $sub }}">
-                    <div><h3 class="text-[1rem] font-bold">Every movement, every category</h3><p class="text-[0.84375rem] text-on-surface-variant">Percentage scored in each category of the latest approved form. Darker is healthier.</p></div>
-                    <x-viz.heatmap :heatmap="$insights->heatmap()" />
-                </section>
-
-                <section class="{{ $sub }}">
-                    <div><h3 class="text-[1rem] font-bold">Where the region is weakest</h3><p class="text-[0.84375rem] text-on-surface-variant">Average score per category, weakest first.</p></div>
-                    <x-score-bars :rows="collect($weakest)->map(fn ($row) => ['label' => $row['category']->name, 'pct' => (float) $row['pct'], 'band_code' => Bands::at((float) $row['pct'])['code'] ?? null, 'band' => Bands::at((float) $row['pct'])['label'] ?? '—'])->values()->all()" />
-                </section>
-
                 <div class="grid gap-lg lg:grid-cols-2 items-start border-t border-[#f0eeea] pt-lg">
                     @foreach ([['income_mix', Profile::INCOME_GROUPS, 'Where the money comes from', 'Average share of income by source (Q214–Q222).'], ['expense_mix', Profile::EXPENSE_GROUPS, 'Where the money goes', 'Average share of expenditure by type (Q229–Q237).']] as [$key, $groups, $title, $subtitle])
-                        @php($avg = $insights->averageMix($key))
+                        @php($avg = $detail['mixes'][$key])
                         <section class="flex flex-col gap-md">
                             <div><h3 class="text-[1rem] font-bold">{{ $title }}</h3><p class="text-[0.84375rem] text-on-surface-variant">{{ $subtitle }}</p></div>
                             @if ($avg === null)
-                                <x-empty-state icon="pie_chart">No rated movement gave these figures.</x-empty-state>
+                                <x-empty-state icon="pie_chart">No assessed movement gave these figures.</x-empty-state>
                             @else
                                 <x-viz.stacked :segments="collect($groups)->map(fn ($g, $k) => ['label' => $g['label'], 'value' => $avg['shares'][$k]])->values()->all()"
-                                               :caption="'Regional average · '.$avg['movements'].' movements'" />
+                                               :caption="'Average · '.$avg['movements'].' movements'" />
                                 <div class="flex flex-col gap-sm border-t border-[#f0eeea] pt-sm">
-                                    @foreach ($rated as $r)
+                                    @foreach ($detail['profiles'] as $r)
                                         @continue(empty($r['profile'][$key]))
                                         <div class="grid grid-cols-[minmax(6rem,9rem)_1fr] items-center gap-sm">
                                             <span class="text-[0.8125rem] truncate">{{ $short($r['movement']->name) }}</span>
@@ -308,20 +290,6 @@
                                         </div>
                                     @endforeach
                                 </div>
-                                <details class="text-[0.8125rem]">
-                                    <summary class="cursor-pointer font-semibold w-fit">Show as a table</summary>
-                                    <div class="relative overflow-x-auto mt-xs">
-                                        <table class="w-full text-[0.8125rem]">
-                                            <thead><tr class="text-left text-on-surface-variant"><th class="py-1 pr-sm">Movement</th>@foreach ($groups as $g)<th class="py-1 pr-sm">{{ $g['label'] }}</th>@endforeach</tr></thead>
-                                            <tbody>
-                                                @foreach ($rated as $r)
-                                                    @continue(empty($r['profile'][$key]))
-                                                    <tr class="border-t border-[#f0eeea]"><td class="py-1 pr-sm">{{ $r['movement']->name }}</td>@foreach (array_keys($groups) as $k)<td class="py-1 pr-sm tabular-nums">{{ Viz::number($r['profile'][$key][$k], 1) }}%</td>@endforeach</tr>
-                                                @endforeach
-                                            </tbody>
-                                        </table>
-                                    </div>
-                                </details>
                             @endif
                         </section>
                     @endforeach
@@ -329,17 +297,17 @@
 
                 <div class="grid gap-lg lg:grid-cols-2 items-start border-t border-[#f0eeea] pt-lg">
                     <section class="flex flex-col gap-md">
-                        <div><h3 class="text-[1rem] font-bold">Policies in place</h3><p class="text-[0.84375rem] text-on-surface-variant">Share of rated movements with each policy (Q412–Q430). Weakest at the bottom.</p></div>
-                        <x-viz.adoption :rows="$insights->adoption('policies', Profile::POLICIES)" />
+                        <div><h3 class="text-[1rem] font-bold">Policies in place</h3><p class="text-[0.84375rem] text-on-surface-variant">Share of assessed movements with each policy (Q412–Q430).</p></div>
+                        <x-viz.adoption :rows="$detail['policies']" />
                     </section>
                     <div class="flex flex-col gap-lg">
                         <section class="flex flex-col gap-md">
-                            <div><h3 class="text-[1rem] font-bold">Governance practice</h3><p class="text-[0.84375rem] text-on-surface-variant">Share of rated movements following each practice.</p></div>
-                            <x-viz.adoption :rows="$insights->adoption('governance', Profile::GOVERNANCE_PRACTICES)" labelWidth="14rem" />
+                            <div><h3 class="text-[1rem] font-bold">Governance practice</h3><p class="text-[0.84375rem] text-on-surface-variant">Share of assessed movements following each practice.</p></div>
+                            <x-viz.adoption :rows="$detail['governance']" labelWidth="14rem" />
                         </section>
                         <section class="flex flex-col gap-md">
-                            <div><h3 class="text-[1rem] font-bold">Vision 2030 in the Strategic Plan</h3><p class="text-[0.84375rem] text-on-surface-variant">Of the movements whose plan reflects Vision 2030 (Q620), how many cover each component.</p></div>
-                            <x-viz.adoption :rows="$insights->adoption('vision_2030', Profile::VISION_2030)" />
+                            <div><h3 class="text-[1rem] font-bold">Vision 2030 in the Strategic Plan</h3><p class="text-[0.84375rem] text-on-surface-variant">Of the movements whose plan reflects Vision 2030 (Q620), how many cover each part.</p></div>
+                            <x-viz.adoption :rows="$detail['vision']" />
                         </section>
                     </div>
                 </div>

@@ -34,6 +34,9 @@ final class FormDefinition
 
     public const EXPENSE = ['Q229', 'Q230', 'Q231', 'Q232', 'Q233', 'Q234', 'Q235', 'Q236', 'Q237'];
 
+    /** The form's line for reliance on international funding (Q224): above it, Q223 scores 0. */
+    public const INTERNATIONAL_LIMIT = 75;
+
     /** "1 General Information": code in C, question in D, answer in E, notes in F. */
     public const GENERAL_SHEET = 1;
 
@@ -141,8 +144,8 @@ final class FormDefinition
                 return $top > 65 ? 0 : ($top >= 50 ? 1 : 2);
             }),
             ...array_map(fn ($code) => self::percent($code, group: 'income'), array_slice(self::INCOME, 1)),
-            // International share above 75% scores 0. The formula sits on Q223's row but reads Q224.
-            self::percent('Q223', required: true, max: 1, points: fn ($a) => ($v = Answer::number($a['Q224'] ?? null)) === null ? 0 : ($v > 75 ? 0 : 1)),
+            // International share above the limit (75%) scores 0. The formula sits on Q223's row but reads Q224.
+            self::percent('Q223', required: true, max: 1, points: fn ($a) => ($v = Answer::number($a['Q224'] ?? null)) === null ? 0 : ($v > self::INTERNATIONAL_LIMIT ? 0 : 1)),
             self::percent('Q224', required: true),
             self::percent('Q225', required: true, max: 1, points: fn ($a) => ($v = Answer::number($a['Q225'] ?? null)) === null ? 0 : ($v < 85 ? 1 : 0)),
             self::percent('Q226', required: true),

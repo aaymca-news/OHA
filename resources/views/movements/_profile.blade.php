@@ -47,10 +47,10 @@
             </dl>
             <div class="flex flex-col gap-xs">
                 <x-bar :value="$profile['international_pct'] ?? 0" :label="$profile['international_pct'] !== null ? Viz::number($profile['international_pct'], 1).'% international' : 'International share not given'"
-                       :tone="($profile['international_pct'] ?? 0) > 75 ? 'serious' : 'primary'" wide />
+                       :tone="($profile['international_pct'] ?? 0) > \App\Oha\FormDefinition::INTERNATIONAL_LIMIT ? 'serious' : 'primary'" wide />
                 <x-bar :value="$profile['restricted_pct'] ?? 0" :label="$profile['restricted_pct'] !== null ? Viz::number($profile['restricted_pct'], 1).'% restricted' : 'Restricted share not given'" wide />
-                @if (($profile['international_pct'] ?? 0) > 75)
-                    <p class="text-[0.8125rem] text-serious-ink">Above the form’s 75% line for reliance on international sources.</p>
+                @if (($profile['international_pct'] ?? 0) > \App\Oha\FormDefinition::INTERNATIONAL_LIMIT)
+                    <p class="text-[0.8125rem] text-serious-ink">Above the form’s {{ \App\Oha\FormDefinition::INTERNATIONAL_LIMIT }}% line for reliance on international sources.</p>
                 @endif
             </div>
         </x-panel>

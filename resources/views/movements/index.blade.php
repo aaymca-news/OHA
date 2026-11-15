@@ -10,8 +10,6 @@
     $me = auth()->user();
     // $stage($status) gives an App\Enums\Stage: its label, icon and tone.
     $started = fn ($status) => ! in_array($stage($status), [\App\Enums\Stage::NotAssessed, \App\Enums\Stage::Complete, \App\Enums\Stage::Closed], true);
-    $short = ['financial' => 'Financial', 'governance' => 'Governance', 'constitution' => 'Constitution', 'me' => 'M&E', 'strategy' => 'Strategy',
-        'diversity' => 'Diversity & youth', 'comms' => 'Comms', 'staff' => 'Staff & volunteers'];
     $query = fn (array $change) => route('movements.index', array_filter(array_merge($filters, $change), fn ($v) => $v !== null && $v !== ''));
     // When the next assessment comes: no band-based date (decided 12 Nov 2026), it starts once the cycle is closed.
     $next = function ($status) use ($stage) {
@@ -111,7 +109,7 @@
                                         <x-status-pill :tone="Bands::tone($status->band_code)">{{ $status->band->label }}</x-status-pill>
                                         <span class="text-[0.78125rem] text-on-surface-variant">{{ Viz::figure((float) $status->points_achieved) }} of {{ $status->points_available }} points · {{ $status->last_assessed_on?->asMonth() }}</span>
                                     </div>
-                                    <div class="relative z-[1] grid grid-cols-8 gap-[3px]" role="img" aria-label="Category scores: {{ $categories->map(fn ($c) => ($short[$c->code] ?? $c->name).' '.(isset($mine[$c->code]) ? round($mine[$c->code]).'%' : 'not rated'))->join(', ') }}">
+                                    <div class="relative z-[1] grid gap-[3px]" style="grid-template-columns: repeat({{ max(1, $categories->count()) }}, minmax(0, 1fr))" role="img" aria-label="Category scores: {{ $categories->map(fn ($c) => $c->short_name.' '.(isset($mine[$c->code]) ? round($mine[$c->code]).'%' : 'not rated'))->join(', ') }}">
                                         @foreach ($categories as $c)
                                             {{-- Each category in its band's colour, as on the score bars. --}}
                                             @php($b = isset($mine[$c->code]) ? Bands::at((float) $mine[$c->code]) : null)

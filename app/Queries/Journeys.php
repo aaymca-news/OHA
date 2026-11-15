@@ -121,9 +121,9 @@ final class Journeys
         for ($n = 1; $n <= self::slots(); $n++) {
             $step = $byNumber[$n] ?? null;
             $points[] = [
-                'label' => 'Baseline '.$n,
+                'label' => Baseline::name($n),
                 'pct' => $step['pct'] ?? null,
-                'note' => $step === null ? ($n === 1 ? 'Not recorded' : 'After follow-up '.($n - 1).', not yet')
+                'note' => $step === null ? ($n === 1 ? 'Not recorded' : 'Not yet')
                     : Viz::figure($step['points']).' of '.$step['max'].' points · '.($step['band']->label ?? ''),
             ];
         }
@@ -139,7 +139,7 @@ final class Journeys
         return [
             'baseline' => $baseline,
             'number' => $baseline->number,
-            'label' => 'Baseline '.$baseline->number,
+            'label' => Baseline::name($baseline->number),
             'pct' => (float) $baseline->total?->pct,
             'points' => (float) $baseline->total?->points_achieved,
             'max' => (int) $baseline->total?->points_available,

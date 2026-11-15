@@ -33,7 +33,7 @@ final class MovementCycle
             return self::mark([
                 ['title' => 'OHA form approved', 'meta' => 'Once '.$whose.' assessment begins', 'done' => false],
                 ['title' => 'Report and ODP approved', 'meta' => 'Written with '.$whose.' assessors', 'done' => false],
-                ['title' => 'Assessment closed', 'meta' => 'Sets Baseline 1, by '.$whose.' assessors', 'done' => false],
+                ['title' => 'Assessment closed', 'meta' => 'Sets the baseline, by '.$whose.' assessors', 'done' => false],
                 ['title' => 'Follow-up year', 'meta' => 'Three follow-ups and an overall review', 'done' => false],
             ], ['title' => 'Next assessment', 'meta' => $nextOn]);
         }

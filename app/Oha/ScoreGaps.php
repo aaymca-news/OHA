@@ -24,10 +24,44 @@ final class ScoreGaps
         'Q244' => ['Q244', 'Q245'],
     ];
 
+    /**
+     * A short name for each scored question that evidence does not prove (those are named
+     * in EvidenceQuestions::LABELS), for lists such as the dashboard's "most often missed".
+     */
+    private const NAMES = [
+        'Q206' => 'Auditor engaged 1–5 years',
+        'Q214' => 'Spread of income sources',
+        'Q223' => 'International funding within the limit',
+        'Q225' => 'Restricted funding below 85%',
+        'Q227' => 'Would cope without a major funder',
+        'Q238' => 'Expenses covered for 2 years',
+        'Q241' => 'Reserve lasting over 6 months',
+        'Q242' => 'No outstanding debt',
+        'Q244' => 'No unaffordable interest-rate risk',
+        'Q320' => 'Board recruited on skills',
+        'Q322' => 'Board term under 5 years',
+        'Q323' => 'Term limit for board members',
+        'Q325' => 'Term limit for the Chair',
+        'Q326#2' => 'Board met twice or more',
+        'Q328' => 'CEO/GS and Chair are different people',
+        'Q511' => 'Project-based monitoring',
+        'Q513' => 'Project-based needs assessment',
+        'Q612' => 'Plan made with staff',
+        'Q613' => 'Plan made with the Board',
+        'Q614' => 'Plan made with members',
+        'Q615' => 'Plan made with volunteers',
+        'Q616' => 'Plan made with young people and communities',
+        'Q619' => 'Innovation in the Strategic Plan',
+        'Q630' => 'Mission in line with YMCA values',
+        'Q813' => 'Communications staff or volunteer',
+        'Q1001' => 'Enough volunteers',
+        'Q1002' => 'Enough staff',
+    ];
+
     /** What earns the points where the form's rule is a threshold, or reads several answers. */
     private const RULES = [
         'Q214' => 'Income by source (Q214–Q222): 2 points when no single source is 50% or more of the income; 1 point when the largest is 50% to 65%; 0 when one is above 65%.',
-        'Q223' => '1 point when the share from international sources (Q224) is 75% or less. The form scores this row from Q224.',
+        'Q223' => '1 point when the share from international sources (Q224) is '.FormDefinition::INTERNATIONAL_LIMIT.'% or less. The form scores this row from Q224.',
         'Q225' => '1 point when restricted funding is below 85%.',
         'Q241' => '1 point when the reserve can be used for more than 6 months.',
         'Q244' => '1 point only when Q244 and Q245 are both answered “No”.',
@@ -97,6 +131,12 @@ final class ScoreGaps
     public static function pointsOpen(array $gaps): array
     {
         return array_map(fn (array $items) => array_sum(array_map(fn (array $i) => $i['max'] - $i['points'], $items)), $gaps);
+    }
+
+    /** A scored question's short name, e.g. "Cash reserve" (Q239); its code when it has none. */
+    public static function name(string $code): string
+    {
+        return EvidenceQuestions::label($code) ?? self::NAMES[$code] ?? $code;
     }
 
     /**

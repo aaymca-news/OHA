@@ -116,11 +116,11 @@ final class FollowUpSchedule
             && FollowUpWindow::query()->where('assessment_id', $assessment->id)->where('number', $countedIn)->whereNotNull('locked_at')->exists();
     }
 
-    /** What $countedIn counts in, in words: "Follow-up 2", "the assessment (Baseline 1)". */
+    /** What $countedIn counts in, in words: "Follow-up 2", "the assessment (the baseline)". */
     public static function label(?int $countedIn): string
     {
         return match ($countedIn) {
-            null => 'the assessment (Baseline 1)',
+            null => 'the assessment (the baseline)',
             self::NEXT_ASSESSMENT => 'the next assessment',
             default => 'Follow-up '.$countedIn,
         };

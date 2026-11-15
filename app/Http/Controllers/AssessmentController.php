@@ -84,7 +84,7 @@ class AssessmentController extends Controller
         $close->handle($assessment, $request->user(), $data['first_follow_up_on'] ?? null);
 
         return redirect()->route('follow-up.show', $assessment)
-            ->with('status', 'The assessment is closed. Its scores are Baseline 1, and the follow-up has begun.');
+            ->with('status', 'The assessment is closed. Its scores are the baseline, and the follow-up has begun.');
     }
 
     /** The Super Administrator deletes the whole assessment. */

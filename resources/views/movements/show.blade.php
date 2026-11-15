@@ -84,7 +84,7 @@
     {{-- Health by category | the cycle and its people --}}
     <div class="grid gap-md lg:grid-cols-[1.55fr_1fr] items-start">
         <div class="flex flex-col gap-md min-w-0">
-            <x-panel title="Health by category" :subtitle="$latest ? (($latest->score?->baseline ?? 1) > 1 ? 'Baseline '.$latest->score->baseline.' of the '.$latest->period_label.' assessment, after follow-up '.($latest->score->baseline - 1) : 'From the approved OHA form, '.$latest->period_label).' · weakest first' : null">
+            <x-panel title="Health by category" :subtitle="$latest ? (($latest->score?->baseline ?? 1) > 1 ? \App\Models\Baseline::name($latest->score->baseline).', '.$latest->period_label.' assessment' : 'From the approved OHA form, '.$latest->period_label).' · weakest first' : null">
                 @if ($latest && $me->can('view', $latest))
                     <x-slot:actions><x-more-link :href="route('assessments.show', $latest)">Full scores</x-more-link></x-slot:actions>
                 @endif

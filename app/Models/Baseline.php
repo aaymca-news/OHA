@@ -112,10 +112,20 @@ class Baseline extends Model
         return $this->superseded_at !== null;
     }
 
-    /** "Baseline 2 · after follow-up 1". */
+    /**
+     * What a baseline is called on screen (decided 15 Nov 2026): the first is the
+     * "Baseline", the closed assessment's score; each one after it is named after its
+     * follow-up, "Follow-up 2 score". ("Baseline" stays the word in the code.)
+     */
+    public static function name(int $number): string
+    {
+        return $number <= 1 ? 'Baseline' : 'Follow-up '.($number - 1).' score';
+    }
+
+    /** "Follow-up 1 score", or "Baseline · the assessment". */
     public function label(): string
     {
-        return 'Baseline '.$this->number.($this->follow_up_number !== null ? ' · after follow-up '.$this->follow_up_number : ' · the assessment');
+        return self::name($this->number).($this->follow_up_number === null ? ' · the assessment' : '');
     }
 
     protected function casts(): array

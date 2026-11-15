@@ -43,6 +43,36 @@ final class Viz
         return ['fill' => $fill, 'text' => $text, 'band' => $band->label ?? 'Not started'];
     }
 
+    /** The change steps, in points since the baseline: up to the first a light blue, then darker. */
+    public const GAIN_STEPS = [10, 20];
+
+    /**
+     * The step for a change since the baseline, in points: a warm wash for a fall, grey for
+     * none (or no follow-up yet: null), and blue, darker as the gain grows.
+     *
+     * @return array{fill: string, text: string}
+     */
+    public static function gain(?float $points): array
+    {
+        return match (true) {
+            $points === null, $points == 0 => ['fill' => 'bg-surface-container', 'text' => 'text-on-surface-variant'],
+            $points < 0 => ['fill' => 'bg-loss', 'text' => 'text-on-surface'],
+            $points <= self::GAIN_STEPS[0] => ['fill' => 'bg-gain-1', 'text' => 'text-on-surface'],
+            $points <= self::GAIN_STEPS[1] => ['fill' => 'bg-gain-2', 'text' => 'text-on-surface'],
+            default => ['fill' => 'bg-gain-3', 'text' => 'text-white'],
+        };
+    }
+
+    /** "+12.5", "−3", "0": a change in points, signed. */
+    public static function signed(?float $points, int $decimals = 1): string
+    {
+        if ($points === null) {
+            return '—';
+        }
+
+        return ($points > 0 ? '+' : ($points < 0 ? '−' : '')).self::number(abs($points), $decimals);
+    }
+
     /**
      * A score inside each band, for drawing the legend without writing the limits here.
      *

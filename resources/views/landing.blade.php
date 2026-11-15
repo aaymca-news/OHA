@@ -39,6 +39,8 @@
         'excellent' => 'A model of good practice for others to learn from.',
     ];
     $scale = $bands->sortByDesc('sort_order')->values();
+    // How many areas, in words ("nine"), from the categories themselves.
+    $count = \Illuminate\Support\Number::spell($areas->count());
 @endphp
 <!DOCTYPE html>
 <html lang="{{ str_replace('_', '-', app()->getLocale()) }}" class="landing">
@@ -82,7 +84,7 @@
             </a>
             <nav class="hidden md:flex items-center gap-lg ml-auto text-[0.9375rem] font-medium text-on-surface-variant" aria-label="On this page">
                 <a href="#purpose" class="hover:text-primary">Purpose</a>
-                <a href="#areas" class="hover:text-primary">The nine areas</a>
+                <a href="#areas" class="hover:text-primary">The {{ $count }} areas</a>
                 <a href="#how" class="hover:text-primary">How it works</a>
             </nav>
             <x-landing.sign-in class="ml-auto md:ml-0 inline-flex items-center gap-xs rounded-lg bg-primary text-on-primary px-md py-[0.55rem] text-[0.9375rem] font-semibold hover:bg-primary-container" />
@@ -110,7 +112,7 @@
                         </a>
                     </div>
                     <ul class="mt-xl flex flex-wrap gap-x-lg gap-y-sm text-[0.9375rem] text-on-surface-variant" data-reveal style="--d: 4">
-                        <li class="flex items-center gap-xs"><x-landing.icon name="know" class="size-5 text-brand-red-ink" /> Nine areas of health</li>
+                        <li class="flex items-center gap-xs"><x-landing.icon name="know" class="size-5 text-brand-red-ink" /> {{ ucfirst($count) }} areas of health</li>
                         <li class="flex items-center gap-xs"><x-landing.icon name="grow" class="size-5 text-brand-red-ink" /> A clear plan to grow</li>
                         <li class="flex items-center gap-xs"><x-landing.icon name="lock" class="size-5 text-brand-red-ink" /> Private and secure</li>
                     </ul>
@@ -150,14 +152,14 @@
             <div class="mx-auto max-w-[72rem] px-md py-[4.5rem] lg:py-[6rem]">
                 <div class="max-w-[40rem]" data-reveal>
                     <p class="landing-eyebrow">What is assessed</p>
-                    <h2 class="landing-h2">The nine areas of a healthy YMCA.</h2>
+                    <h2 class="landing-h2">The {{ $count }} areas of a healthy YMCA.</h2>
                     <p class="mt-md text-[1.0625rem] leading-relaxed text-on-surface-variant">
                         Together they make up the whole organisation. A movement is only as strong as the areas it neglects, so each one is looked at in turn.
                     </p>
                 </div>
                 <div class="mt-xl grid lg:grid-cols-[22rem_1fr] gap-xl items-start">
                     <div class="lg:sticky lg:top-[7rem]">
-                        <x-landing.ring id="areas" centre="label" :areas="$areas" label="Nine areas, one healthy YMCA" class="mx-auto w-full max-w-[16rem] sm:max-w-[20rem] lg:max-w-none" />
+                        <x-landing.ring id="areas" centre="label" :areas="$areas" :label="ucfirst($count).' areas, one healthy YMCA'" class="mx-auto w-full max-w-[16rem] sm:max-w-[20rem] lg:max-w-none" />
                     </div>
                     <ol class="grid sm:grid-cols-2 xl:grid-cols-3 gap-md">
                         @foreach ($areas as $i => $area)

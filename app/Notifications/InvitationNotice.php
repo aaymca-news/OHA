@@ -48,6 +48,12 @@ class InvitationNotice extends Notification implements ShouldQueue
 
         return $mail
             ->action('Set your password', $url)
-            ->line('This link works once and expires in 7 days. If you were not expecting it, you can ignore this email.');
+            ->line('This link works once and expires in '.self::validDays().' days. If you were not expecting it, you can ignore this email.');
+    }
+
+    /** How long an invitation link works, in days (the "invites" password broker's expiry). */
+    public static function validDays(): int
+    {
+        return max(1, (int) round((int) config('auth.passwords.invites.expire') / 1440));
     }
 }

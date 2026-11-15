@@ -91,6 +91,16 @@
     --color-heat-3: #636363;
     --color-heat-4: #434343;
     --color-heat-5: #231f20;
+    /*
+     * Change since the baseline (the dashboard's heatmap, decided 15 Nov 2026): one hue,
+     * blue, light to dark as the gain grows, and a warm wash for a fall, kept apart from the
+     * score's greys. Every cell prints its value. Text: brand black on gain-1, gain-2 and
+     * loss (13.1, 8.7 and 10.8:1), white on gain-3 (5.4:1).
+     */
+    --color-gain-1: #dbe8f6;
+    --color-gain-2: #9cc1e8;
+    --color-gain-3: #2a6bb5;
+    --color-loss: #f4c9b3;
 
     --radius-DEFAULT: 0.25rem;
     --radius-lg: 0.5rem;
@@ -492,8 +502,9 @@ html.landing {
         transform: none;
     }
 
+    /* --arc: each segment's length (in the ring's 360 units), set by the ring from how many areas there are. */
     .js .oha-ring:not(.is-in) .ring-seg {
-        stroke-dashoffset: 35;
+        stroke-dashoffset: var(--arc, 35);
     }
     .js .oha-ring.is-in .ring-seg {
         animation: ring-draw 0.6s cubic-bezier(0.3, 0.7, 0.2, 1) both;
@@ -549,7 +560,7 @@ html.landing {
 
 @keyframes ring-draw {
     from {
-        stroke-dashoffset: 35;
+        stroke-dashoffset: var(--arc, 35);
     }
     to {
         stroke-dashoffset: 0;

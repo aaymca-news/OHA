@@ -65,26 +65,25 @@ it('puts the movements falling behind first, and a paused one is not falling beh
         ->and(OdpProgress::alliance(OdpTimeline::assessments())[0]['paused'])->toBeTrue();
 });
 
-it('shows the progress on the movement page, its dashboard and the Administrators’ dashboard', function () {
+it('shows the progress on the movement page and the timelines, never on the dashboards', function () {
     ($this->meeting)([$this->d->id => TaskProgress::Blocked->value]);
     app(FollowUpWindows::class)->plan($this->assessment, $this->j->assessor, 1, today()->subDay()->toDateString());
 
     $this->actingAs($this->j->assessor)->get(route('movements.show', $this->j->zambia))->assertOk()
         ->assertSee('ODP follow-up')->assertSee('0 of 4 tasks done')->assertSee('1 blocked')->assertSee('Open the follow-up');
-    $this->actingAs($this->j->chair)->get(route('dashboard'))->assertOk()
-        ->assertSee('0 of 4 tasks done')->assertSee('Financial Stability')->assertSee('Governance');
-    $this->actingAs($this->j->admin)->get(route('dashboard'))->assertOk()
-        ->assertSee('Follow-ups overdue')->assertSee('Falling behind')->assertSee(route('follow-up.show', $this->assessment), false);
+    $this->actingAs($this->j->admin)->get(route('timelines'))->assertOk()
+        ->assertSee('Overdue')->assertSee(route('follow-up.show', $this->assessment), false);
+    $this->actingAs($this->j->admin)->get(route('timelines', ['tab' => 'odp']))->assertOk()->assertSee('1 blocked');
 
-    // The movement's dashboard: a slim banner only for what waits on this person. The
-    // General Secretary is told the follow-up is open (for evidence and notes); the Board
-    // Chairperson sees the ODP's progress but not the follow-up itself (decided 12 Nov 2026).
-    $this->actingAs($this->ngs)->get(route('dashboard'))->assertOk()
-        ->assertSee('Follow-up 1 is open')->assertSee('add your evidence and notes on the tasks')->assertSee('Your assessment cycle')->assertSee('Follow-ups')
-        ->assertSee(route('follow-up.show', $this->assessment), false);
-    $this->actingAs($this->j->chair)->get(route('dashboard'))->assertOk()
-        ->assertDontSee('Follow-up 1 is open')->assertDontSee('Open the follow-up')
-        ->assertDontSee(route('follow-up.show', $this->assessment), false);
+    // The dashboards are analytics only (decided 15 Nov 2026): no tasks, no follow-up to do,
+    // for AAYMCA and for the movement alike.
+    $this->actingAs($this->j->admin)->get(route('dashboard'))->assertOk()
+        ->assertDontSee('Follow-ups overdue')->assertDontSee('Falling behind')->assertDontSee(route('follow-up.show', $this->assessment), false);
+    foreach ([$this->ngs, $this->j->chair] as $user) {
+        $this->actingAs($user)->get(route('dashboard'))->assertOk()->assertSee('Current score')
+            ->assertDontSee('0 of 4 tasks done')->assertDontSee('Follow-up 1 is open')->assertDontSee('Open the follow-up')
+            ->assertDontSee(route('follow-up.show', $this->assessment), false);
+    }
 
     // Other staff, not following this movement up, see no follow-up card.
     $this->actingAs($this->j->otherStaff)->get(route('movements.show', $this->j->zambia))->assertOk()->assertDontSee('Open the follow-up');

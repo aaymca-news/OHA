@@ -1,165 +1,181 @@
 @use('App\Support\Viz')
 @use('App\Support\Bands')
-@use('App\Enums\Stage')
 {{--
-    A National Movement's own dashboard, for its Board Chairperson and National General
-    Secretary (design standard of 10 Nov 2026), laid out like AAYMCA's: a slim banner only
-    when something waits on this person, then four key figures, the health by category and
-    the assessment cycle, the ODP by priority and its tasks still open (as set at the last
-    follow-up: tasks have no deadlines), and the movement in numbers, its contacts and its
-    documents. Built from the shared components (x-action-banner, x-kpi, x-category-bars,
-    x-cycle-timeline, x-priority-bars, x-task-line).
+    A National Movement's own dashboard, the same for its Board Chairperson and National
+    General Secretary, analytics only (decided 15 Nov 2026): nothing about work, tasks or what
+    is due (that is in My Work and the follow-up). Four key figures; our score over the cycle
+    and where it can still grow; our areas against the baseline or the region; our money and
+    people beside the region (its averages and medians only, never another movement's
+    figures); and our contacts and documents.
 --}}
 @php
     $me = auth()->user();
-    $holder = $current?->workItem;
-    $stage = Stage::of($cycleOf ?? $latest);
     $firstName = \Illuminate\Support\Str::before($me->name, ' ');
-    $open = $tasks->reject(fn ($t) => $t->isSettled());
-    // Still open, blocked first, then in progress, then not started.
-    $stillOpen = $open->sortBy(fn ($t) => match ($t->progress) {
-        \App\Enums\TaskProgress::Blocked => 0,
-        \App\Enums\TaskProgress::InProgress => 1,
-        default => 2,
-    })->take(5);
+    $vs = 'text-[0.78125rem] text-on-surface-variant';
 @endphp
 <x-layouts.app :title="$status->name" :subtitle="'Welcome back, '.$firstName.' · '.$me->role->label()">
     <x-slot:actions>
-        <x-status-pill :tone="$stage->tone()" class="self-center">{{ $stage->label() }}</x-status-pill>
+        @if ($data['rated'] && $status->band)
+            <x-status-pill :tone="Bands::tone($status->band_code)" class="self-center">{{ $status->band->label }}</x-status-pill>
+        @elseif ($underWay)
+            <x-status-pill tone="info" class="self-center">Assessment started</x-status-pill>
+        @else
+            <x-status-pill class="self-center">Not yet assessed</x-status-pill>
+        @endif
     </x-slot:actions>
 
-    {{-- Only when something waits on this person: one line, one button. Otherwise straight to the figures. --}}
-    @if ($action)
-        <x-action-banner :title="$action['title']" :href="$action['href']" :button="$action['button']" />
-    @endif
-
-    {{-- Key figures --}}
-    <section aria-label="Key figures" class="grid gap-md sm:grid-cols-2 xl:grid-cols-[1.35fr_1fr_1fr_1fr]">
-        <x-kpi label="Health score" :value="$status->pct !== null ? number_format((float) $status->pct, 1) : '—'" :unit="$status->pct !== null ? '%' : null">
-            <x-slot:badge>
-                @if ($status->band && $status->pct !== null)
-                    <x-status-pill :tone="Bands::tone($status->band_code)">{{ $status->band->label }}</x-status-pill>
-                @elseif ($holder)
-                    <x-status-pill tone="info">Assessment started</x-status-pill>
+    @if (! $data['rated'])
+        <x-panel>
+            <x-empty-state icon="insights">{{ $underWay ? 'Your assessment has started.' : 'Your movement is not assessed yet.' }} Your scores and figures appear here once your OHA form is approved.</x-empty-state>
+        </x-panel>
+    @else
+        @php($d = $data)
+        @php($w = $d['weakest'])
+        {{-- Key figures --}}
+        <section aria-label="Key figures" class="grid gap-md sm:grid-cols-2 xl:grid-cols-4">
+            <x-kpi label="Current score" :value="number_format($d['pct'], 1)" unit="%">
+                @if ($d['followed'])
+                    <span class="font-semibold text-good-ink">{{ Viz::signed($d['journey']['change']) }}</span> points since baseline ({{ Viz::pct($d['journey']['first']) }})
+                @elseif ($d['journey'])
+                    Your baseline · no follow-up score yet
                 @else
-                    <x-status-pill>Not yet assessed</x-status-pill>
+                    From your approved OHA form
                 @endif
-            </x-slot:badge>
-            @if ($status->pct !== null)
-                <x-band-scale :pct="$status->pct" class="mt-1" />
-            @else
-                Your score appears once your OHA form is approved.
-            @endif
-        </x-kpi>
+            </x-kpi>
+            <x-kpi label="Against the region" :value="Viz::signed($d['pct'] - $d['region']['mean'])" unit=" points">
+                Regional average {{ Viz::pct($d['region']['mean']) }} · {{ $d['region']['movements'] }} movements
+            </x-kpi>
+            <x-kpi label="Strongest" :value="count($d['strongest']) > 1 ? count($d['strongest']).' areas' : ($d['strongest'][0] ?? '—')">
+                {{ count($d['strongest']) > 1 ? 'At '.Viz::pct($d['strongest_pct'], 0).': '.implode(', ', $d['strongest']) : 'At '.Viz::pct($d['strongest_pct'], 0) }}
+            </x-kpi>
+            <x-kpi label="Weakest" :value="$w['short']" :tone="($w['band_code'] ?? null) && in_array($w['band_code'], \App\Enums\BandCode::NEEDING_SUPPORT, true) ? 'critical' : null">
+                At {{ Viz::pct($w['pct'], 0) }} · {{ Viz::figure($w['lost']) }} of its {{ $w['max'] }} points still open
+            </x-kpi>
+        </section>
 
-        <x-kpi label="ODP done" :value="$odp ? $odp['done'] : '—'" :unit="$odp ? ' / '.$odp['total'].' '.\Illuminate\Support\Str::plural('task', $odp['total']) : null">
-            @if ($odp && $odp['total'] > 0)
-                <x-slot:visual><x-progress-ring :value="$odp['done']" :max="$odp['total']" :size="72" /></x-slot:visual>
-                As set at your last follow-up
-            @else
-                {{ $odpAssessment ? 'Its tasks are not entered yet' : 'No approved ODP yet' }}
-            @endif
-        </x-kpi>
+        <div class="grid gap-md lg:grid-cols-[1.4fr_1fr] items-start">
+            <x-panel title="Our score over the cycle" :subtitle="$d['journey'] ? 'The baseline, then each follow-up score · regional average now '.Viz::pct($d['region']['mean']) : null">
+                @if ($d['journey'])
+                    <x-viz.growth-curve :points="$d['curve']" />
+                @else
+                    <x-empty-state icon="show_chart">Your baseline is set when your assessment is closed; each follow-up then adds a score.</x-empty-state>
+                @endif
+            </x-panel>
 
-        <x-kpi label="Blocked" :value="$odp ? $odp['blocked'] : '—'" :tone="($odp['blocked'] ?? 0) > 0 ? 'critical' : null">
-            @if (! $odp)
-                Shown once your ODP is approved
-            @elseif ($odp['blocked'] > 0)
-                of {{ $open->count() }} {{ \Illuminate\Support\Str::plural('task', $open->count()) }} still open
-            @else
-                Nothing blocked{{ $open->isNotEmpty() ? ' · '.$open->count().' still open' : '' }}
-            @endif
-        </x-kpi>
+            <x-panel title="Where our score can grow" :subtitle="Viz::figure($d['points']['earned']).' of '.$d['points']['max'].' points earned · '.Viz::figure($d['points']['max'] - $d['points']['earned']).' still open'" stack>
+                <span class="h-3 rounded-full bg-[#f0eeea] overflow-hidden" role="img" aria-label="{{ Viz::figure($d['points']['earned']) }} of {{ $d['points']['max'] }} points earned">
+                    <span class="block h-full rounded-full bg-on-surface" style="width: {{ $d['points']['earned'] / max(1, $d['points']['max']) * 100 }}%"></span>
+                </span>
+                @if ($d['open'] === [])
+                    <p><x-status-pill tone="good">Every point is earned</x-status-pill></p>
+                @else
+                    @php($openMax = max(1, collect($d['open'])->max('max')))
+                    <ul class="flex flex-col gap-[12px] text-[0.875rem]">
+                        @foreach ($d['open'] as $area)
+                            <li class="grid grid-cols-[7rem_1fr_6.5rem] items-center gap-[12px]">
+                                <span class="font-semibold truncate" title="{{ $area['name'] }}">{{ $area['short'] }}</span>
+                                <span class="h-2 rounded-full bg-[#f0eeea] overflow-hidden" aria-hidden="true"><span class="block h-full rounded-full bg-serious-ink" style="width: {{ $area['lost'] / $openMax * 100 }}%"></span></span>
+                                <span class="text-right tabular-nums"><span class="font-semibold">{{ Viz::figure($area['lost']) }}</span> of {{ $area['max'] }} open</span>
+                            </li>
+                        @endforeach
+                    </ul>
+                    <p class="{{ $vs }}">Every other area has all its points.</p>
+                @endif
+            </x-panel>
+        </div>
 
-        {{-- No band-based date (decided 12 Nov 2026): it starts once the cycle is closed. --}}
-        <x-kpi label="Next assessment" :value="$stage->nextAssessment($status->next_assessment_on)[0]">
-            @if ($stage->nextAssessment($status->next_assessment_on)[1] === 'critical')
-                <span class="text-critical-ink font-semibold">Past its planned date</span>
-            @else
-                {{ $latest ? 'Last: '.$latest->period_label : 'Not yet assessed' }}
-            @endif
-        </x-kpi>
-    </section>
-
-    {{-- Health by category | the assessment cycle --}}
-    <div class="grid gap-md lg:grid-cols-[1.55fr_1fr] items-start">
-        <x-panel title="Health by category" :subtitle="$latest ? 'From your approved OHA form, '.$latest->period_label.' · weakest first' : null">
-            @if ($latest && $me->can('view', $latest))
-                <x-slot:actions><x-more-link :href="route('assessments.show', $latest)">Full scores</x-more-link></x-slot:actions>
-            @endif
-            @if ($latest)
-                <x-category-bars :rows="$rows" />
-            @else
-                <x-empty-state icon="insights">Your scores appear here once your OHA form is approved.</x-empty-state>
-            @endif
-        </x-panel>
-
-        <x-panel title="Your assessment cycle" :subtitle="$cycleOf ? $cycleOf->period_label.' assessment' : 'No assessment yet'">
-            <x-cycle-timeline :steps="$cycle" />
-        </x-panel>
-    </div>
-
-    {{-- The ODP --}}
-    <x-panel title="Your ODP" :subtitle="$odp && $odp['total'] > 0 ? $odp['done'].' of '.$odp['total'].' tasks done · '.$odpAssessment->period_label.' · across '.count($priorities).' '.\Illuminate\Support\Str::plural('priority', count($priorities)) : ($odpAssessment ? $odpAssessment->period_label : null)">
-        @if ($canFollowUp)
+        {{-- Our areas: against the baseline (once there is one) or the region. --}}
+        @php($hasBaseline = collect($d['areas'])->contains(fn ($a) => $a['baseline'] !== null))
+        <x-panel title="Our areas" subtitle="Each area now, weakest first" x-data="{ against: '{{ $hasBaseline ? 'baseline' : 'region' }}' }">
             <x-slot:actions>
-                <a href="{{ route('follow-up.show', $odpAssessment) }}" class="inline-flex items-center gap-sm min-h-10 px-[14px] rounded-[10px] border border-[#d9d7d1] bg-surface-container-lowest text-[0.84375rem] font-semibold text-on-surface hover:bg-[#f2f1ee]">
-                    {{ $canNote ? 'Add notes or evidence' : 'Open the follow-up' }}
-                </a>
-            </x-slot:actions>
-        @endif
-        @if (! $odpAssessment)
-            <x-empty-state icon="checklist">Your ODP’s tasks appear here once it is approved.</x-empty-state>
-        @elseif ($tasks->isEmpty())
-            <x-empty-state icon="checklist">Your ODP’s tasks have not been entered yet.</x-empty-state>
-        @else
-            <div class="grid gap-x-xl gap-y-lg lg:grid-cols-2">
-                <x-priority-bars :priorities="$priorities" />
-                <div class="flex flex-col">
-                    <p class="text-[0.75rem] font-semibold uppercase tracking-[0.06em] text-on-surface-variant">Still open</p>
-                    @if ($stillOpen->isEmpty())
-                        <p class="mt-sm"><x-status-pill tone="good">Every task is done</x-status-pill></p>
-                    @else
-                        <ul class="mt-1">
-                            @foreach ($stillOpen as $task)
-                                <x-task-line :task="$task" />
-                            @endforeach
-                        </ul>
-                    @endif
-                    @if ($canFollowUp)
-                        <x-more-link :href="route('follow-up.show', $odpAssessment)" class="self-start mt-sm -ml-[10px]">All {{ $tasks->count() }} tasks</x-more-link>
-                    @elseif ($tasks->count() > $stillOpen->count())
-                        <details class="text-[0.875rem] mt-sm">
-                            <summary class="cursor-pointer font-semibold w-fit">All {{ $tasks->count() }} tasks</summary>
-                            <ul class="flex flex-col mt-xs">
-                                @foreach ($tasks as $task)
-                                    <x-task-line :task="$task" />
-                                @endforeach
-                            </ul>
-                        </details>
-                    @endif
+                <div class="flex gap-xs rounded-full bg-[#f2f1ee] p-[3px] text-[0.8125rem]" role="group" aria-label="Compare with">
+                    @foreach (array_filter(['baseline' => $hasBaseline ? 'Against baseline' : null, 'region' => 'Against the region']) as $key => $text)
+                        <button type="button" x-on:click="against = '{{ $key }}'" x-bind:aria-pressed="(against === '{{ $key }}').toString()"
+                                x-bind:class="against === '{{ $key }}' ? 'bg-surface-container-lowest text-on-surface shadow-[0_1px_2px_rgba(20,20,20,0.08)]' : 'text-on-surface-variant hover:text-on-surface'"
+                                class="min-h-8 px-[12px] rounded-full font-semibold">{{ $text }}</button>
+                    @endforeach
                 </div>
-            </div>
-        @endif
-    </x-panel>
+            </x-slot:actions>
+            <ul class="flex flex-col gap-[14px] text-[0.875rem]">
+                @foreach ($d['areas'] as $area)
+                    @php($toBase = $area['baseline'] !== null ? round($area['pct'] - $area['baseline'], 1) : null)
+                    @php($toRegion = $area['region'] !== null ? round($area['pct'] - $area['region'], 1) : null)
+                    <li class="grid grid-cols-[minmax(0,1fr)_auto] sm:grid-cols-[8rem_1fr_3.5rem_9.5rem] items-center gap-x-[14px] gap-y-[6px]">
+                        <span class="font-semibold truncate" title="{{ $area['name'] }}">{{ $area['short'] }}</span>
+                        <span class="relative h-2.5 rounded-full bg-[#f0eeea] col-span-2 sm:col-span-1 row-start-2 sm:row-start-auto">
+                            <span class="absolute inset-y-0 left-0 rounded-full {{ Bands::fill($area['band_code']) }}" style="width: {{ $area['pct'] }}%"></span>
+                            @if ($area['baseline'] !== null)
+                                <span x-show="against === 'baseline'" class="absolute -top-1.5 -bottom-1.5 w-[3px] -translate-x-1/2 rounded bg-on-surface" style="left: {{ $area['baseline'] }}%" title="Baseline {{ Viz::pct($area['baseline'], 0) }}"></span>
+                            @endif
+                            @if ($area['region'] !== null)
+                                <span x-show="against === 'region'" @if ($hasBaseline) x-cloak @endif class="absolute -top-1.5 -bottom-1.5 w-[3px] -translate-x-1/2 rounded bg-on-surface" style="left: {{ $area['region'] }}%" title="Regional average {{ Viz::pct($area['region'], 0) }}"></span>
+                            @endif
+                        </span>
+                        <span class="text-right font-semibold tabular-nums">{{ Viz::pct($area['pct'], 0) }}</span>
+                        <span class="text-[0.8125rem] font-semibold tabular-nums">
+                            <span x-show="against === 'baseline'" @class(['text-good-ink' => ($toBase ?? 0) > 0, 'text-critical-ink' => ($toBase ?? 0) < 0, 'text-on-surface-variant' => ! $toBase])>{{ $toBase === null ? '' : ($toBase == 0 ? 'No change' : Viz::signed($toBase).' since baseline') }}</span>
+                            <span x-show="against === 'region'" @if ($hasBaseline) x-cloak @endif @class(['text-good-ink' => ($toRegion ?? 0) > 0, 'text-critical-ink' => ($toRegion ?? 0) < 0, 'text-on-surface-variant' => ! $toRegion])>{{ $toRegion === null ? '' : ($toRegion == 0 ? 'Level with the region' : Viz::signed($toRegion).' vs region') }}</span>
+                        </span>
+                    </li>
+                @endforeach
+            </ul>
+            <p class="mt-md flex flex-wrap gap-x-md gap-y-xs {{ $vs }}">
+                <span class="inline-flex items-center gap-xs"><span class="w-4 h-2.5 rounded-full bg-band-strong" aria-hidden="true"></span>Now, in the band’s colour</span>
+                <span class="inline-flex items-center gap-xs"><span class="w-[3px] h-3.5 rounded bg-on-surface" aria-hidden="true"></span><span x-text="against === 'baseline' ? 'Baseline' : 'Regional average'">{{ $hasBaseline ? 'Baseline' : 'Regional average' }}</span></span>
+            </p>
+        </x-panel>
 
-    {{-- In numbers · contacts · documents --}}
-    <div class="grid gap-md lg:grid-cols-[1.1fr_1fr_1fr] items-stretch">
-        <x-panel title="In numbers" :subtitle="$profile ? 'From your approved OHA form' : null">
-            @if ($profile)
-                <dl class="grid grid-cols-2 sm:grid-cols-3 gap-x-sm gap-y-[18px]">
-                    @foreach ([[$profile['people']['staff'] ?? null, 'Staff'], [$profile['board']['size'] ?? null, 'Board members'], [$profile['beneficiaries'] ?? null, 'People reached a year'], [$profile['people']['volunteers'] ?? null, 'Volunteers'], [$profile['identity']['branches'] ?? null, 'Branches'], [$profile['people']['staff_under_30'] ?? null, 'Staff under 30']] as [$value, $label])
+        @php($money = $d['money'])
+        @php($people = $d['people'])
+        <div class="grid gap-md lg:grid-cols-2 items-start">
+            <x-panel title="Money" subtitle="From our form as it stands · beside the regional median">
+                <dl class="grid grid-cols-2 gap-x-md gap-y-[18px]">
+                    @foreach ([
+                        ['International funding', $money['international'], $money['region']['international'], ($money['international'] ?? 0) > $money['limit'] ? 'Above the form’s '.$money['limit'].'% line' : null],
+                        ['Restricted funding', $money['restricted'], $money['region']['restricted'], null],
+                    ] as [$label, $value, $region, $note])
                         <div>
-                            <dt class="text-[0.78125rem] text-on-surface-variant">{{ $label }}</dt>
-                            <dd @class(['mt-0.5 text-[1.375rem] font-bold tabular-nums', 'text-on-surface' => $value !== null, 'text-[#8a8880]' => $value === null])>{{ $value !== null ? Viz::number($value) : '—' }}</dd>
+                            <dt class="text-[0.75rem] font-semibold uppercase tracking-[0.06em] text-on-surface-variant">{{ $label }}</dt>
+                            <dd @class(['mt-0.5 text-[1.375rem] font-bold tabular-nums', 'text-serious-ink' => $note !== null])>{{ $value !== null ? Viz::number($value).'%' : '—' }}</dd>
+                            <dd class="{{ $vs }}">{{ $note ? $note.' · ' : '' }}Region {{ $region !== null ? Viz::number($region).'%' : '—' }}</dd>
+                        </div>
+                    @endforeach
+                    <div>
+                        <dt class="text-[0.75rem] font-semibold uppercase tracking-[0.06em] text-on-surface-variant">Operating margin</dt>
+                        <dd @class(['mt-0.5 text-[1.375rem] font-bold tabular-nums', 'text-critical-ink' => ($money['margin'] ?? 0) < 0])>{{ $money['margin'] !== null ? ($money['margin'] > 0 ? '+' : '').Viz::number($money['margin'], 1).'%' : '—' }}</dd>
+                        <dd class="{{ $vs }}">{{ ($money['margin'] ?? 0) < 0 ? 'A deficit · ' : '' }}Region {{ $money['region']['margin'] !== null ? ($money['region']['margin'] > 0 ? '+' : '').Viz::number($money['region']['margin'], 1).'%' : '—' }}</dd>
+                    </div>
+                    <div>
+                        <dt class="text-[0.75rem] font-semibold uppercase tracking-[0.06em] text-on-surface-variant">Cash reserve</dt>
+                        <dd class="mt-0.5 text-[1.375rem] font-bold tabular-nums">{{ $money['reserve_months'] !== null ? Viz::number($money['reserve_months']).' months' : 'None' }}</dd>
+                        <dd class="{{ $vs }}">{{ $money['region']['with_reserve'] }} of {{ $d['region']['movements'] }} movements have one</dd>
+                    </div>
+                </dl>
+            </x-panel>
+
+            <x-panel title="People, Board and policies" subtitle="From our form as it stands · beside the region">
+                <dl class="grid grid-cols-2 sm:grid-cols-3 gap-x-md gap-y-[18px]">
+                    @foreach ([
+                        ['Staff', $people['staff'], 'Median '.Viz::number($people['region']['staff'])],
+                        ['Volunteers', $people['volunteers'], 'Median '.Viz::number($people['region']['volunteers'])],
+                        ['Board members', $people['board'], 'Median '.Viz::number($people['region']['board'])],
+                        ['Women on the Board', $people['women'] !== null ? $people['women'].'%' : null, 'Region '.($people['region']['women'] ?? '—').'%'],
+                        ['Under 30 on the Board', $people['under_30'] !== null ? $people['under_30'].'%' : null, 'Region '.($people['region']['under_30'] ?? '—').'%'],
+                        ['Policies in place', $people['policies'].' / '.$people['policies_of'], 'Region average '.Viz::number($people['region']['policies'], 1)],
+                    ] as [$label, $value, $region])
+                        <div>
+                            <dt class="text-[0.75rem] font-semibold uppercase tracking-[0.06em] text-on-surface-variant">{{ $label }}</dt>
+                            <dd class="mt-0.5 text-[1.375rem] font-bold tabular-nums">{{ $value === null ? '—' : (is_string($value) ? $value : Viz::number($value)) }}</dd>
+                            <dd class="{{ $vs }}">{{ $region }}</dd>
                         </div>
                     @endforeach
                 </dl>
-            @else
-                <x-empty-state icon="groups">These appear once your OHA form is approved.</x-empty-state>
-            @endif
-        </x-panel>
+            </x-panel>
+        </div>
+    @endif
 
+    {{-- Contacts · documents --}}
+    <div class="grid gap-md lg:grid-cols-2 items-start">
         <x-panel title="Your contacts at AAYMCA" subtitle="The staff assessing your movement">
             @forelse ($assessors as $person)
                 <div class="flex items-center gap-[14px] py-[12px] border-t border-[#f0eeea] first:border-t-0 first:pt-0">
@@ -190,7 +206,7 @@
                             @if ($assessment->score)
                                 Report, ODP and scores · {{ $assessment->score->band?->label }}, {{ number_format((float) $assessment->score->pct, 1) }}%
                             @else
-                                {{ Stage::of($assessment)->label() }}
+                                {{ \App\Enums\Stage::of($assessment)->label() }}
                             @endif
                         </span>
                     </span>

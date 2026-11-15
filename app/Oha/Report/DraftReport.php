@@ -13,6 +13,7 @@ use App\Oha\FormDefinition;
 use App\Oha\Profile;
 use App\Oha\Question;
 use App\Oha\Scorer;
+use App\Support\Bands;
 use App\Support\Viz;
 use Illuminate\Support\Collection;
 
@@ -333,11 +334,11 @@ final class DraftReport
      */
     private function strengths(array $rows, array $items): array
     {
-        $candidates = collect($rows)->filter(fn ($r) => $r['max'] !== null && $r['pct'] >= 50)->sortByDesc('pct')
+        $candidates = collect($rows)->filter(fn ($r) => $r['max'] !== null && $r['pct'] >= Bands::from('developing'))->sortByDesc('pct')
             ->map(fn ($r) => [$r, $this->merged(collect($items[$r['code']] ?? [])->where('earned', true)->sortByDesc('max')->pluck('in_place')->all())])
             ->filter(fn ($pair) => $pair[1] !== []);
         // Mainly the Strong and Excellent categories; Developing ones only to make up three.
-        $strong = $candidates->filter(fn ($pair) => $pair[0]['pct'] >= 70);
+        $strong = $candidates->filter(fn ($pair) => $pair[0]['pct'] >= Bands::from('strong'));
         $points = ($strong->count() >= 3 ? $strong : $candidates->take(max(3, $strong->count())))->take(self::SUMMARY)
             ->map(fn ($pair) => SentenceBank::HEADLINES[$pair[0]['code']]['strength'].': '.$this->sentenceList(array_slice($pair[1], 0, 3)).'.');
 
@@ -400,7 +401,7 @@ final class DraftReport
             ->map(fn ($r) => [$r, $this->gaps($r['max'] !== null ? ($items[$r['code']] ?? []) : [])])
             ->filter(fn ($pair) => $pair[1]->isNotEmpty())->values();
         // Mainly the categories below Strong; stronger ones only to make up three.
-        $weak = $withGaps->filter(fn ($pair) => $pair[0]['pct'] < 70);
+        $weak = $withGaps->filter(fn ($pair) => $pair[0]['pct'] < Bands::from('strong'));
 
         return ($weak->count() >= 3 ? $weak : $withGaps->take(max(3, $weak->count())))->take(self::SUMMARY)->values()->all();
     }

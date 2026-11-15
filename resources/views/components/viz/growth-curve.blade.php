@@ -1,16 +1,17 @@
 {{--
-    A cycle's growth curve (decided 12 Nov 2026): the overall score at each baseline, from
-    Baseline 1 (the closed assessment) to Baseline 4 (after the third follow-up). One series
-    in ink, so no legend: the panel's title names it. The health bands' lower limits are
-    solid hairlines, named at the right. Only the first and newest values are written on the
-    chart; hovering (or focusing) a baseline shows its figures, and a table beside the chart
-    carries every value. A baseline not reached yet is named beneath, with nothing plotted.
-      points  list of ['label' => 'Baseline 2', 'pct' => float|null, 'note' => string], one per slot
+    A cycle's growth curve (decided 12 Nov 2026): the overall score at the baseline (the
+    closed assessment) and after each follow-up (the follow-up scores). One series in ink, so
+    no legend: the panel's title names it. The health bands' lower limits are solid
+    hairlines, named at the right. Only the first and newest values are written on the
+    chart; hovering (or focusing) a step shows its figures, and a table beside the chart
+    carries every value. A step not reached yet is named beneath, with nothing plotted.
+      points  list of ['label' => 'Follow-up 1 score', 'pct' => float|null, 'note' => string], one per slot
       height  the plot's height in px
 --}}
 @props(['points', 'height' => 200])
 @php
-    $bands = \App\Models\HealthBand::query()->where('min_pct', '>', 1)->orderBy('min_pct')->get(['label', 'min_pct']);
+    // The bands' lower limits, read once per request (App\Support\Bands); the lowest starts at 0.
+    $bands = collect(\App\Support\Bands::scale())->filter(fn ($b) => $b['from'] > 1)->map(fn ($b) => (object) ['label' => $b['label'], 'min_pct' => $b['from']]);
     $slots = count($points);
     $x = fn (int $i) => $slots > 1 ? 6 + $i * (88 / ($slots - 1)) : 50;
     $reached = collect($points)->map(fn ($p, $i) => $p + ['i' => $i, 'x' => $x($i)])->filter(fn ($p) => $p['pct'] !== null)->values();

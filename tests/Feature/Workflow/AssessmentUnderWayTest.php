@@ -65,12 +65,11 @@ it('refuses a second assessment while one is under way', function () {
         ->toThrow(WorkflowRuleBroken::class);
 });
 
-it('shows "Assessment started", not "Not started", on the lists and dashboards', function () {
+it('shows "Assessment started", not "Not started", on the lists and the movement’s dashboard', function () {
     $this->j->assessmentAt('form_uploaded');
 
     $this->actingAs($this->j->admin)->get(route('movements.index'))->assertOk()->assertSee('Assessment started');
     $this->actingAs($this->j->admin)->get(route('movements.index', ['view' => 'table']))->assertOk()->assertSee('Assessment started');
-    $this->actingAs($this->j->admin)->get(route('dashboard'))->assertOk()->assertSee('Assessment started');
     $this->actingAs($this->j->chair)->get(route('dashboard'))->assertOk()->assertSee('Assessment started');
     $this->actingAs($this->j->chair)->get(route('movements.show', $this->j->zambia))->assertOk()->assertSee('Assessment started');
 
@@ -140,9 +139,10 @@ it('shows a closed assessment as Stage 1 done, its follow-ups ongoing, until its
     // The movement page: the label; no starting the next one while the cycle runs.
     $this->actingAs($this->j->assessor)->get(route('movements.show', $this->j->zambia))->assertOk()
         ->assertSee('Stage 1 done')->assertSee('Follow-ups ongoing')->assertDontSee('Start new assessment');
-    // The movement's own dashboard.
+    // The movement's own dashboard is analytics only (15 Nov 2026): its scores, the stage on its page.
     $this->actingAs($this->j->chair)->get(route('dashboard'))->assertOk()
-        ->assertSee('Stage 1 done · follow-ups ongoing')->assertSee('Follow-ups')->assertDontSee('No assessment is under way');
+        ->assertSee('Current score')->assertDontSee('No assessment is under way');
+    $this->actingAs($this->j->chair)->get(route('movements.show', $this->j->zambia))->assertOk()->assertSee('Stage 1 done');
     // The National Movements table.
     $this->actingAs($this->j->admin)->get(route('movements.index', ['view' => 'table']))->assertOk()->assertSee('Stage 1 done · follow-ups ongoing');
 

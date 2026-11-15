@@ -4,6 +4,7 @@ namespace App\Oha\Report;
 
 use App\Exceptions\WorkflowRuleBroken;
 use App\Models\Assessment;
+use App\Models\Baseline;
 use App\Models\HealthBand;
 use App\Oha\EvidenceQuestions;
 use App\Oha\FollowUpSchedule;
@@ -55,7 +56,7 @@ final class JourneyPdf
     {
         $steps = $this->journeys->of($assessment);
         if ($steps === []) {
-            throw new WorkflowRuleBroken('There is no journey yet: Baseline 1 is recorded when the assessment is closed.');
+            throw new WorkflowRuleBroken('There is no journey yet: the baseline is recorded when the assessment is closed.');
         }
         $movement = $assessment->movement;
         $this->pdf = new PdfDocument($movement->name.' · the '.$assessment->period_label.' cycle’s journey');
@@ -88,14 +89,14 @@ final class JourneyPdf
 
         $pdf->text(self::LEFT, 58, 'AAYMCA · ORGANISATIONAL HEALTH ASSESSMENT', 8, true, self::MUTED);
         $pdf->text(self::LEFT, 88, $assessment->movement->name, 22, true);
-        $pdf->text(self::LEFT, 110, 'The '.$assessment->period_label.' cycle’s journey, from Baseline 1 to Baseline '.$now['number'], 12);
-        $pdf->text(self::LEFT, 128, 'Prepared '.now()->format('j M Y').'. Scored by the OHA form’s own formulas, as recorded at each baseline.', 9, false, self::MUTED);
+        $pdf->text(self::LEFT, 110, 'The '.$assessment->period_label.' cycle’s journey, from the baseline'.($now['number'] > 1 ? ' to the '.Baseline::name($now['number']) : ''), 12);
+        $pdf->text(self::LEFT, 128, 'Prepared '.now()->format('j M Y').'. Scored by the OHA form’s own formulas, as recorded at the baseline and each follow-up.', 9, false, self::MUTED);
 
         $change = count($steps) > 1 ? round($now['pct'] - $first['pct'], 1) : null;
         $boxes = [
-            ['BASELINE 1', Viz::pct($first['pct']), $this->band($first['band']).' · '.Viz::points($first['points'], $first['max'], '/').' points'],
-            ['NOW · BASELINE '.$now['number'], Viz::pct($now['pct']), $this->band($now['band']).' · '.Viz::points($now['points'], $now['max'], '/').' points'],
-            ['CHANGE', $change === null ? '—' : ($change > 0 ? '+' : '').number_format($change, 1).' pts', 'Percentage points since Baseline 1'],
+            ['BASELINE', Viz::pct($first['pct']), $this->band($first['band']).' · '.Viz::points($first['points'], $first['max'], '/').' points'],
+            ['NOW · '.mb_strtoupper(Baseline::name($now['number'])), Viz::pct($now['pct']), $this->band($now['band']).' · '.Viz::points($now['points'], $now['max'], '/').' points'],
+            ['CHANGE', $change === null ? '—' : ($change > 0 ? '+' : '').number_format($change, 1).' pts', 'Points since the baseline'],
             ['FOLLOW-UPS CLOSED', $followUps.' of '.(Journeys::slots() - 1), 'ODP tasks done: '.($now['tasks_total'] !== null ? $now['tasks_done'].' of '.$now['tasks_total'] : '—')],
         ];
         $boxWidth = (self::WIDTH - 3 * 10) / 4;
@@ -107,10 +108,10 @@ final class JourneyPdf
             $pdf->paragraph($x + 10, 205, $boxWidth - 20, $sub, 7.5, false, self::MUTED, 1.25);
         }
 
-        $this->heading(256, 'Growth curve', 'The overall score at each baseline: Baseline 1 when the assessment was closed, then one after each follow-up.');
+        $this->heading(256, 'Growth curve', 'The overall score at the baseline, when the assessment was closed, then after each follow-up.');
         $this->growthCurve($steps, 292, 468);
 
-        $this->heading(528, 'Where it stands now · Baseline '.$now['number'], null);
+        $this->heading(528, 'Where it stands now · '.Baseline::name($now['number']), null);
         $tasks = OdpProgress::of($assessment)['summary'];
         $yes = count(array_filter(array_keys(EvidenceQuestions::LABELS), fn (string $code) => strtolower(trim((string) ($now['baseline']->answers[$code] ?? ''))) === 'yes'));
         $unproven = count($now['baseline']->evidence_gaps ?? []);
@@ -160,7 +161,7 @@ final class JourneyPdf
         for ($i = 0; $i < $slots; $i++) {
             $step = $byNumber[$i + 1] ?? null;
             $x = $xOf($i);
-            $pdf->text($x, $bottom + 16, 'Baseline '.($i + 1), 9, true, $step === null ? self::MUTED : self::INK, 'center');
+            $pdf->text($x, $bottom + 16, Baseline::name($i + 1), 9, true, $step === null ? self::MUTED : self::INK, 'center');
             $pdf->text($x, $bottom + 28, $step === null ? 'not yet' : $step['baseline']->set_at->format('j M Y'), 8, false, self::MUTED, 'center');
             if ($step !== null) {
                 $points[] = [$x, $yOf($step['pct']), $step];
@@ -228,7 +229,7 @@ final class JourneyPdf
     {
         $pdf = $this->pdf;
         $pdf->addPage();
-        $this->heading(64, 'Each category, baseline by baseline', 'The percentage of each category’s points, as recorded at each baseline.');
+        $this->heading(64, 'Each category, step by step', 'The percentage of each category’s points, as recorded at the baseline and at each follow-up.');
 
         $slots = Journeys::slots();
         $byNumber = collect($steps)->keyBy('number');
@@ -239,7 +240,7 @@ final class JourneyPdf
 
         $y = 112;
         for ($i = 0; $i < $slots; $i++) {
-            $pdf->text($right($i), $y, 'Baseline '.($i + 1), 8.5, true, isset($byNumber[$i + 1]) ? self::INK : self::MUTED, 'right');
+            $pdf->text($right($i), $y, $i === 0 ? 'Baseline' : 'Follow-up '.$i, 8.5, true, isset($byNumber[$i + 1]) ? self::INK : self::MUTED, 'right');
         }
         $pdf->text($changeX, $y, 'Change', 8.5, true, self::INK, 'right');
         $pdf->text(self::LEFT, $y, 'Category', 8.5, true);
@@ -285,7 +286,7 @@ final class JourneyPdf
         // Baseline 1 against now, category by category.
         if (count($steps) > 1) {
             $y += 30;
-            $this->heading($y, 'Each category: Baseline 1 and now', 'Hollow: Baseline 1. Filled: Baseline '.$now['number'].', the newest.');
+            $this->heading($y, 'Each category: the baseline and now', 'Hollow: the baseline. Filled: the '.Baseline::name($now['number']).', the current score.');
             $y += 50;
             $trackLeft = self::LEFT + 170;
             $trackRight = self::LEFT + self::WIDTH - 80;
@@ -315,17 +316,17 @@ final class JourneyPdf
         $pdf = $this->pdf;
         $pdf->addPage();
         $wording = $this->journeys->wording($assessment);
-        $this->heading(64, 'What changed at each follow-up', 'Each answer changed since the baseline before, with the reason given, who changed it and how.');
+        $this->heading(64, 'What changed at each follow-up', 'Each answer changed since the score before, with the reason given, who changed it and how.');
         $this->y = 112;
 
         if (count($steps) === 1) {
-            $this->y = $pdf->paragraph(self::LEFT, $this->y, self::WIDTH, 'No follow-up is closed yet: Baseline 1 is the only baseline so far.', 9.5, false, self::MUTED);
+            $this->y = $pdf->paragraph(self::LEFT, $this->y, self::WIDTH, 'No follow-up is closed yet: the baseline is the only score so far.', 9.5, false, self::MUTED);
         }
         foreach (array_slice($steps, 1) as $index => $step) {
             $before = $steps[$index];
             $baseline = $step['baseline'];
             $this->room(40);
-            $pdf->text(self::LEFT, $this->y, 'Baseline '.$step['number'].' · after follow-up '.$baseline->follow_up_number, 11, true);
+            $pdf->text(self::LEFT, $this->y, Baseline::name($step['number']), 11, true);
             $this->y += 14;
             $this->y = $pdf->paragraph(self::LEFT, $this->y, self::WIDTH,
                 'Recorded '.$baseline->set_at->format('j M Y').($baseline->setter ? ' by '.$baseline->setter->name : '').' · '
@@ -352,7 +353,7 @@ final class JourneyPdf
         $gaps = $now['baseline']->evidence_gaps ?? [];
         $this->room(60);
         $this->y += 8;
-        $pdf->text(self::LEFT, $this->y, '“Yes” answers with no evidence yet · Baseline '.$now['number'], 11, true);
+        $pdf->text(self::LEFT, $this->y, '“Yes” answers with no evidence yet · '.Baseline::name($now['number']), 11, true);
         $this->y += 16;
         $text = $gaps === []
             ? 'Every “Yes” that evidence can prove has evidence counted.'
@@ -361,7 +362,7 @@ final class JourneyPdf
         $this->room(14 * count($pdf->wrap($text, self::WIDTH, 9)));
         $this->y = $pdf->paragraph(self::LEFT, $this->y, self::WIDTH, $text, 9);
 
-        $note = 'How the scores are worked out: each baseline is scored from its answers by the OHA form’s own formulas, exactly as the Excel form scores them. “Not Applicable” scores 0, with the category’s maximum unchanged. A baseline is never changed once recorded; when a follow-up is reopened, its baseline is set aside and kept.';
+        $note = 'How the scores are worked out: each score is worked out from its answers by the OHA form’s own formulas, exactly as the Excel form scores them. “Not Applicable” scores 0, with the category’s maximum unchanged. A score is never changed once recorded; when a follow-up is reopened, its score is set aside and kept.';
         $this->room(14 * count($pdf->wrap($note, self::WIDTH, 8.5)) + 20);
         $this->y += 18;
         $pdf->paragraph(self::LEFT, $this->y, self::WIDTH, $note, 8.5, false, self::MUTED);

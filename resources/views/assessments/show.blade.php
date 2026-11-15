@@ -15,9 +15,9 @@
                     <span class="text-on-surface-variant">{{ \App\Support\Viz::figure((float) $assessment->score->points_achieved) }} / {{ $assessment->score->points_available }}</span>
                 </span>
                 <x-status-pill :tone="Bands::tone($assessment->score->band->code)">{{ $assessment->score->band->label }}</x-status-pill>
-                {{-- Once closed, the score is the newest baseline's: its history is a click away for those who follow it up. --}}
+                {{-- Once closed, the score is the newest one (the baseline or a follow-up score): its history is a click away for those who follow it up. --}}
                 @if ($assessment->isClosed() && Gate::allows('viewFollowUp', $assessment))
-                    <a href="{{ route('baselines.show', $assessment) }}" class="text-[0.8125rem] font-semibold underline underline-offset-2">Baseline {{ $assessment->score->baseline }}</a>
+                    <a href="{{ route('baselines.show', $assessment) }}" class="text-[0.8125rem] font-semibold underline underline-offset-2">{{ \App\Models\Baseline::name($assessment->score->baseline) }}</a>
                 @endif
             @endif
             @if ($openGaps > 0 && Gate::allows('viewGaps', $assessment))
@@ -28,7 +28,7 @@
             @if ($assessment->workItem)
                 <x-due-note :days="$assessment->workItem->days_left" />
             @elseif ($assessment->closed_at)
-                <x-status-pill tone="good">Closed {{ $assessment->closed_at->asDay() }} · Baseline 1</x-status-pill>
+                <x-status-pill tone="good">Closed {{ $assessment->closed_at->asDay() }} · baseline set</x-status-pill>
             @endif
             @if ($tabs->contains('odp'))
                 <x-validation-chip :status="$artefacts['odp']->status" />
@@ -38,9 +38,9 @@
 
     {{-- Stage 1 done: whoever may close it, once the ODP is approved and nothing waits for approval. --}}
     @can('close', $assessment)
-        <x-action-banner id="close" title="The ODP is approved. Close the assessment to set Baseline 1 and start the follow-up.">
+        <x-action-banner id="close" title="The ODP is approved. Close the assessment to set the baseline and start the follow-up.">
             <x-confirm-form :action="route('assessments.close', $assessment)" class="flex flex-wrap items-end gap-sm"
-                            :confirm="'Close the '.$assessment->movement->name.' assessment? Its OHA form, report and ODP are frozen as approved, its scores become Baseline 1, and the follow-up begins. The Board Chairperson can still sign the ODP afterwards.'">
+                            :confirm="'Close the '.$assessment->movement->name.' assessment? Its OHA form, report and ODP are frozen as approved, its scores become the baseline, and the follow-up begins. The Board Chairperson can still sign the ODP afterwards.'">
                 <x-field label="Follow-up 1’s date (optional)" size="sm">
                     <input type="date" name="first_follow_up_on" @class(\App\Support\Ui::control(false, 'sm'))>
                 </x-field>

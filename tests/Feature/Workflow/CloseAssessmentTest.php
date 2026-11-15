@@ -161,11 +161,11 @@ it('closes from the assessment page, for those who may', function () {
     expect($assessment->refresh()->isClosed())->toBeFalse();
 
     $this->actingAs($this->j->assessor)->get($page)->assertOk()
-        ->assertSee('Close the assessment to set Baseline 1')->assertSee('Close the assessment');
+        ->assertSee('Close the assessment to set the baseline')->assertSee('Close the assessment');
     $this->actingAs($this->j->assessor)->post(route('assessments.close', $assessment))
         ->assertRedirect(route('follow-up.show', $assessment))->assertSessionHasNoErrors();
 
     expect($assessment->refresh()->isClosed())->toBeTrue();
     $this->actingAs($this->j->assessor)->get($page)->assertOk()
-        ->assertSee('Baseline 1')->assertSee('The assessment is closed, so this ODP is kept as approved.')->assertDontSee('Close the assessment to set Baseline 1');
+        ->assertSee('baseline set')->assertSee('The assessment is closed, so this ODP is kept as approved.')->assertDontSee('Close the assessment to set the baseline');
 });

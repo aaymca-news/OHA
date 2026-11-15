@@ -9,6 +9,7 @@ use App\Models\AssessmentMilestone;
 use App\Models\OdpTask;
 use App\Models\TimelineItem;
 use App\Oha\FollowUpSchedule;
+use App\Queries\OdpActivity;
 use App\Queries\OdpProgress;
 use App\Support\OdpTimeline;
 use Illuminate\Http\RedirectResponse;
@@ -105,6 +106,9 @@ class TimelineController extends Controller
             'state' => $state,
             'movement' => $movement,
             'canEdit' => $assessments->mapWithKeys(fn (Assessment $a) => [$a->id => Gate::forUser($request->user())->allows('editTimeline', $a)]),
+            // The newest ODP versions and whether Google Drive is read (moved here from the dashboard, 15 Nov 2026).
+            'odpChanges' => app(OdpActivity::class)->latest($request->user()),
+            'odpSync' => app(OdpActivity::class)->sync(),
         ]);
     }
 
