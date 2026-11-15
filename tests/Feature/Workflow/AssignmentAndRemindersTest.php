@@ -8,6 +8,7 @@ use App\Models\User;
 use App\Notifications\WorkflowNotice;
 use App\Support\SystemHealth;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Notification;
 use Tests\Support\Journey;
 
@@ -46,16 +47,13 @@ it('assigns only active AAYMCA staff', function () {
         ->toThrow(WorkflowRuleBroken::class, 'Only active AAYMCA staff');
 });
 
-it('flags a missing Administrator, Super Administrator or Board Chairperson', function () {
-    // Every movement but Zambia and Ghana still lacks a Chairperson in this walkthrough.
-    expect(SystemHealth::check()['movements_without_chair'])->not->toContain('Zambia YMCA')->toContain('Kenya YMCA');
-
+it('flags a missing Administrator, Super Administrator or National General Secretary', function () {
     $this->j->secondAdmin->update(['active' => false]);
     $this->j->superAdmin->update(['active' => false]);
     $health = SystemHealth::check();
 
     expect($health['severity'])->toBe('serious')
-        ->and(implode(' ', $health['problems']))->not->toContain('only one Administrator')->toContain('no Super Administrator')->toContain('have no Board Chairperson');
+        ->and(implode(' ', $health['problems']))->not->toContain('only one Administrator')->toContain('no Super Administrator')->toContain('have no National General Secretary');
 
     $this->j->admin->update(['active' => false]);
 
@@ -63,25 +61,25 @@ it('flags a missing Administrator, Super Administrator or Board Chairperson', fu
         ->and(implode(' ', SystemHealth::check()['problems']))->toContain('There is no Administrator. Nothing can be approved.');
 });
 
-it('reminds the Administrators, and nobody else', function () {
-    $this->artisan('oha:remind-missing-roles')->assertSuccessful();
-
-    foreach ([$this->j->admin, $this->j->secondAdmin, $this->j->superAdmin] as $user) {
-        Notification::assertSentTo($user, WorkflowNotice::class, fn ($n) => $n->subject === 'Reminder: roles still to be appointed');
-    }
-    foreach ([$this->j->assessor, $this->j->otherStaff, $this->j->chair] as $user) {
-        Notification::assertNotSentTo($user, WorkflowNotice::class);
-    }
-});
-
-it('sends no reminder once every role is held', function () {
-    foreach (Movement::query()->whereNotIn('slug', ['zambia', 'ghana'])->get() as $movement) {
-        User::factory()->chair($movement)->create();
-    }
+it('never flags a movement without a Board Chairperson, whose signature is optional (16 Nov 2026)', function () {
+    // Every movement but Zambia and Ghana lacks a Chairperson in this walkthrough; each gets its General Secretary.
     foreach (Movement::query()->get() as $movement) {
         User::factory()->generalSecretary($movement)->create();
     }
 
-    $this->artisan('oha:remind-missing-roles')->expectsOutputToContain('No reminder sent')->assertSuccessful();
+    expect(SystemHealth::check()['ok'])->toBeTrue()
+        ->and(SystemHealth::check())->not->toHaveKey('movements_without_chair');
+    $this->actingAs($this->j->admin)->get(route('dashboard'))->assertOk()
+        ->assertDontSee('Roles still to be appointed')->assertDontSee('Movements without a Board Chairperson');
+});
+
+it('sends no daily email about roles still to be appointed: the banner is enough', function () {
+    expect(Artisan::all())->not->toHaveKey('oha:remind-missing-roles');
+    $this->artisan('schedule:list')->doesntExpectOutputToContain('remind-missing-roles')->assertSuccessful();
+
+    // The banner still shows what is missing, without promising a daily reminder.
+    $this->actingAs($this->j->admin)->get(route('dashboard'))->assertOk()
+        ->assertSee('Roles still to be appointed')->assertSee('Movements without a National General Secretary')
+        ->assertDontSee('reminded daily')->assertDontSee('Movements without a Board Chairperson');
     Notification::assertNothingSent();
 });

@@ -158,19 +158,12 @@
                 @if (! $health['ok'] && \App\Support\SystemHealth::shouldWarn(auth()->user()))
                     <x-callout :tone="$health['severity'] === 'critical' ? 'critical' : 'serious'" icon="warning" title="Roles still to be appointed" alert>
                         <p>{{ implode(' ', $health['problems']) }}</p>
-                        @if ($health['movements_without_chair'] !== [])
-                            <details>
-                                <summary class="cursor-pointer underline">Movements without a Board Chairperson ({{ count($health['movements_without_chair']) }})</summary>
-                                <p class="mt-xs">{{ implode(', ', $health['movements_without_chair']) }}</p>
-                            </details>
-                        @endif
                         @if ($health['movements_without_gs'] !== [])
                             <details>
                                 <summary class="cursor-pointer underline">Movements without a National General Secretary ({{ count($health['movements_without_gs']) }})</summary>
                                 <p class="mt-xs">{{ implode(', ', $health['movements_without_gs']) }}</p>
                             </details>
                         @endif
-                        <p class="text-[0.8125rem]">You will be reminded daily until these are appointed.</p>
                         @can('manage', \App\Models\User::class)
                             <x-button :href="route('admin.users.index')" size="sm" class="self-start">Appoint in Users &amp; Roles</x-button>
                         @endcan

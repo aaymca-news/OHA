@@ -4,10 +4,8 @@ use App\Support\Google\GoogleDrive;
 use Illuminate\Support\Facades\Schedule;
 
 // Run by cron every minute on cPanel: `php artisan schedule:run`.
-
-// While there is no Super Administrator, only one Administrator, or a movement
-// without a Board Chairperson, remind the Administrators.
-Schedule::command('oha:remind-missing-roles')->dailyAt('08:00')->timezone('Africa/Nairobi')->withoutOverlapping();
+// No daily email about roles still to be appointed (stopped 16 Nov 2026): the
+// Administrators see them in the banner on every page (App\Support\SystemHealth).
 
 // Stage 2, ODP follow-up: the weekly digest to each General Secretary and assessor
 // (tasks due and overdue, waiting for confirmation, follow-up meetings), on Monday
