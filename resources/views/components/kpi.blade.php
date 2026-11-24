@@ -3,15 +3,16 @@
     the figure, and what it means beneath (the default slot). Optional slots: `badge` (top
     right, e.g. a status pill) and `visual` (to the left, e.g. a progress ring).
       tone  null, or critical (the figure in red: something is wrong)
+      info  null, or the figure's key in App\Support\Kpis: an ⓘ beside the label
 --}}
-@props(['label', 'value' => null, 'unit' => null, 'tone' => null])
+@props(['label', 'value' => null, 'unit' => null, 'tone' => null, 'info' => null])
 <x-panel {{ $attributes->class('!px-[20px] !py-[18px] flex gap-md') }}>
     @isset($visual)
         <div class="flex-none self-center">{{ $visual }}</div>
     @endisset
     <div class="flex-1 min-w-0 flex flex-col gap-[6px]">
         <div class="flex items-center justify-between gap-sm min-h-[1.5rem]">
-            <p class="text-[0.75rem] font-semibold uppercase tracking-[0.06em] text-on-surface-variant">{{ $label }}</p>
+            <p class="flex items-center gap-[6px] text-[0.75rem] font-semibold uppercase tracking-[0.06em] text-on-surface-variant">{{ $label }}@if ($info)<x-kpi-info :key="$info" />@endif</p>
             {{ $badge ?? '' }}
         </div>
         <p @class([

@@ -21,7 +21,6 @@ return [
         'timelines' => 'Timelines',
         'journeys' => 'Journeys',
         'users' => 'Users & Roles',
-        'our_movement' => 'Our Movement',
         'resources' => 'Resources',
         'notifications' => 'Notifications',
         'profile' => 'My profile',

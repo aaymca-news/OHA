@@ -116,5 +116,5 @@ it('shows the sidebar each role needs, and the warning to those who must act on 
         ->assertDontSee('Users &amp; Roles', escape: false)->assertDontSee('Roles still to be appointed');
     $this->actingAs($this->j->admin)->get(route('dashboard'))->assertSee('Users &amp; Roles', escape: false)->assertSee('Roles still to be appointed');
     $this->actingAs($this->j->superAdmin)->get(route('dashboard'))->assertSee('Roles still to be appointed');
-    $this->actingAs($this->j->chair)->get(route('dashboard'))->assertSee('Our Movement')->assertDontSee('National Movements')->assertDontSee('Movements assessed');
+    $this->actingAs($this->j->chair)->get(route('dashboard'))->assertDontSee('Our Movement')->assertDontSee('National Movements')->assertDontSee('Movements assessed');
 });

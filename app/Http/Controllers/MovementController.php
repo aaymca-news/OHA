@@ -5,18 +5,13 @@ namespace App\Http\Controllers;
 use App\Actions\Oha\AssignAssessors;
 use App\Enums\Stage;
 use App\Models\Assessment;
-use App\Models\AuditEvent;
 use App\Models\HealthBand;
 use App\Models\MembershipStatus;
 use App\Models\Movement;
 use App\Models\MovementStatus;
 use App\Models\Zone;
-use App\Oha\CategoryRows;
 use App\Queries\AllianceInsights;
-use App\Queries\Journeys;
-use App\Queries\MovementSnapshot;
-use App\Queries\OdpProgress;
-use App\Support\MovementCycle;
+use App\Queries\MovementPage;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
@@ -69,65 +64,15 @@ class MovementController extends Controller
         ]);
     }
 
-    public function show(Request $request, Movement $movement, Journeys $journeys): View
+    /**
+     * One movement's page: its dashboard for everyone who may see it, and for AAYMCA staff
+     * the Manage section beneath (see App\Queries\MovementPage).
+     */
+    public function show(Request $request, Movement $movement, MovementPage $page): View
     {
         Gate::authorize('view', $movement);
-        $user = $request->user();
 
-        $status = MovementStatus::query()->with('band')->findOrFail($movement->id);
-
-        // Every assignment change (and hand-back), newest first: who was assessing, and since when.
-        $assignmentHistory = $user->isSecretariat()
-            ? AuditEvent::query()->with('actor')->where('action', 'movement.assessors_changed')
-                ->where('subject_type', $movement->getMorphClass())->where('subject_id', $movement->id)
-                ->latest('id')->get()
-            : collect();
-        $assignedSince = [];
-        foreach ($assignmentHistory->reverse() as $event) {
-            foreach ($event->payload['added'] ?? [] as $id) {
-                $assignedSince[$id] = $event->occurred_at;
-            }
-        }
-        $snapshot = MovementSnapshot::of($status);
-        $underWay = $movement->assessmentUnderWay();
-        $lastDone = $movement->lastAssessmentDone();
-        // The assessment its cycle follows: the one under way, else the last one done.
-        $cycleOf = $underWay ?? $lastDone;
-
-        $assessments = $movement->assessments()->with(['score.band', 'artefacts.status', 'workItem'])->latest('assessed_on')->latest('id')->get()
-            ->filter(fn (Assessment $a) => Gate::forUser($user)->allows('view', $a));
-
-        return view('movements.show', [
-            'movement' => $movement->load('zone', 'membershipStatus'),
-            'status' => $status,
-            'latest' => $snapshot->latest,
-            'rows' => $snapshot->rows,
-            'assessments' => $assessments,
-            // Each scored assessment's category scores, oldest first (the last five), to compare.
-            'history' => $assessments->filter(fn (Assessment $a) => $a->score !== null)->take(5)->reverse()->values()
-                ->map(fn (Assessment $a) => ['assessment' => $a, 'rows' => collect(CategoryRows::for($a))->keyBy('code')]),
-            'assessors' => $user->isSecretariat() ? $movement->activeAssessors()->get() : collect(),
-            'chair' => $movement->chair()->first(),
-            'generalSecretary' => $movement->generalSecretary()->first(),
-            'evidenceCount' => $movement->evidence()->count(),
-            'profile' => $snapshot->profile,
-            'assignmentHistory' => $assignmentHistory,
-            'assignedSince' => $assignedSince,
-            'underWay' => $underWay,
-            // Stage 1 done (closed): its follow-ups are under way until the next assessment is due.
-            'lastDone' => $lastDone,
-            // Stage 2: how its ODP is being carried out, for those who follow it up.
-            'followUpProgress' => $lastDone !== null && Gate::forUser($user)->allows('viewFollowUp', $lastDone) ? OdpProgress::of($lastDone) : null,
-            // Its cycle's journey, baseline by baseline, for those who follow it up.
-            'journey' => $lastDone !== null && Gate::forUser($user)->allows('viewFollowUp', $lastDone) ? $journeys->of($lastDone) : [],
-            // In follow-up: closed, its cycle not closed yet (the next assessment waits for it).
-            'followingUp' => $lastDone !== null && ! $lastDone->isFollowUpClosed(),
-            'canOpen' => Gate::forUser($user)->allows('openAssessment', $movement),
-            'canAssign' => Gate::forUser($user)->allows('assignAssessors', $movement),
-            'stage' => Stage::of($cycleOf ?? $snapshot->latest),
-            'cycle' => $cycleOf !== null ? MovementCycle::steps($cycleOf, $status->next_assessment_on, $user->isSecretariat() ? 'its' : 'your') : null,
-            'cycleOf' => $cycleOf,
-        ]);
+        return view('movements.show', $page->for($request->user(), $movement));
     }
 
     /** The Administrators choose who assesses a movement, on the Assessments page. */

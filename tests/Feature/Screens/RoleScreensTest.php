@@ -11,6 +11,7 @@ use App\Support\SignedInDevices;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Notification;
 use Tests\Support\Journey;
+use Tests\Support\ValidHtml;
 
 /*
  * Each role's menu and dashboard: the Administrators hand out the work and manage
@@ -29,8 +30,8 @@ it('gives each role its own menu', function () {
     expect(($this->menu)($this->j->admin))->toBe(['Dashboard', 'My Work', 'National Movements', 'Assessments', 'Timelines', 'Journeys', 'Resources', 'Users & Roles'])
         ->and(($this->menu)($this->j->superAdmin))->toBe(['Dashboard', 'My Work', 'National Movements', 'Assessments', 'Timelines', 'Journeys', 'Resources', 'Users & Roles'])
         ->and(($this->menu)($this->j->assessor))->toBe(['Dashboard', 'My Work', 'National Movements', 'Timelines', 'Journeys', 'Resources'])
-        ->and(($this->menu)($this->j->chair))->toBe(['Dashboard', 'My Work', 'Our Movement', 'Resources'])
-        ->and(($this->menu)($this->ngs))->toBe(['Dashboard', 'Our Movement', 'Resources']);
+        ->and(($this->menu)($this->j->chair))->toBe(['Dashboard', 'My Work', 'Resources'])
+        ->and(($this->menu)($this->ngs))->toBe(['Dashboard', 'Resources']);
 
     // AAYMCA staff see the menu in captioned groups; a movement's own short menu has none.
     $this->actingAs($this->j->admin)->get(route('dashboard'))->assertOk()
@@ -128,14 +129,35 @@ it('shows AAYMCA the region, and the movement its own dashboard', function () {
 
     // Analytics only (decided 15 Nov 2026): the movement's scores and figures, never its work or tasks.
     $this->actingAs($this->j->chair)->get(route('dashboard'))->assertOk()
-        ->assertSee('Welcome back')->assertSee('Current score')->assertSee('Our areas')->assertSee('Against the region')
+        ->assertSee('Welcome back')->assertSee('Current score')->assertSee('Where the missing points are')->assertSee('Against the region')
         ->assertDontSee('Your assessment cycle')->assertDontSee('Your ODP')->assertDontSee('Blocked')
-        ->assertSee('Your contacts at AAYMCA')->assertSee('Tendai Moyo')->assertDontSee('By zone')
+        ->assertSee('Contacts at AAYMCA')->assertSee('Tendai Moyo')->assertDontSee('By zone')
         // Signing is optional: never a prompt on the dashboard (it is in My Work).
         ->assertDontSee('ready for your signature')->assertDontSee('Review and sign')->assertDontSee('in My Work');
 
     $this->actingAs($this->ngs)->get(route('dashboard'))->assertOk()
         ->assertSee('Welcome back')->assertDontSee('ready for your signature')->assertDontSee('Review and sign')->assertDontSee('Ghana YMCA');
+});
+
+it('shows one movement page: the same dashboard to its own users and AAYMCA staff, with Manage for staff only', function () {
+    $this->j->assessmentAt('odp_approved');
+
+    // Its own users: their dashboard is their movement's page, with each figure explained, and no Manage.
+    foreach ([$this->j->chair, $this->ngs] as $user) {
+        $dashboard = $this->actingAs($user)->get(route('dashboard'))->assertOk();
+        ValidHtml::assert($dashboard->getContent(), 'movement dashboard');
+        $dashboard->assertSee('Zambia YMCA')->assertSee('Current score')->assertSee('What is “Current score”?')
+            ->assertSee('How these figures are worked out')
+            ->assertDontSee('id="manage"', false)->assertDontSee('Start new assessment')->assertDontSee('AAYMCA only');
+        $this->actingAs($user)->get(route('movements.show', $this->j->zambia))->assertOk()
+            ->assertSee('Where the missing points are')->assertDontSee('id="manage"', false);
+    }
+
+    // AAYMCA staff: the same dashboard, then Manage at its foot.
+    $page = $this->actingAs($this->j->assessor)->get(route('movements.show', $this->j->zambia))->assertOk();
+    ValidHtml::assert($page->getContent(), 'movement page with Manage');
+    $page->assertSee('How these figures are worked out')
+        ->assertSeeInOrder(['Current score', 'Where the missing points are', 'id="manage"', 'Next assessment', 'Evidence library', 'Assessments'], false);
 });
 
 it('keeps the job title of a National Movement’s users as the Administrators set it', function () {

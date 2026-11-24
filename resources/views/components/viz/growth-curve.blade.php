@@ -7,8 +7,12 @@
     carries every value. A step not reached yet is named beneath, with nothing plotted.
       points  list of ['label' => 'Follow-up 1 score', 'pct' => float|null, 'note' => string], one per slot
       height  the plot's height in px
+      shaded  true: each band's span washed in its colour behind the line (23 Nov 2026)
+      region  null, or the regional average: a dotted line across, named
+      pace    null, or one value per slot (App\Support\Pace::of()['points']): the pace to the
+              next band, a red dashed line from the newest score to the cycle's end
 --}}
-@props(['points', 'height' => 200])
+@props(['points', 'height' => 200, 'shaded' => false, 'region' => null, 'pace' => null])
 @php
     // The bands' lower limits, read once per request (App\Support\Bands); the lowest starts at 0.
     $bands = collect(\App\Support\Bands::scale())->filter(fn ($b) => $b['from'] > 1)->map(fn ($b) => (object) ['label' => $b['label'], 'min_pct' => $b['from']]);
@@ -28,6 +32,13 @@
         </div>
 
         <div class="relative" style="height: {{ $height }}px">
+            @if ($shaded)
+                {{-- Each band's span, washed in its colour. --}}
+                @php($wash = ['critical' => 'bg-critical-wash', 'atrisk' => 'bg-serious-wash', 'developing' => 'bg-warning-wash', 'strong' => 'bg-good-wash', 'excellent' => 'bg-[#dcefe0]'])
+                @foreach (\App\Support\Bands::scale() as $b)
+                    <span class="absolute inset-x-0 {{ $wash[$b['code']] ?? '' }}" style="bottom: {{ $b['from'] }}%; height: {{ $b['to'] - $b['from'] }}%" aria-hidden="true"></span>
+                @endforeach
+            @endif
             {{-- Hairlines: 0, each band's lower limit, 100. --}}
             <span class="absolute inset-x-0 bottom-0 border-t border-[#d9d7d1]" aria-hidden="true"></span>
             <span class="absolute inset-x-0 top-0 border-t border-[#efede8]" aria-hidden="true"></span>
@@ -39,6 +50,25 @@
             @foreach ($points as $i => $point)
                 <span x-show="hover === {{ $i }}" x-cloak class="absolute inset-y-0 border-l border-[#b8b6af]" style="left: {{ $x($i) }}%" aria-hidden="true"></span>
             @endforeach
+
+            @if ($region !== null)
+                <span class="absolute inset-x-0 border-t-2 border-dotted border-on-surface/70" style="bottom: {{ (float) $region }}%" aria-hidden="true"></span>
+                {{-- Named midway between two slots, under the line, on a light backing: clear of the points and their labels. --}}
+                <span class="absolute -translate-x-1/2 translate-y-[calc(100%+2px)] rounded px-[4px] bg-surface-container-lowest/85 text-[0.75rem] text-on-surface whitespace-nowrap" style="left: {{ $slots > 2 ? ($x(1) + $x(2)) / 2 : 50 }}%; bottom: {{ (float) $region }}%" aria-hidden="true">Region {{ \App\Support\Viz::pct((float) $region) }}</span>
+            @endif
+
+            @if ($pace !== null)
+                {{-- The pace to the next band: from the newest score to the cycle's end. --}}
+                @php($paceLine = collect($pace)->map(fn ($p, $i) => $p === null ? null : round($x($i), 2).','.round(100 - (float) $p, 2))->filter()->join(' '))
+                <svg class="absolute inset-0 size-full overflow-visible" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
+                    <polyline points="{{ $paceLine }}" fill="none" stroke="#c8102e" stroke-width="2" stroke-dasharray="6 5" vector-effect="non-scaling-stroke" />
+                </svg>
+                @foreach ($pace as $i => $p)
+                    @continue($p === null || $points[$i]['pct'] !== null)
+                    <span class="absolute size-[10px] -translate-x-1/2 translate-y-1/2 rounded-full border-2 border-[#c8102e] bg-surface-container-lowest" style="left: {{ $x($i) }}%; bottom: {{ (float) $p }}%" aria-hidden="true"></span>
+                    <span class="absolute -translate-x-1/2 text-[0.75rem] font-semibold tabular-nums text-[#c8102e] whitespace-nowrap" style="left: {{ $x($i) }}%; bottom: calc({{ (float) $p }}% + 10px)" aria-hidden="true">{{ \App\Support\Viz::pct((float) $p) }}</span>
+                @endforeach
+            @endif
 
             @if ($reached->count() > 1)
                 <svg class="absolute inset-0 size-full overflow-visible" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
@@ -80,10 +110,11 @@
 
         {{-- The baselines, beneath. --}}
         <span aria-hidden="true"></span>
-        <div class="relative h-[2.5rem] text-[0.78125rem]" aria-hidden="true">
+        {{-- Short names ("Follow-up 1", not "Follow-up 1 score"), each kept within its own slot, so they never run into one another. --}}
+        <div class="relative h-[2.75rem] text-[0.78125rem] leading-tight" aria-hidden="true">
             @foreach ($points as $i => $point)
-                <span class="absolute top-xs -translate-x-1/2 flex flex-col items-center text-center whitespace-nowrap" style="left: {{ $x($i) }}%">
-                    <span @class(['font-semibold', 'text-on-surface-variant' => $point['pct'] === null])>{{ $point['label'] }}</span>
+                <span class="absolute top-xs -translate-x-1/2 flex flex-col items-center text-center" style="left: {{ $x($i) }}%; width: {{ $slots > 1 ? round(88 / ($slots - 1), 2) : 100 }}%">
+                    <span @class(['font-semibold', 'text-on-surface-variant' => $point['pct'] === null])>{{ \Illuminate\Support\Str::replaceLast(' score', '', $point['label']) }}</span>
                     @if ($point['pct'] === null)<span class="text-on-surface-variant">not yet</span>@endif
                 </span>
             @endforeach

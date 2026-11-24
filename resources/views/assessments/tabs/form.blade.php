@@ -43,7 +43,7 @@
 
 @if ($frozen && ($me->oversees() || $me->canAssess($assessment->movement)))
     <x-callout tone="good" icon="lock">
-        <p><span class="font-semibold">Frozen.</span> The Board Chairperson has signed the ODP, which rests on this form and the report, so none of them can be changed. Stage 2 follows the ODP’s implementation.</p>
+        <p><span class="font-semibold">Frozen.</span> The assessment is closed, so this form, the report and the ODP can no longer be changed. Stage 2 follows the ODP’s implementation.</p>
     </x-callout>
 @endif
 

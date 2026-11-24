@@ -25,7 +25,7 @@ final class Navigation
      * kept for oha.badge_cache_seconds (a minute) and worked out afresh as soon as anything
      * is recorded in the audit trail (every change of work is): see forget().
      *
-     * @return list<array{label: string, route: string, params: array<string, mixed>, icon: string, badge: int, tone: string, active: string, group: ?string}>
+     * @return list<array{label: string, route: string, params: array<string, mixed>, icon: string, badge: int, tone: string, active: string|list<string>, group: ?string}>
      */
     public function for(User $user): array
     {
@@ -35,7 +35,7 @@ final class Navigation
         }
 
         // "v2": entries cached before the sidebar held only plain values are never read back.
-        return Cache::remember('nav:v4:'.Cache::get('nav:version', 0).':'.$user->id, $seconds, fn () => $this->build($user));
+        return Cache::remember('nav:v5:'.Cache::get('nav:version', 0).':'.$user->id, $seconds, fn () => $this->build($user));
     }
 
     /** Every sidebar is worked out afresh on its next page: something changed. */
@@ -46,31 +46,30 @@ final class Navigation
     }
 
     /**
-     * @return list<array{label: string, route: string, params: array<string, mixed>, icon: string, badge: int, tone: string, active: string, group: ?string}>
+     * @return list<array{label: string, route: string, params: array<string, mixed>, icon: string, badge: int, tone: string, active: string|list<string>, group: ?string}>
      */
     private function build(User $user): array
     {
-        $item = fn (string $key, string $route, string $icon, int $badge = 0, string $tone = 'critical', array $params = [], ?string $active = null, ?string $group = null) => [
+        $item = fn (string $key, string $route, string $icon, int $badge = 0, string $tone = 'critical', array $params = [], string|array|null $active = null, ?string $group = null) => [
             'label' => __('oha.nav.'.$key), 'route' => $route, 'params' => $params, 'icon' => $icon,
             'badge' => $badge, 'tone' => $tone, 'active' => $active ?? $route.'*', 'group' => $group,
         ];
 
-        $items = [$item('dashboard', 'dashboard', 'dashboard')];
-
-        // A National Movement's own users. The Board Chairperson has the ODP to sign, in
+        // A National Movement's own users. Their dashboard is their movement's page (since
+        // 23 Nov 2026), so it stays lit there too. The Board Chairperson may sign the ODP, in
         // My Work; the National General Secretary has no work to act on. Both read their
         // movement's approved documents in Resources, where the NGS also adds evidence.
         if (! $user->isSecretariat()) {
+            $items = [$item('dashboard', 'dashboard', 'dashboard', active: ['dashboard', 'movements.*'])];
             if (self::hasMyWork($user)) {
                 $items[] = $item('my_work', 'my-work', 'inbox', $this->myWork->actionableCount($user));
             }
-            // Plain values only (its slug, not the model): the sidebar is cached, and a model
-            // read back from the cache cannot be rebuilt (it came back incomplete: a 500).
-            $items[] = $item('our_movement', 'movements.show', 'flag', params: ['movement' => $user->movement?->getRouteKey()], active: 'movements.*');
             $items[] = $item('resources', 'resources', 'folder_open');
 
             return $items;
         }
+
+        $items = [$item('dashboard', 'dashboard', 'dashboard')];
 
         // AAYMCA: staff see their own work; the Administrators also hand out the
         // assessments (Assessments) and manage the users (Users & Roles).

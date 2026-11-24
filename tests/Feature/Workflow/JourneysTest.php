@@ -6,6 +6,7 @@ use App\Models\User;
 use App\Oha\Rescoring;
 use App\Oha\ScoreGaps;
 use App\Queries\Journeys;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Notification;
 use Tests\Support\Journey;
 
@@ -45,6 +46,15 @@ it('follows the cycle baseline by baseline, as recorded', function () {
     expect($alliance['summary'])->toMatchArray(['movements' => 1, 'followed' => 1, 'improved' => 1])
         ->and($alliance['rows'][0]['change'])->toBe(round($steps[1]['pct'] - $steps[0]['pct'], 1))
         ->and($alliance['curve'][1])->toMatchArray(['number' => 2, 'n' => 1]);
+
+    // The analytics layer (23 Nov 2026) reads the same scores: one row per baseline, the
+    // newest marked current, its change since Baseline 1, and one row per area each.
+    $rows = DB::table('v_analytics_scores')->where('assessment_id', $this->assessment->id)->orderBy('number')->get();
+    expect($rows->pluck('number')->all())->toBe([1, 2])
+        ->and((float) $rows[1]->pct)->toBe($steps[1]['pct'])
+        ->and((float) $rows[1]->change_since_baseline)->toBe(round($steps[1]['pct'] - $steps[0]['pct'], 1))
+        ->and($rows->pluck('is_current')->all())->toBe([false, true])
+        ->and(DB::table('v_analytics_area_scores')->where('baseline_id', $rows[1]->baseline_id)->sum('points'))->toEqual($first->points_achieved + 1);
 });
 
 it('shows the journey to those who follow the cycle up, and the Alliance’s to AAYMCA staff', function () {
@@ -54,9 +64,9 @@ it('shows the journey to those who follow the cycle up, and the Alliance’s to 
     $this->actingAs($this->j->chair)->get($movement)->assertOk()->assertDontSee('cycle’s journey', false);
 
     $this->actingAs($this->j->otherStaff)->get(route('journeys.index'))->assertOk()->assertSee('Zambia YMCA')->assertSee('Moved up a band');
-    $this->actingAs($this->j->admin)->get(route('dashboard'))->assertOk()->assertSee('Growth over the cycle')->assertSee('Biggest gains');
+    $this->actingAs($this->j->admin)->get(route('dashboard'))->assertOk()->assertSee('From baseline to now')->assertSee('Band movement');
     foreach ([$this->ngs, $this->j->chair] as $user) {
-        $this->actingAs($user)->get(route('dashboard'))->assertOk()->assertSee('Our score over the cycle')->assertSee('Follow-up 1 score')->assertSee('points since baseline');
+        $this->actingAs($user)->get(route('dashboard'))->assertOk()->assertSee('Score over the cycle')->assertSee('Follow-up 1 score')->assertSee('points since baseline');
     }
     $this->actingAs($this->ngs)->get(route('journeys.index'))->assertForbidden();
     $this->actingAs($this->j->chair)->get(route('journeys.index'))->assertForbidden();

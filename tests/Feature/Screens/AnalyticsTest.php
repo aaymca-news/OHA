@@ -32,7 +32,7 @@ it('fills the dashboard from the approved forms', function () {
     ValidHtml::assert($response->getContent(), 'dashboard with analytics');
 
     $response->assertSee('Who needs support')->assertSee('Every movement, every area')->assertSee('Zambia')
-        ->assertSee('Most often missed')->assertSee('Areas, weakest first')
+        ->assertSee('Most often missed')->assertSee('The region’s health shape')->assertSee('Every movement’s shape')->assertSee('Red flags')
         ->assertSee('Where the money comes from')->assertSee('Paid services')
         ->assertSee('Financial resilience')->assertSee('23%')
         ->assertSee('Operating margin')->assertSee('+15.2%')

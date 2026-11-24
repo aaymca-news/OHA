@@ -6,6 +6,7 @@ use App\Http\Controllers\ArtefactController;
 use App\Http\Controllers\AssessmentController;
 use App\Http\Controllers\BaselineController;
 use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\DashboardReportController;
 use App\Http\Controllers\DemoAccountController;
 use App\Http\Controllers\DemoShowcaseController;
 use App\Http\Controllers\DemoSignInController;
@@ -81,6 +82,9 @@ Route::middleware('auth')->group(function () {
     Route::get('people/{user}/photo', [ProfileController::class, 'photo'])->name('avatars.show');
 
     Route::get('dashboard', DashboardController::class)->name('dashboard');
+    // The dashboards to download, as a PDF or an Excel workbook (23 Nov 2026).
+    Route::get('dashboard/report.{format}', [DashboardReportController::class, 'region'])->whereIn('format', ['pdf', 'xlsx'])->middleware('throttle:30,1')->name('dashboard.report');
+    Route::get('movements/{movement}/report.{format}', [DashboardReportController::class, 'movement'])->whereIn('format', ['pdf', 'xlsx'])->middleware('throttle:30,1')->name('movements.report');
     // Each movement's latest cycle, from Baseline 1 to its newest baseline (AAYMCA staff).
     Route::get('journeys', JourneyController::class)->name('journeys.index');
     Route::get('my-work', MyWorkController::class)->name('my-work');

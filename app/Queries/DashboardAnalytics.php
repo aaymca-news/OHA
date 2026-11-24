@@ -17,8 +17,11 @@ use App\Oha\FormDefinition;
 use App\Oha\Profile;
 use App\Oha\ScoreGaps;
 use App\Support\Bands;
+use App\Support\Pace;
+use App\Support\RedFlags;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 
 /**
  * The figures behind the two dashboards (decided 15 Nov 2026: analytics for decisions,
@@ -34,6 +37,15 @@ use Illuminate\Support\Facades\DB;
  */
 final class DashboardAnalytics
 {
+    /** Who needs support: the groups a movement falls in (matrix points' `group`), in the key's order. */
+    public const SUPPORT_GROUPS = [
+        0 => 'Needs support',
+        1 => 'Improving, not yet strong',
+        2 => 'Strong, not improving',
+        3 => 'Strong and improving',
+        4 => 'No follow-up yet',
+    ];
+
     public function __construct(private readonly AllianceInsights $insights) {}
 
     /**
@@ -52,6 +64,9 @@ final class DashboardAnalytics
         $movements = $rated->map(function (array $r) use ($journeys, $heat) {
             $journey = $journeys[$r['movement']->id] ?? null;
             $followed = $journey !== null && count($journey['steps']) > 1;
+            $cells = collect($heat['rows'])->firstWhere('movement.id', $r['movement']->id)['cells'] ?? [];
+            $scored = array_filter($cells, fn (?float $v) => $v !== null);
+            $weakestCode = $scored === [] ? null : array_search(min($scored), $scored, true);
 
             return [
                 'movement' => $r['movement'],
@@ -60,7 +75,9 @@ final class DashboardAnalytics
                 'journey' => $journey,
                 'followed' => $followed,
                 'change' => $followed ? $journey['change'] : null,
-                'areas' => collect($heat['rows'])->firstWhere('movement.id', $r['movement']->id)['cells'] ?? [],
+                'areas' => $cells,
+                // Its weakest area now, for the pop-up on "Who needs support".
+                'weakest' => $weakestCode === null || $weakestCode === false ? null : ['code' => (string) $weakestCode, 'pct' => (float) $scored[$weakestCode]],
                 'profile' => $r['profile'],
                 'answers' => $r['answers'],
             ];
@@ -70,12 +87,11 @@ final class DashboardAnalytics
 
         return [
             'figures' => $this->figures($movements->all(), $followed->all(), $withBaseline->all(), $zone, $order),
-            'matrix' => $this->matrix($movements->all()),
+            'matrix' => $this->matrix($movements->all(), $heat['categories']),
             'bands' => $this->bandsThenNow($withBaseline->all()),
-            'growth' => [
-                'lines' => $followed->map(fn (array $m) => ['movement' => $m['movement'], 'steps' => $m['journey']['steps']])->all(),
-                'slots' => Journeys::slots(),
-            ],
+            'flows' => $this->flows($withBaseline->all()),
+            'shape' => $this->shape($movements->all(), $heat['categories']),
+            'flags' => $this->flags($movements->all()),
             'gains' => $followed->sortByDesc('change')->values()->all(),
             'categories' => $heat['categories'],
             'heatmap' => $movements->sortByDesc('pct')->map(fn (array $m) => [
@@ -87,10 +103,6 @@ final class DashboardAnalytics
                     ? round($now - $m['journey']['first_areas'][$code], 1) : null)->all() : [],
             ])->values()->all(),
             'missed' => $this->mostMissed($movements->all()),
-            'areas' => $heat['categories']->map(fn (Category $c) => [
-                'category' => $c,
-                'pct' => ($values = $movements->pluck('areas.'.$c->code)->filter(fn ($v) => $v !== null))->isEmpty() ? null : round($values->avg(), 1),
-            ])->filter(fn (array $a) => $a['pct'] !== null)->sortBy('pct')->values()->all(),
             'money' => $movements->map(fn (array $m) => [
                 'movement' => $m['movement'],
                 'international' => $m['profile']['international_pct'] ?? null,
@@ -140,6 +152,7 @@ final class DashboardAnalytics
         $heat = $this->insights->heatmap();
         $regionAreas = $heat['categories']->mapWithKeys(fn (Category $c) => [$c->code => ($v = collect($heat['rows'])->pluck('cells.'.$c->code)->filter(fn ($x) => $x !== null))->isEmpty() ? null : round($v->avg(), 1)]);
         $shortNames = $heat['categories']->pluck('short_name', 'code');
+        $icons = $heat['categories']->pluck('icon', 'code');
 
         $areas = collect(CategoryRows::for($assessment))->filter(fn (array $r) => $r['max'] !== null)->map(fn (array $r) => $r + [
             'short' => $shortNames[$r['code']] ?? $r['name'],
@@ -162,6 +175,10 @@ final class DashboardAnalytics
             'journey' => $journey,
             'followed' => $journey !== null && count($journey['steps']) > 1,
             'curve' => Journeys::curve($steps),
+            // To the next band up by the end of the cycle (decided 23 Nov 2026).
+            'pace' => $journey !== null ? Pace::of($journey['steps'], Journeys::slots()) : null,
+            // The health shape: every scored area in form order, with its icon.
+            'shape' => $areas->map(fn (array $a) => $a + ['icon' => (string) ($icons[$a['code']] ?? 'circle')])->values()->all(),
             'region' => [
                 'mean' => round($rated->avg(fn ($r) => (float) $r['status']->pct), 1),
                 'movements' => $rated->count(),
@@ -178,6 +195,9 @@ final class DashboardAnalytics
                 'margin' => $profile['finance']['margin_pct'] ?? null,
                 'reserve_months' => $profile['finance']['reserve_months'] ?? null,
                 'limit' => FormDefinition::INTERNATIONAL_LIMIT,
+                // Where the money comes from: ours, and the region's average mix.
+                'mix' => $profile['income_mix'] ?? null,
+                'region_mix' => $this->insights->averageMix('income_mix'),
                 'region' => [
                     'international' => $this->median($all->pluck('international_pct')),
                     'restricted' => $this->median($all->pluck('restricted_pct')),
@@ -202,6 +222,17 @@ final class DashboardAnalytics
                     'policies' => round($all->avg(fn ($p) => count(array_filter($p['policies'] ?? []))), 1),
                 ],
             ],
+            // The 19 policies, in the form's order: ours (true, false, or null when not answered) beside the region's adoption.
+            'policies' => (function () use ($profile) {
+                $region = collect($this->insights->adoption('policies', Profile::POLICIES))->keyBy('code');
+
+                return collect(Profile::POLICIES)->map(fn (string $label, string $code) => [
+                    'code' => $code,
+                    'label' => $label,
+                    'ours' => $profile['policies'][$code] ?? null,
+                    'region' => $region[$code]['answered'] > 0 ? $region[$code]['pct'] : null,
+                ])->values()->all();
+            })(),
         ];
     }
 
@@ -219,9 +250,10 @@ final class DashboardAnalytics
             ->with(['baselines' => fn ($q) => $q->whereNull('superseded_at')->with('total.band')])
             ->get()->filter(fn (Assessment $a) => $a->baselines->isNotEmpty());
 
-        $firstAreas = DB::table('baseline_scores as bs')->join('categories as c', 'c.id', '=', 'bs.category_id')
-            ->whereIn('bs.baseline_id', $assessments->map(fn (Assessment $a) => $a->baselines->first()->id))
-            ->get(['bs.baseline_id', 'c.code', 'bs.points', 'bs.max_points_at_scoring'])->groupBy('baseline_id');
+        // Each area at the baseline, from the analytics layer (v_analytics_area_scores).
+        $firstAreas = DB::table('v_analytics_area_scores')
+            ->whereIn('baseline_id', $assessments->map(fn (Assessment $a) => $a->baselines->first()->id))
+            ->get(['baseline_id', 'category_code', 'pct'])->groupBy('baseline_id');
 
         $journeys = [];
         foreach ($assessments as $assessment) {
@@ -235,7 +267,7 @@ final class DashboardAnalytics
                 'change' => round((float) $last->total?->pct - (float) $first->total?->pct, 1),
                 'first_band' => $first->total?->band,
                 'band' => $last->total?->band,
-                'first_areas' => collect($firstAreas[$first->id] ?? [])->mapWithKeys(fn ($s) => [$s->code => round((float) $s->points * 100 / max(1, (int) $s->max_points_at_scoring), 1)])->all(),
+                'first_areas' => collect($firstAreas[$first->id] ?? [])->mapWithKeys(fn ($s) => [(string) $s->category_code => (float) $s->pct])->all(),
                 'finished' => $assessment->follow_up_closed_at !== null,
                 'tasks_done' => $last->tasks_done,
                 'tasks_total' => $last->tasks_total,
@@ -286,10 +318,16 @@ final class DashboardAnalytics
      * Who needs support: each movement by its current score (across) and its change since
      * the baseline (up), split at the start of the Strong band and at no change.
      *
+     * Rebuilt 23 Nov 2026: each point carries what its pop-up shows (zone, band, its scores
+     * over the cycle, its weakest area), and its group, so the key is grouped as the chart is.
+     * A movement not followed up yet has no change: it goes in the lane beneath, not on the
+     * no-change line.
+     *
      * @param  list<array<string, mixed>>  $movements
-     * @return array{points: list<array<string, mixed>>, x: array{from: float, split: float, split_at: float}, y: array{from: float, to: float, zero_at: float}}
+     * @param  Collection<int, Category>  $categories
+     * @return array{points: list<array<string, mixed>>, x: array{from: float, split: float, split_at: float, ticks: list<int>}, y: array{from: float, to: float, zero_at: float, ticks: list<int>}}
      */
-    private function matrix(array $movements): array
+    private function matrix(array $movements, Collection $categories): array
     {
         $movements = collect($movements);
         $split = (float) Bands::from('strong');
@@ -297,18 +335,115 @@ final class DashboardAnalytics
         $xFrom = (float) min($split - 20, floor(($movements->min('pct') ?? $split) / 10) * 10);
         $yTo = (float) max(10, ceil(($changes->max() ?? 0) / 5) * 5 + 5);
         $yFrom = (float) min(-5, floor(($changes->min() ?? 0) / 5) * 5 - 5);
+        $shortNames = $categories->pluck('short_name', 'code');
+        $step = $yTo - $yFrom > 30 ? 10 : 5;
 
-        return [
-            'points' => $movements->map(fn (array $m) => [
+        $points = $movements->sortByDesc('pct')->values()->map(function (array $m, int $i) use ($xFrom, $yTo, $yFrom, $split, $shortNames) {
+            $weakest = $m['weakest'];
+
+            return [
                 'movement' => $m['movement'],
+                'n' => $i + 1,
                 'pct' => $m['pct'],
                 'change' => $m['change'],
+                'band' => $m['band'],
+                'steps' => $m['journey']['steps'] ?? [$m['pct']],
+                'baseline' => $m['journey']['first'] ?? null,
+                'weakest' => $weakest === null ? null : ['name' => (string) ($shortNames[$weakest['code']] ?? $weakest['code']), 'pct' => $weakest['pct']],
+                // 0 needs support, 1 improving (not yet strong), 2 strong (not improving), 3 strong and improving, 4 no follow-up yet.
+                'group' => $m['change'] === null ? 4 : ($m['pct'] >= $split ? ($m['change'] > 0 ? 3 : 2) : ($m['change'] > 0 ? 1 : 0)),
                 'left' => round((max($xFrom, $m['pct']) - $xFrom) / (100 - $xFrom) * 100, 2),
-                'top' => round(($yTo - ($m['change'] ?? 0)) / ($yTo - $yFrom) * 100, 2),
-            ])->values()->all(),
-            'x' => ['from' => $xFrom, 'split' => $split, 'split_at' => round(($split - $xFrom) / (100 - $xFrom) * 100, 2)],
-            'y' => ['from' => $yFrom, 'to' => $yTo, 'zero_at' => round($yTo / ($yTo - $yFrom) * 100, 2)],
+                'top' => $m['change'] === null ? null : round(($yTo - $m['change']) / ($yTo - $yFrom) * 100, 2),
+            ];
+        });
+
+        // Dots that would sit on one another move up (or, in the lane, along) until clear.
+        $placed = [];
+        $points = $points->map(function (array $p) use (&$placed) {
+            for ($tries = 0; $tries < 6; $tries++) {
+                $clash = array_any($placed, fn (array $q): bool => $q['lane'] === ($p['top'] === null)
+                    && abs($q['left'] - $p['left']) < 2.6 && ($p['top'] === null || abs($q['top'] - $p['top']) < 5.5));
+                if (! $clash) {
+                    break;
+                }
+                $p['top'] === null ? $p['left'] = min(98, $p['left'] + 2.8) : $p['top'] = max(1, $p['top'] - 6);
+            }
+            $placed[] = ['left' => $p['left'], 'top' => $p['top'], 'lane' => $p['top'] === null];
+
+            return $p;
+        });
+
+        $yTicks = [];
+        for ($t = (int) (ceil($yFrom / $step) * $step); $t <= $yTo; $t += $step) {
+            $yTicks[] = $t;
+        }
+
+        return [
+            'points' => $points->all(),
+            'x' => ['from' => $xFrom, 'split' => $split, 'split_at' => round(($split - $xFrom) / (100 - $xFrom) * 100, 2), 'ticks' => range((int) $xFrom, 100, 10)],
+            'y' => ['from' => $yFrom, 'to' => $yTo, 'zero_at' => round($yTo / ($yTo - $yFrom) * 100, 2), 'ticks' => $yTicks],
         ];
+    }
+
+    /**
+     * How the movements with a baseline moved between bands, from the baseline to now: one
+     * entry per pair of bands with movements in it (best bands first).
+     *
+     * @param  list<array<string, mixed>>  $withBaseline
+     * @return list<array{from: string, to: string, count: int}>
+     */
+    private function flows(array $withBaseline): array
+    {
+        return collect($withBaseline)
+            ->groupBy(fn (array $m): string => ($m['journey']['first_band']->code ?? 'notstarted').'>'.($m['band']->code ?? 'notstarted'))
+            ->map(fn (Collection $group, string $key) => ['from' => Str::before($key, '>'), 'to' => Str::after($key, '>'), 'count' => $group->count()])
+            ->values()->all();
+    }
+
+    /**
+     * The region's health shape: each scored area's median at the baseline and now, now by
+     * zone, and each movement's own, for comparing (decided 23 Nov 2026). Medians, so one
+     * movement does not pull the shape.
+     *
+     * @param  list<array<string, mixed>>  $movements
+     * @param  Collection<int, Category>  $categories
+     * @return array{areas: list<array{code: string, short: string, name: string, icon: string}>, baseline: list<float|null>, now: list<float|null>, zones: list<array{name: string, values: list<float|null>}>, movements: list<array{id: int, name: string, values: list<float|null>}>}
+     */
+    private function shape(array $movements, Collection $categories): array
+    {
+        $movements = collect($movements);
+        $codes = $categories->pluck('code')->all();
+        $medians = fn (Collection $rows, string $key) => array_map(fn (string $code) => $this->median($rows->pluck($key.'.'.$code)), $codes);
+        $withBaseline = $movements->filter(fn (array $m) => $m['journey'] !== null);
+
+        return [
+            'areas' => $categories->map(fn (Category $c) => ['code' => (string) $c->code, 'short' => (string) $c->short_name, 'name' => (string) $c->name, 'icon' => (string) $c->icon])->values()->all(),
+            'baseline' => $medians($withBaseline->map(fn (array $m) => ['first' => $m['journey']['first_areas']]), 'first'),
+            'now' => $medians($movements, 'areas'),
+            'zones' => $movements->groupBy(fn (array $m): string => (string) $m['movement']->zone->name)->sortKeys()
+                ->map(fn (Collection $rows, string $zone) => ['name' => $zone, 'values' => $medians($rows, 'areas')])->values()->all(),
+            'movements' => $movements->sortByDesc('pct')->map(fn (array $m) => [
+                'id' => (int) $m['movement']->id,
+                'name' => str_replace(' YMCA', '', (string) $m['movement']->name),
+                'values' => array_map(fn (string $code) => $m['areas'][$code] ?? null, $codes),
+            ])->values()->all(),
+        ];
+    }
+
+    /**
+     * Each movement's red flags (App\Support\RedFlags), most flags first.
+     *
+     * @param  list<array<string, mixed>>  $movements
+     * @return list<array{movement: Movement, checks: array<string, bool|null>, count: int}>
+     */
+    private function flags(array $movements): array
+    {
+        return collect($movements)->map(function (array $m) {
+            $provable = count(array_filter(array_keys(EvidenceQuestions::LABELS), fn (string $code) => Answer::isYes($m['answers'][$code] ?? null)));
+            $checks = RedFlags::of($m['journey']['steps'] ?? [], $m['profile'] ?? [], $provable, $m['journey']['evidence_gaps'] ?? null);
+
+            return ['movement' => $m['movement'], 'checks' => $checks, 'count' => count(array_filter($checks, fn (?bool $c) => $c === true))];
+        })->sortBy([['count', 'desc'], fn (array $a, array $b) => strcmp($a['movement']->name, $b['movement']->name)])->values()->all();
     }
 
     /**
