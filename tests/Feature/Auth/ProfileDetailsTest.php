@@ -24,7 +24,7 @@ it('shows the photo, the details to edit, and what the Administrators set, from 
 
     $this->actingAs($this->user)->get(route('profile.show'))->assertOk()
         ->assertSee('Profile photo')->assertSee('Your details')
-        ->assertSee('tendai@africaymca.org')->assertSee('AAYMCA Staff')->assertSee('Zambia YMCA')
+        ->assertSee('tendai@africaymca.org')->assertSee('Assessment Officer')->assertSee('Zambia YMCA')
         ->assertDontSee('Change password');
 
     // Security keeps the password and sign-ins, without the photo.

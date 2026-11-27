@@ -120,6 +120,27 @@ final class Viz
         return $achieved === null ? '—' : self::figure($achieved).$separator.self::figure($available);
     }
 
+    /**
+     * Names as people list them: "Comms", "Comms and Financial", "Comms, Financial and Staff".
+     *
+     * @param  list<string>  $names
+     */
+    public static function names(array $names): string
+    {
+        return count($names) < 2 ? (string) ($names[0] ?? '') : implode(', ', array_slice($names, 0, -1)).' and '.end($names);
+    }
+
+    /**
+     * The tile's figure for one or more areas tied at the top or bottom: the name, the two
+     * names, or "3 areas" (the note beneath then names every one).
+     *
+     * @param  list<string>  $names
+     */
+    public static function tiedFigure(array $names): string
+    {
+        return count($names) <= 2 ? self::names($names) : count($names).' areas';
+    }
+
     /** A percentage to one decimal place: "69.0%". */
     public static function pct(int|float|null $value, int $decimals = 1): string
     {

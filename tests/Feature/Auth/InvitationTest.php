@@ -124,7 +124,7 @@ it('lets only the Super Administrator invite an Administrator', function () {
 
     $this->actingAs($admin)->from(route('admin.users.create'))->post(route('admin.users.store'), [
         'name' => 'Aminata Diallo', 'email' => 'aminata@aaymca.test', 'role' => 'admin',
-    ])->assertSessionHasErrors(['action' => 'Only the Super Administrator gives the Administrator roles.']);
+    ])->assertSessionHasErrors(['action' => 'Only the Super Administrator gives the Technical Administrator and Super Administrator roles.']);
     expect(User::query()->where('email', 'aminata@aaymca.test')->exists())->toBeFalse();
 
     inviteThroughScreen($this->admin, ['role' => 'admin']);

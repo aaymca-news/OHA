@@ -14,7 +14,9 @@
 @php
     $plot = 420;
     $laneTop = $plot + 16;
-    $height = $laneTop + 56;
+    $height = $laneTop + 72;
+    // A dot in the lane: its row (two rows, so close dots never sit on one another).
+    $laneY = fn (array $p) => $laneTop + 18 + 28 * ($p['lane_row'] ?? 0);
     $points = collect($matrix['points']);
     $split = $matrix['x']['split_at'];
     $zero = $matrix['y']['zero_at'];
@@ -27,7 +29,8 @@
         3 => ['Strong and improving', 'text-good-ink'],
         4 => ['No follow-up yet', 'text-on-surface-variant'],
     ];
-    $quad = 'absolute text-[0.6875rem] font-semibold uppercase tracking-[0.06em] pointer-events-none';
+    // On a phone the corner labels give way (the key beneath names every group).
+    $quad = 'absolute hidden sm:block text-[0.6875rem] font-semibold uppercase tracking-[0.06em] pointer-events-none';
     $short = fn ($m) => str_replace(' YMCA', '', $m->name);
     // The card's small line of the scores over the cycle: 232 × 44, the bands from 40% up.
     $spark = function (array $steps) {
@@ -58,7 +61,7 @@
                 @endforeach
                 @foreach ($matrix['x']['ticks'] as $p)
                     <span @class(['absolute top-0 border-l', 'border-outline border-dashed' => $p == $matrix['x']['split'], 'border-[#1c1b1f]/[0.06]' => $p != $matrix['x']['split']]) style="left: {{ $xAt($p) }}%; height: {{ $plot }}px" aria-hidden="true"></span>
-                    <span @class(['absolute -translate-x-1/2 text-[0.75rem] text-on-surface-variant tabular-nums whitespace-nowrap', 'font-semibold text-on-surface' => $p == $matrix['x']['split']]) style="left: {{ $xAt($p) }}%; top: {{ $height + 6 }}px" aria-hidden="true">{{ $p }}%{{ $p == $matrix['x']['split'] ? ' · Strong' : '' }}</span>
+                    <span @class(['absolute -translate-x-1/2 text-[0.75rem] text-on-surface-variant tabular-nums whitespace-nowrap', 'font-semibold text-on-surface' => $p == $matrix['x']['split'], 'max-sm:hidden' => ! in_array($p, [$matrix['x']['from'], $matrix['x']['split'], 100])]) style="left: {{ $xAt($p) }}%; top: {{ $height + 6 }}px" aria-hidden="true">{{ $p }}%{{ $p == $matrix['x']['split'] ? ' · Strong' : '' }}</span>
                 @endforeach
 
                 <span class="{{ $quad }} left-sm top-sm text-info-ink" aria-hidden="true">Improving, not yet strong</span>
@@ -67,12 +70,12 @@
                 <span class="{{ $quad }} right-sm text-[#4a4950] text-right" style="top: {{ $plot - 24 }}px" aria-hidden="true">Strong, not improving</span>
 
                 {{-- The lane for those not followed up yet --}}
-                <span class="absolute inset-x-0 rounded-xl border border-dashed border-[#dcd8d0] bg-[#faf9f6]" style="top: {{ $laneTop }}px; height: 48px" aria-hidden="true"></span>
-                <span class="{{ $quad }} right-sm text-on-surface-variant" style="top: {{ $laneTop + 16 }}px" aria-hidden="true">No follow-up yet</span>
+                <span class="absolute inset-x-0 rounded-xl border border-dashed border-[#dcd8d0] bg-[#faf9f6]" style="top: {{ $laneTop }}px; height: 64px" aria-hidden="true"></span>
+                <span class="{{ $quad }} right-sm text-on-surface-variant" style="top: {{ $laneTop + 24 }}px" aria-hidden="true">No follow-up yet</span>
 
                 {{-- The movements --}}
                 @foreach ($points as $p)
-                    @php($top = $p['top'] === null ? $laneTop + 24 : round($p['top'] / 100 * $plot, 1))
+                    @php($top = $p['top'] === null ? $laneY($p) : round($p['top'] / 100 * $plot, 1))
                     <button type="button"
                             @class(['absolute -translate-x-1/2 -translate-y-1/2 size-[28px] rounded-full border-2 border-on-surface grid place-items-center text-[0.75rem] font-bold tabular-nums transition-transform focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-info-ink',
                                 'bg-on-surface text-white' => $p['change'] !== null, 'bg-surface-container-lowest text-on-surface' => $p['change'] === null])
@@ -86,7 +89,7 @@
 
                 {{-- Each movement's card --}}
                 @foreach ($points as $p)
-                    @php($top = $p['top'] === null ? $laneTop + 24 : round($p['top'] / 100 * $plot, 1))
+                    @php($top = $p['top'] === null ? $laneY($p) : round($p['top'] / 100 * $plot, 1))
                     @php($line = $spark($p['steps']))
                     <div x-show="(pinned ?? hover) === {{ $p['n'] }}" x-cloak x-transition.opacity role="dialog" aria-label="{{ $p['movement']->name }}"
                          class="absolute z-20 w-[16.5rem] max-w-[calc(100%-1rem)] flex flex-col gap-sm rounded-xl border border-[#e7e5e0] bg-surface-container-lowest px-[16px] py-[14px] shadow-[0_12px_32px_rgba(20,20,20,0.16)]"
@@ -117,7 +120,7 @@
                             <p class="text-[0.8125rem] text-on-surface-variant">No follow-up score yet: the baseline is its only score.</p>
                         @endif
                         @if ($p['weakest'])
-                            <p class="text-[0.8125rem] text-on-surface-variant">Weakest area: <span class="font-semibold text-on-surface">{{ $p['weakest']['name'] }} {{ Viz::pct($p['weakest']['pct'], 0) }}</span></p>
+                            <p class="text-[0.8125rem] text-on-surface-variant">{{ count($p['weakest']['names']) > 1 ? 'Weakest areas' : 'Weakest area' }}: <span class="font-semibold text-on-surface">{{ Viz::names($p['weakest']['names']) }} {{ count($p['weakest']['names']) > 1 ? '(all at '.Viz::pct($p['weakest']['pct'], 0).')' : Viz::pct($p['weakest']['pct'], 0) }}</span></p>
                         @endif
                         <a href="{{ route('movements.show', $p['movement']) }}" class="text-[0.8125rem] font-semibold text-on-surface hover:underline">Open movement →</a>
                     </div>

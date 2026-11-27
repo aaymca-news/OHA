@@ -35,7 +35,7 @@ final class Navigation
         }
 
         // "v2": entries cached before the sidebar held only plain values are never read back.
-        return Cache::remember('nav:v5:'.Cache::get('nav:version', 0).':'.$user->id, $seconds, fn () => $this->build($user));
+        return Cache::remember('nav:v7:'.Cache::get('nav:version', 0).':'.$user->id, $seconds, fn () => $this->build($user));
     }
 
     /** Every sidebar is worked out afresh on its next page: something changed. */
@@ -56,15 +56,16 @@ final class Navigation
         ];
 
         // A National Movement's own users. Their dashboard is their movement's page (since
-        // 23 Nov 2026), so it stays lit there too. The Board Chairperson may sign the ODP, in
-        // My Work; the National General Secretary has no work to act on. Both read their
-        // movement's approved documents in Resources, where the NGS also adds evidence.
+        // 23 Nov 2026), so it stays lit there too, and in its evidence library, which opens
+        // from that page (27 Nov 2026). The Board Chairperson may sign the ODP, in My Work;
+        // the National General Secretary has no work to act on. Their Library: the Area
+        // Resource Repository, what every movement shares.
         if (! $user->isSecretariat()) {
-            $items = [$item('dashboard', 'dashboard', 'dashboard', active: ['dashboard', 'movements.*'])];
+            $items = [$item('dashboard', 'dashboard', 'dashboard', active: ['dashboard', 'movements.*', 'evidence.*'])];
             if (self::hasMyWork($user)) {
                 $items[] = $item('my_work', 'my-work', 'inbox', $this->myWork->actionableCount($user));
             }
-            $items[] = $item('resources', 'resources', 'folder_open');
+            $items[] = $item('resource_repository', 'resource-repository', 'hub', group: 'library');
 
             return $items;
         }
@@ -78,7 +79,7 @@ final class Navigation
             // First assessments past the month an Administrator planned (no band-based dates since 12 Nov 2026).
             MovementStatus::query()->where('reassessment_overdue', true)
                 ->whereHas('movement', fn ($m) => $m->where(fn ($q) => $q->whereNull('follow_up_paused_until')->orWhere('follow_up_paused_until', '<', today())))
-                ->count(), 'warning', active: 'movements.*', group: 'movements');
+                ->count(), 'warning', active: ['movements.*', 'evidence.*'], group: 'movements');
         if ($user->isAdmin()) {
             $items[] = $item('assessments', 'assessments.index', 'fact_check',
                 $this->unassigned(), 'warning', active: 'assessments.*', group: 'movements');
@@ -86,7 +87,8 @@ final class Navigation
         $items[] = $item('timelines', 'timelines', 'event_note', $this->overdue($user), group: 'movements');
         // Each movement's latest cycle, baseline by baseline (all staff: analytics, like the dashboard).
         $items[] = $item('journeys', 'journeys.index', 'trending_up', group: 'movements');
-        $items[] = $item('resources', 'resources', 'folder_open', group: 'library');
+        // What every movement shares. Each movement's own evidence library opens from its page (27 Nov 2026).
+        $items[] = $item('resource_repository', 'resource-repository', 'hub', group: 'library');
 
         if (Gate::forUser($user)->allows('manage', User::class)) {
             $items[] = $item('users', 'admin.users.index', 'manage_accounts', active: 'admin.users.*', group: 'admin');

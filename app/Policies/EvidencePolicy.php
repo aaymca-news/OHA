@@ -15,11 +15,14 @@ use Illuminate\Auth\Access\Response;
  *   viewLibrary  AAYMCA staff see every movement's; a movement's own users (Board
  *                Chairperson, National General Secretary) see their own
  *   upload       AAYMCA staff, and the movement's National General Secretary
- *   download     whoever sees the library, and every movement once it is shared
+ *   download     whoever sees the library, and everyone once it is shared (the Area
+ *                Resource Repository)
  *   remove       AAYMCA staff anything; the National General Secretary what they added,
  *                until it is counted in something closed (the assessment, a follow-up)
  *   move         to another folder: the same people as remove
- *   share        the Administrators, and the movement's National General Secretary
+ *   share        into the Area Resource Repository: AAYMCA staff (Super Administrators,
+ *                Administrators, assessors) and the movement's National General
+ *                Secretary; never the Board Chairperson (decided 27 Nov 2026)
  */
 class EvidencePolicy
 {
@@ -100,15 +103,15 @@ class EvidencePolicy
         return $this->shareFor($user, $evidence->assessment->movement);
     }
 
-    /** Sharing a document with other movements as it is added (the "share" box on the add form). */
+    /** Sharing a document into the Area Resource Repository as it is added (the "share" box on the add form). */
     public function shareFor(User $user, Movement $movement): Response
     {
         if (! $user->active) {
             return Response::deny('Your account is not active.');
         }
 
-        return $user->isAdmin() || $user->isGeneralSecretaryOf($movement)
+        return $user->isSecretariat() || $user->isGeneralSecretaryOf($movement)
             ? Response::allow()
-            : Response::deny('Sharing with other movements is decided by the movement’s National General Secretary or an Administrator.');
+            : Response::deny('Sharing into the Area Resource Repository is decided by the movement’s National General Secretary and AAYMCA staff.');
     }
 }

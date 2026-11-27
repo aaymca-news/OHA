@@ -10,11 +10,14 @@
 @use('App\Oha\EvidenceQuestions')
 @php($categoryNames = $categories->pluck('name', 'code')->all())
 @php($forCategory = $for !== null ? EvidenceQuestions::categoryOf($for) : null)
-<x-layouts.app :title="'Evidence: '.$movement->name"
-               subtitle="What each “Yes” on the OHA form needs as evidence, what has been supplied, and the evidence behind the ODP’s tasks.">
+{{-- Named for its movement (27 Nov 2026): "Zambia YMCA Health Assessment Evidence Library". --}}
+<x-layouts.app :title="__('oha.nav.evidence_library', ['movement' => $movement->name])"
+               subtitle="What each “Yes” on the OHA form needs as evidence, what has been supplied, and the evidence behind the ODP’s tasks. What is shared also appears in the Area Resource Repository.">
 
-    <div class="flex flex-wrap items-center gap-sm text-[0.875rem]">
-        <x-button variant="link" icon="arrow_back" :href="route('resources')">Resources</x-button>
+    <div class="flex flex-wrap items-center gap-x-md gap-y-sm text-[0.875rem]">
+        {{-- The library opens from its movement's page (27 Nov 2026): back there. --}}
+        <x-button variant="link" icon="arrow_back" :href="route('movements.show', $movement)">{{ $movement->name }}</x-button>
+        <x-button variant="link" icon="hub" :href="route('resource-repository')">Area Resource Repository</x-button>
         @if ($assessments->count() > 1)
             <x-segmented label="Which assessment" variant="joined" class="ml-auto flex-wrap">
                 @foreach ($assessments as $a)
@@ -105,7 +108,7 @@
                         <label class="flex items-start gap-sm text-[0.875rem]">
                             <input type="hidden" name="share" value="0">
                             <input type="checkbox" name="share" value="1" class="mt-1" @checked(old('share'))>
-                            <span>Share this with the other movements. They see this evidence only, never {{ $movement->name }}’s scores or form.</span>
+                            <span>Share this in the Area Resource Repository, for every movement to see. They see this evidence only, never {{ $movement->name }}’s scores or form.</span>
                         </label>
                     @endif
 
@@ -161,7 +164,7 @@
                                     <div class="flex flex-wrap items-start gap-sm">
                                         <x-evidence-link :doc="$doc" class="font-semibold flex-1 min-w-[min(12rem,100%)]" />
                                         @if ($doc->isShared())
-                                            <x-status-pill tone="info">Shared with other movements</x-status-pill>
+                                            <x-status-pill tone="info">In the Area Resource Repository</x-status-pill>
                                         @endif
                                         {{-- Once the assessment is closed: what it counts in (the assessment, or a follow-up), or is waiting for. --}}
                                         @if ($assessment->isClosed())
@@ -206,7 +209,7 @@
                                                     @csrf
                                                     @method('PUT')
                                                     <input type="hidden" name="shared" value="{{ $doc->isShared() ? 0 : 1 }}">
-                                                    <x-button variant="secondary" size="sm">{{ $doc->isShared() ? 'Stop sharing' : 'Share with other movements' }}</x-button>
+                                                    <x-button variant="secondary" size="sm">{{ $doc->isShared() ? 'Stop sharing' : 'Share in the Area Resource Repository' }}</x-button>
                                                 </form>
                                             @endcan
                                             @can('remove', $doc)

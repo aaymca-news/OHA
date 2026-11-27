@@ -15,9 +15,9 @@
         @foreach ($rows as $row)
             <li class="grid grid-cols-[minmax(0,1fr)_auto] sm:grid-cols-[minmax(8rem,var(--label-w))_1fr_auto] items-center gap-x-[14px] gap-y-[6px] text-[0.875rem]" style="--label-w: {{ $labelWidth }}">
                 @if ($row['href'] ?? null)
-                    <a href="{{ $row['href'] }}" class="truncate text-on-surface underline decoration-[#d3d0c9] underline-offset-2 hover:decoration-on-surface" title="{{ $row['label'] }}">{{ $row['label'] }}</a>
+                    <a href="{{ $row['href'] }}" class="min-w-0 sm:truncate text-on-surface underline decoration-[#d3d0c9] underline-offset-2 hover:decoration-on-surface" title="{{ $row['label'] }}">{{ $row['label'] }}</a>
                 @else
-                    <span class="truncate" title="{{ $row['label'] }}">{{ $row['label'] }}</span>
+                    <span class="min-w-0 sm:truncate" title="{{ $row['label'] }}">{{ $row['label'] }}</span>
                 @endif
                 <span class="relative h-2.5 rounded-full bg-[#f0eeea] col-span-2 sm:col-span-1 row-start-2 sm:row-start-auto" @if ($row['title'] ?? null) title="{{ $row['title'] }}" @endif>
                     <span class="absolute inset-y-0 left-0 rounded-full {{ Bands::fill($row['band_code']) }}" style="width: {{ max(1.5, min(100, (float) $row['pct'])) }}%"></span>

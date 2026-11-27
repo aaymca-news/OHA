@@ -98,7 +98,8 @@
                                 <div class="flex-1 min-w-0">
                                     {{-- The whole card opens the movement. --}}
                                     <a href="{{ route('movements.show', $m) }}" class="text-[1rem] font-bold text-on-surface after:absolute after:inset-0 after:rounded-2xl focus-visible:outline-none focus-visible:after:outline-2 focus-visible:after:outline-primary">{{ $m->name }}</a>
-                                    <p class="text-[0.8125rem] text-on-surface-variant">{{ $m->city }} · {{ $m->country }} · {{ $m->membershipStatus->label }}</p>
+                                    <x-head-office :movement="$m" class="mt-[2px]" />
+                                    <p class="text-[0.8125rem] text-on-surface-variant">{{ $m->membershipStatus->label }}</p>
                                 </div>
                                 <x-viz.ring :pct="$status->pct" :band="$status->band" :size="56" />
                             </div>
@@ -171,8 +172,8 @@
                     @php($at = $stage($status))
                     @php($when = $next($status))
                     <tr class="border-t border-[#f2f1ec] hover:bg-[#fafaf8]">
-                        <td><a href="{{ route('movements.show', $status->movement) }}" class="font-semibold text-on-surface hover:underline">{{ $status->name }}</a>
-                            <span class="block text-[0.8125rem] text-on-surface-variant">{{ $status->movement->city }}</span></td>
+                        <td class="min-w-[13rem]"><a href="{{ route('movements.show', $status->movement) }}" class="font-semibold text-on-surface hover:underline">{{ $status->name }}</a>
+                            <x-head-office :movement="$status->movement" class="flex mt-[2px]" /></td>
                         <td>{{ $status->movement->zone->name }}</td>
                         <td>{{ $status->movement->membershipStatus->label }}</td>
                         <td><x-status-pill :tone="$at->tone()">{{ $at->label() }}</x-status-pill></td>

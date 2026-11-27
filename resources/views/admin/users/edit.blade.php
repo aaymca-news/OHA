@@ -37,7 +37,7 @@
                     @csrf
                     @method('PUT')
                     <x-select name="role" x-model="role" aria-label="Role"
-                              :hint="config('oha.demo') ? 'On the demo, the Super Administrator role is the showcase’s own: it is not given here.' : (auth()->user()->isSuperAdmin() ? null : 'Only the Super Administrator gives the Administrator roles.')">
+                              :hint="config('oha.demo') ? 'On the demo, the Super Administrator role is the showcase’s own: it is not given here.' : (auth()->user()->isSuperAdmin() ? null : 'Only the Super Administrator gives the Technical Administrator and Super Administrator roles.')">
                         {{-- On the demo, every role is shown; those that cannot be given are greyed out. --}}
                         @foreach (config('oha.demo') ? \App\Enums\Role::cases() : $roles as $role)
                             <option value="{{ $role->value }}" @disabled(! in_array($role, $roles, true))>{{ $role->label() }}{{ in_array($role, $roles, true) ? '' : ' (not given here)' }}</option>

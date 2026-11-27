@@ -91,7 +91,7 @@ it('registers a visitor into a demo of their own, with everyone already in it', 
     $key = register();
 
     $this->withUnencryptedCookie(Sandboxes::COOKIE, $key)->get(route('login'))->assertOk()
-        ->assertSee('Choose who to be')->assertSee('AAYMCA staff')->assertSee('A National Movement')
+        ->assertSee('Choose who to be')->assertSee('Area Personnel')->assertSee('Technical Administrator')->assertSee('Assessment Officer')->assertSee('A National Movement')
         ->assertSee('Zambia YMCA')->assertSee('Signed in to your demo as')
         ->assertDontSee('name="password"', false);
 
@@ -301,7 +301,7 @@ it('shows Zambia’s Board Chairperson and NGS what was approved, by the Super A
     // As Zambia's NGS and Board Chairperson: the approved form, not yet the report.
     foreach (['ngs', 'chair'] as $role) {
         $as()->post(route('demo.sign-in'), ['role' => $role] + $zambia)->assertRedirect(route('dashboard'));
-        $as()->get(route('resources'))->assertOk()->assertSee($formName)->assertDontSee($reportName);
+        $as()->get(route('movements.show', $zambia))->assertOk()->assertSee($formName)->assertDontSee($reportName);
         $as()->post(route('demo.choose'));
     }
 
@@ -313,7 +313,7 @@ it('shows Zambia’s Board Chairperson and NGS what was approved, by the Super A
     // Zambia's NGS and Board Chairperson now see the report too.
     foreach (['ngs', 'chair'] as $role) {
         $as()->post(route('demo.sign-in'), ['role' => $role] + $zambia);
-        $as()->get(route('resources'))->assertOk()->assertSee($formName)->assertSee($reportName);
+        $as()->get(route('movements.show', $zambia))->assertOk()->assertSee($formName)->assertSee($reportName);
         $as()->post(route('demo.choose'));
     }
 });
@@ -724,7 +724,7 @@ it('keeps everything after a visitor signs out of the shared demo and back in: t
     $as($again)->get(route('login'))->assertOk()->assertSee('Choose who to be');
     foreach ([['role' => 'admin'], ['role' => 'assessor'], ['role' => 'ngs', 'movement' => 'zambia'], ['role' => 'chair', 'movement' => 'zambia']] as $who) {
         $as($again)->post(route('demo.sign-in'), $who)->assertRedirect(route('dashboard'));
-        $as($again)->get(route('resources'))->assertOk()->assertSee('Validated');
+        $as($again)->get(route('movements.show', ['movement' => 'zambia']))->assertOk()->assertSee('Validated');
         $as($again)->post(route('demo.choose'))->assertRedirect(route('login'));
     }
     expect(BoardSignature::query()->count())->toBe(1);

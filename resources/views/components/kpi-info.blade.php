@@ -7,7 +7,7 @@
 --}}
 @props(['key'])
 @php($kpi = \App\Support\Kpis::get($key))
-<span class="relative inline-flex align-middle normal-case tracking-normal font-normal" x-data="{ open: false }"
+<span {{ $attributes->class('relative inline-flex align-middle normal-case tracking-normal font-normal') }} x-data="{ open: false }"
       x-on:mouseenter="open = true" x-on:mouseleave="open = false" x-on:click.outside="open = false" x-on:keydown.escape="open = false">
     <button type="button" x-on:click="open = ! open" x-on:focus="open = true" x-on:blur="open = false"
             x-bind:aria-expanded="open.toString()" aria-expanded="false" aria-label="What is “{{ $kpi['label'] }}”?"

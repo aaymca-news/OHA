@@ -3,6 +3,7 @@
 use App\Support\Pace;
 use App\Support\Radar;
 use App\Support\RedFlags;
+use App\Support\Viz;
 
 /*
  * The arithmetic behind the dashboards' charts (approved on the mockup of 23 Nov 2026): the
@@ -22,6 +23,15 @@ it('works out the pace to the next band by the end of the cycle', function () {
     // Nothing above the top band, and nothing once the cycle's follow-ups are all done.
     expect(Pace::of([88.0, 93.0], 4))->toBeNull()
         ->and(Pace::of([50.0, 55.0, 60.0, 65.0], 4))->toBeNull();
+});
+
+it('names every area when several tie for the strongest or the weakest', function () {
+    expect(Viz::names(['Comms']))->toBe('Comms')
+        ->and(Viz::names(['Comms', 'Financial']))->toBe('Comms and Financial')
+        ->and(Viz::names(['Comms', 'Financial', 'Staff']))->toBe('Comms, Financial and Staff')
+        // The tile's figure: one or two names, or how many (the note beneath names them all).
+        ->and(Viz::tiedFigure(['Comms', 'Financial']))->toBe('Comms and Financial')
+        ->and(Viz::tiedFigure(['Comms', 'Financial', 'Staff']))->toBe('3 areas');
 });
 
 it('places the health shape’s corners clockwise from the top', function () {

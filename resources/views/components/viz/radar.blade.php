@@ -12,7 +12,7 @@
 @php
     $n = count($areas);
 @endphp
-<div {{ $attributes->class('relative w-full max-w-[620px] mx-auto') }} style="aspect-ratio: {{ Radar::WIDTH }} / {{ Radar::HEIGHT }}">
+<div {{ $attributes->class('@container relative w-full max-w-[620px] mx-auto') }} style="aspect-ratio: {{ Radar::WIDTH }} / {{ Radar::HEIGHT }}">
     <svg viewBox="0 0 {{ Radar::WIDTH }} {{ Radar::HEIGHT }}" class="absolute inset-0 size-full" role="img" aria-label="{{ $label }}">
         {{-- The outer ring (filled) first, so the inner rings and the spokes show on it. --}}
         @foreach (array_reverse(Radar::RINGS) as $ring)
@@ -29,9 +29,10 @@
             @php([$rx, $ry] = Radar::point(0, $n, $ring / 100 * Radar::RADIUS))
             <text x="{{ $rx + 6 }}" y="{{ $ry - 3 }}" font-size="11" font-weight="600" fill="var(--color-on-surface-variant)" stroke="#ffffff" stroke-width="3" paint-order="stroke" stroke-linejoin="round">{{ $ring }}%</text>
         @endforeach
+        {{-- In a small drawing (a phone, or a half-width card) the area names give way to the corner icons, each naming its area, and the figures beside or beneath. --}}
         @foreach ($areas as $k => $area)
             @php($name = Radar::label($k, $n, 58))
-            <text x="{{ $name['x'] }}" y="{{ $name['y'] + ($name['top'] > 60 ? 10 : ($name['top'] < 40 ? -2 : 5)) }}" text-anchor="{{ $name['anchor'] }}" font-size="13.5" font-weight="600" fill="var(--color-on-surface)">{{ $area['short'] }}</text>
+            <text class="@max-[26rem]:hidden" x="{{ $name['x'] }}" y="{{ $name['y'] + ($name['top'] > 60 ? 10 : ($name['top'] < 40 ? -2 : 5)) }}" text-anchor="{{ $name['anchor'] }}" font-size="13.5" font-weight="600" fill="var(--color-on-surface)">{{ $area['short'] }}</text>
         @endforeach
     </svg>
     @foreach ($areas as $k => $area)

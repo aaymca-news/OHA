@@ -34,7 +34,8 @@
     </x-segmented>
 
     {{-- Key figures --}}
-    <section aria-label="Key figures" class="grid gap-md sm:grid-cols-2 xl:grid-cols-5">
+    {{-- As many tiles a row as fit (at least 12.5rem each); a short last row widens to fill it, so no gap is left. --}}
+    <section aria-label="Key figures" class="flex flex-wrap gap-md *:flex-[1_1_12.5rem]">
         <x-kpi label="Movements assessed" info="movements_assessed" :value="$f['assessed']" :unit="' / '.$f['total']">
             <x-slot:visual><x-progress-ring :value="$f['assessed']" :max="max(1, $f['total'])" :size="64" /></x-slot:visual>
             {{ $f['total'] - $f['assessed'] }} not assessed yet
@@ -356,6 +357,6 @@
             </div>
         </details>
 
-        <x-kpi-glossary :keys="['movements_assessed', 'average_score', 'current_score', 'baseline', 'change_since_baseline', 'improving', 'at_risk', 'health_band', 'evidence_backed', 'support_quadrants', 'red_flags', 'area_score', 'most_missed', 'international_funding', 'operating_margin', 'cash_reserve', 'adoption', 'plan_delivered']" />
+        <x-kpi-glossary :keys="['movements_assessed', 'average_score', 'current_score', 'baseline', 'change_since_baseline', 'improving', 'at_risk', 'health_band', 'evidence_backed', 'support_quadrants', 'red_flags', 'area_score', 'most_missed', 'region_median', 'international_funding', 'operating_margin', 'cash_reserve', 'adoption', 'plan_delivered']" />
     @endif
 </x-layouts.app>

@@ -21,11 +21,13 @@ return [
         'timelines' => 'Timelines',
         'journeys' => 'Journeys',
         'users' => 'Users & Roles',
-        'resources' => 'Resources',
+        // A movement's evidence library, named for it (opened from its page), and the Library's one entry: what movements share (27 Nov 2026).
+        'evidence_library' => ':movement Health Assessment Evidence Library',
+        'resource_repository' => 'Area Resource Repository',
         'notifications' => 'Notifications',
         'profile' => 'My profile',
         'security' => 'Security',
-        // The captions over the groups in the menu (AAYMCA staff only).
+        // The captions over the groups in the menu (a movement's own users have Library only).
         'group' => [
             'movements' => 'Movements',
             'library' => 'Library',

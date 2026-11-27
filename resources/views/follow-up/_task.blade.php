@@ -3,7 +3,7 @@
     it, its evidence), and a side panel. Where it stands is set at each follow-up meeting,
     for every task together (decided 12 Nov 2026); tasks have no deadlines of their own.
     Between the meetings the panel takes a note and evidence (added right here: it goes
-    into Resources too), shows what has happened to it, and, out of the way, dropping it.
+    into the evidence library too), shows what has happened to it, and, out of the way, dropping it.
     Several of these forms share field names on one page, so their controls are plain (no
     old()). Expects $task, $status (OdpTask::followUpStatus), $canNote, $canDrop, $evidence
     (the library: id => title).
@@ -90,9 +90,9 @@
                         @if ($evidence !== [])
                             <details class="group text-[0.875rem]" @if ($task->evidence_id) open @endif>
                                 <summary class="inline-flex cursor-pointer items-center gap-xs font-semibold text-on-surface-variant hover:text-on-surface">
-                                    <span class="material-symbols-outlined text-[1.125rem] transition-transform group-open:rotate-90" aria-hidden="true">chevron_right</span>Link evidence already in Resources
+                                    <span class="material-symbols-outlined text-[1.125rem] transition-transform group-open:rotate-90" aria-hidden="true">chevron_right</span>Link evidence already in the evidence library
                                 </summary>
-                                <select name="evidence_id" aria-label="Evidence already in Resources" @class([...$control, 'mt-sm w-full' => true])>
+                                <select name="evidence_id" aria-label="Evidence already in the evidence library" @class([...$control, 'mt-sm w-full' => true])>
                                     <option value="">None linked</option>
                                     @foreach ($evidence as $id => $title)
                                         <option value="{{ $id }}" @selected($task->evidence_id === $id)>{{ $title }}</option>
@@ -113,7 +113,7 @@
                                 <span class="material-symbols-outlined text-[1.25rem]" aria-hidden="true">{{ $task->evidence->url ? 'link' : 'description' }}</span>
                             </span>
                             <div class="min-w-0 flex-1 text-[0.875rem]"><x-evidence-link :doc="$task->evidence" /></div>
-                            <span class="text-[0.75rem] font-semibold text-good-ink">In Resources</span>
+                            <span class="text-[0.75rem] font-semibold text-good-ink">In the evidence library</span>
                         </div>
                     @elseif (! $note)
                         <p class="text-[0.875rem] text-on-surface-variant">None linked.</p>
@@ -143,7 +143,7 @@
                             </label>
                             <div class="flex flex-wrap items-center justify-between gap-sm">
                                 <span class="inline-flex items-center gap-[5px] text-[0.8125rem] text-on-surface-variant">
-                                    <span class="material-symbols-outlined text-[1rem]" aria-hidden="true">folder_open</span>Saved to Resources › Evidence too
+                                    <span class="material-symbols-outlined text-[1rem]" aria-hidden="true">folder_open</span>Saved to the evidence library too
                                 </span>
                                 <x-button variant="secondary" size="sm" icon="add">Add evidence</x-button>
                             </div>

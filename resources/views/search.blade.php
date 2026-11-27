@@ -2,7 +2,7 @@
     @if (mb_strlen($q) >= 2)
         <x-card title="National Movements">
             @forelse ($movements as $movement)
-                <a href="{{ route('movements.show', $movement) }}" class="text-[0.875rem] text-primary underline">{{ $movement->name }} <span class="text-on-surface-variant no-underline">· {{ $movement->city }}, {{ $movement->country }}</span></a>
+                <span class="flex flex-col gap-[2px]"><a href="{{ route('movements.show', $movement) }}" class="text-[0.875rem] text-primary underline">{{ $movement->name }}</a><x-head-office :movement="$movement" /></span>
             @empty
                 <x-empty-state icon="search_off">No movement matches.</x-empty-state>
             @endforelse

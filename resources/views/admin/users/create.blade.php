@@ -9,7 +9,7 @@
                 <x-input name="email" label="Email" type="email" required />
                 <x-input name="title" label="Job title" hint="For example: Zonal Coordinator, East Africa" />
                 <x-select name="role" label="Role" x-model="role"
-                          :hint="auth()->user()->isSuperAdmin() ? null : 'Only the Super Administrator gives the Administrator roles.'">
+                          :hint="auth()->user()->isSuperAdmin() ? null : 'Only the Super Administrator gives the Technical Administrator and Super Administrator roles.'">
                     @foreach ($roles as $role)
                         <option value="{{ $role->value }}">{{ $role->label() }}</option>
                     @endforeach

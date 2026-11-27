@@ -31,17 +31,22 @@ final class EvidenceLibrary
     }
 
     /**
-     * Documents other movements have shared, newest first. Only what the document is:
-     * its title, file, category and movement; not what it says about the movement's form.
+     * The Area Resource Repository (27 Nov 2026): every document shared from a movement's
+     * library, for everyone, newest first; in one area (a category's code, or "general"),
+     * from one movement, or with words in its title, when asked. Only what the document is:
+     * its title, file, area and movement; not what it says about the movement's form.
      *
      * @return Collection<int, Evidence>
      */
-    public function sharedBeyond(?int $movementId): Collection
+    public function shared(?string $area = null, ?int $movementId = null, string $search = ''): Collection
     {
         return Evidence::query()->whereNotNull('shared_at')
             ->with('category', 'assessment.movement')
-            ->when($movementId !== null, fn ($q) => $q->whereHas('assessment', fn ($a) => $a->where('movement_id', '!=', $movementId)))
-            ->latest('shared_at')->get();
+            ->when($area === 'general', fn ($q) => $q->whereNull('category_id'))
+            ->when($area !== null && $area !== 'general', fn ($q) => $q->whereHas('category', fn ($c) => $c->where('code', $area)))
+            ->when($movementId !== null, fn ($q) => $q->whereHas('assessment', fn ($a) => $a->where('movement_id', $movementId)))
+            ->when($search !== '', fn ($q) => $q->whereRaw('lower(title) like ?', ['%'.mb_strtolower($search).'%']))
+            ->latest('shared_at')->latest('id')->get();
     }
 
     /**

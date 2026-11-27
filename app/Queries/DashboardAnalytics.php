@@ -28,7 +28,8 @@ use Illuminate\Support\Str;
  * nothing about work or tasks). AAYMCA's: how healthy the region is, who is improving and
  * who needs support, the areas and points most often short, money, policies and people,
  * for one zone or all. A movement's: its own score over the cycle and where it can still
- * grow, beside the region's averages (never another movement's figures).
+ * grow, and nothing else: no regional average, median or comparison (decided 27 Nov 2026;
+ * the region's figures are on AAYMCA's dashboard only).
  *
  * Scores are read as recorded: the current score (the newest baseline's, as every screen
  * shows it), the baseline (the closed assessment's) and the follow-up scores between.
@@ -66,7 +67,6 @@ final class DashboardAnalytics
             $followed = $journey !== null && count($journey['steps']) > 1;
             $cells = collect($heat['rows'])->firstWhere('movement.id', $r['movement']->id)['cells'] ?? [];
             $scored = array_filter($cells, fn (?float $v) => $v !== null);
-            $weakestCode = $scored === [] ? null : array_search(min($scored), $scored, true);
 
             return [
                 'movement' => $r['movement'],
@@ -76,8 +76,8 @@ final class DashboardAnalytics
                 'followed' => $followed,
                 'change' => $followed ? $journey['change'] : null,
                 'areas' => $cells,
-                // Its weakest area now, for the pop-up on "Who needs support".
-                'weakest' => $weakestCode === null || $weakestCode === false ? null : ['code' => (string) $weakestCode, 'pct' => (float) $scored[$weakestCode]],
+                // Its weakest areas now (all of them when several tie), for the pop-up on "Who needs support".
+                'weakest' => $scored === [] ? null : ['codes' => array_map('strval', array_keys(self::tied($scored, min($scored)))), 'pct' => (float) min($scored)],
                 'profile' => $r['profile'],
                 'answers' => $r['answers'],
             ];
@@ -133,15 +133,16 @@ final class DashboardAnalytics
     }
 
     /**
-     * A movement's own dashboard: its score over the cycle and where it can grow, beside
-     * the region's averages. Null figures before its first form is approved.
+     * A movement's own dashboard: its score over the cycle and where it can grow, from its own
+     * figures only (decided 27 Nov 2026: no regional average, median or comparison on a
+     * movement's page, for its own users or AAYMCA staff alike). Null figures before its
+     * first form is approved.
      *
      * @return array<string, mixed>
      */
     public function movement(MovementStatus $status): array
     {
-        $rated = $this->insights->rated();
-        $mine = $rated[$status->movement_id] ?? null;
+        $mine = $this->insights->rated()[$status->movement_id] ?? null;
         $assessment = $status->latest_assessment_id !== null ? Assessment::query()->find($status->latest_assessment_id) : null;
         if ($mine === null || $assessment === null) {
             return ['rated' => false];
@@ -149,23 +150,19 @@ final class DashboardAnalytics
 
         $journey = $this->journeys([$status->movement_id])[$status->movement_id] ?? null;
         $steps = $journey !== null ? app(Journeys::class)->of($journey['assessment']) : [];
-        $heat = $this->insights->heatmap();
-        $regionAreas = $heat['categories']->mapWithKeys(fn (Category $c) => [$c->code => ($v = collect($heat['rows'])->pluck('cells.'.$c->code)->filter(fn ($x) => $x !== null))->isEmpty() ? null : round($v->avg(), 1)]);
-        $shortNames = $heat['categories']->pluck('short_name', 'code');
-        $icons = $heat['categories']->pluck('icon', 'code');
+        $categories = Category::query()->weighted()->orderBy('form_order')->get();
+        $shortNames = $categories->pluck('short_name', 'code');
+        $icons = $categories->pluck('icon', 'code');
 
         $areas = collect(CategoryRows::for($assessment))->filter(fn (array $r) => $r['max'] !== null)->map(fn (array $r) => $r + [
             'short' => $shortNames[$r['code']] ?? $r['name'],
             'baseline' => $journey['first_areas'][$r['code']] ?? null,
-            'region' => $regionAreas[$r['code']] ?? null,
         ])->values();
+        // The strongest and the weakest: every area at the top (or the bottom) score, when several tie.
         $top = $areas->max('pct');
-        $weakest = $areas->sortBy('pct')->first();
+        $low = $areas->min('pct');
 
         $profile = $mine['profile'];
-        $all = $rated->pluck('profile');
-        $boards = $all->filter(fn ($p) => ($p['board']['size'] ?? 0) > 0);
-        $boardTotal = $boards->sum(fn ($p) => $p['board']['size']);
         $share = fn (mixed $part, mixed $whole) => $part !== null && $whole ? (int) round((float) $part * 100 / (float) $whole) : null;
 
         return [
@@ -179,14 +176,11 @@ final class DashboardAnalytics
             'pace' => $journey !== null ? Pace::of($journey['steps'], Journeys::slots()) : null,
             // The health shape: every scored area in form order, with its icon.
             'shape' => $areas->map(fn (array $a) => $a + ['icon' => (string) ($icons[$a['code']] ?? 'circle')])->values()->all(),
-            'region' => [
-                'mean' => round($rated->avg(fn ($r) => (float) $r['status']->pct), 1),
-                'movements' => $rated->count(),
-            ],
             'areas' => $areas->sortBy('pct')->values()->all(),
-            'strongest' => $areas->where('pct', $top)->pluck('short')->all(),
+            'strongest' => $areas->filter(fn (array $a) => round((float) $a['pct'], 1) === round((float) $top, 1))->pluck('short')->values()->all(),
             'strongest_pct' => $top,
-            'weakest' => $weakest,
+            'weakest' => $areas->filter(fn (array $a) => round((float) $a['pct'], 1) === round((float) $low, 1))->values()->all(),
+            'weakest_pct' => $low,
             'points' => ['earned' => $areas->sum('points'), 'max' => $areas->sum('max')],
             'open' => $areas->filter(fn (array $a) => $a['lost'] > 0)->sortByDesc('lost')->values()->all(),
             'money' => [
@@ -195,15 +189,8 @@ final class DashboardAnalytics
                 'margin' => $profile['finance']['margin_pct'] ?? null,
                 'reserve_months' => $profile['finance']['reserve_months'] ?? null,
                 'limit' => FormDefinition::INTERNATIONAL_LIMIT,
-                // Where the money comes from: ours, and the region's average mix.
+                // Where the money comes from, by source.
                 'mix' => $profile['income_mix'] ?? null,
-                'region_mix' => $this->insights->averageMix('income_mix'),
-                'region' => [
-                    'international' => $this->median($all->pluck('international_pct')),
-                    'restricted' => $this->median($all->pluck('restricted_pct')),
-                    'margin' => $this->median($all->pluck('finance.margin_pct')),
-                    'with_reserve' => $all->filter(fn ($p) => ($p['finance']['reserve_months'] ?? null) !== null)->count(),
-                ],
             ],
             'people' => [
                 'staff' => $profile['people']['staff'] ?? null,
@@ -213,26 +200,13 @@ final class DashboardAnalytics
                 'under_30' => $share($profile['board']['under_30'] ?? null, $profile['board']['size'] ?? null),
                 'policies' => count(array_filter($profile['policies'] ?? [])),
                 'policies_of' => count(Profile::POLICIES),
-                'region' => [
-                    'staff' => $this->median($all->pluck('people.staff')),
-                    'volunteers' => $this->median($all->pluck('people.volunteers')),
-                    'board' => $this->median($all->pluck('board.size')),
-                    'women' => $share((int) $boards->sum(fn ($p) => $p['board']['women'] ?? 0), (int) $boardTotal),
-                    'under_30' => $share((int) $boards->sum(fn ($p) => $p['board']['under_30'] ?? 0), (int) $boardTotal),
-                    'policies' => round($all->avg(fn ($p) => count(array_filter($p['policies'] ?? []))), 1),
-                ],
             ],
-            // The 19 policies, in the form's order: ours (true, false, or null when not answered) beside the region's adoption.
-            'policies' => (function () use ($profile) {
-                $region = collect($this->insights->adoption('policies', Profile::POLICIES))->keyBy('code');
-
-                return collect(Profile::POLICIES)->map(fn (string $label, string $code) => [
-                    'code' => $code,
-                    'label' => $label,
-                    'ours' => $profile['policies'][$code] ?? null,
-                    'region' => $region[$code]['answered'] > 0 ? $region[$code]['pct'] : null,
-                ])->values()->all();
-            })(),
+            // The 19 policies, in the form's order: true (in place), false (not yet) or null (not answered).
+            'policies' => collect(Profile::POLICIES)->map(fn (string $label, string $code) => [
+                'code' => $code,
+                'label' => $label,
+                'ours' => $profile['policies'][$code] ?? null,
+            ])->values()->all(),
         ];
     }
 
@@ -349,7 +323,7 @@ final class DashboardAnalytics
                 'band' => $m['band'],
                 'steps' => $m['journey']['steps'] ?? [$m['pct']],
                 'baseline' => $m['journey']['first'] ?? null,
-                'weakest' => $weakest === null ? null : ['name' => (string) ($shortNames[$weakest['code']] ?? $weakest['code']), 'pct' => $weakest['pct']],
+                'weakest' => $weakest === null ? null : ['names' => array_map(fn (string $code) => (string) ($shortNames[$code] ?? $code), $weakest['codes']), 'pct' => $weakest['pct']],
                 // 0 needs support, 1 improving (not yet strong), 2 strong (not improving), 3 strong and improving, 4 no follow-up yet.
                 'group' => $m['change'] === null ? 4 : ($m['pct'] >= $split ? ($m['change'] > 0 ? 3 : 2) : ($m['change'] > 0 ? 1 : 0)),
                 'left' => round((max($xFrom, $m['pct']) - $xFrom) / (100 - $xFrom) * 100, 2),
@@ -357,18 +331,22 @@ final class DashboardAnalytics
             ];
         });
 
-        // Dots that would sit on one another move up (or, in the lane, along) until clear.
+        // Dots that would sit on one another move apart: in the chart, up until clear; in the
+        // lane beneath, onto its second row (27 Nov 2026: wide enough apart for a phone too).
         $placed = [];
         $points = $points->map(function (array $p) use (&$placed) {
-            for ($tries = 0; $tries < 6; $tries++) {
-                $clash = array_any($placed, fn (array $q): bool => $q['lane'] === ($p['top'] === null)
-                    && abs($q['left'] - $p['left']) < 2.6 && ($p['top'] === null || abs($q['top'] - $p['top']) < 5.5));
-                if (! $clash) {
-                    break;
+            $p['lane_row'] = 0;
+            if ($p['top'] === null) {
+                $p['lane_row'] = array_any($placed, fn (array $q): bool => $q['lane'] && $q['row'] === 0 && abs($q['left'] - $p['left']) < 9) ? 1 : 0;
+            } else {
+                for ($tries = 0; $tries < 6; $tries++) {
+                    if (! array_any($placed, fn (array $q): bool => ! $q['lane'] && abs($q['left'] - $p['left']) < 4.5 && abs($q['top'] - $p['top']) < 5.5)) {
+                        break;
+                    }
+                    $p['top'] = max(1, $p['top'] - 6);
                 }
-                $p['top'] === null ? $p['left'] = min(98, $p['left'] + 2.8) : $p['top'] = max(1, $p['top'] - 6);
             }
-            $placed[] = ['left' => $p['left'], 'top' => $p['top'], 'lane' => $p['top'] === null];
+            $placed[] = ['left' => $p['left'], 'top' => $p['top'], 'lane' => $p['top'] === null, 'row' => $p['lane_row']];
 
             return $p;
         });
@@ -533,6 +511,17 @@ final class DashboardAnalytics
     private function bandOrder(): Collection
     {
         return HealthBand::query()->pluck('min_pct', 'code')->map(fn ($v) => (float) $v);
+    }
+
+    /**
+     * The entries of $values at $value (to one decimal): every one of them when several tie.
+     *
+     * @param  array<string, float>  $values
+     * @return array<string, float>
+     */
+    private static function tied(array $values, float $value): array
+    {
+        return array_filter($values, fn (float $v) => round($v, 1) === round($value, 1));
     }
 
     /** @param  Collection<int, mixed>  $values */

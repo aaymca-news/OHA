@@ -12,7 +12,7 @@ use Illuminate\Support\Str;
 
 /**
  * Stage 2, ODP follow-up: evidence added right on an ODP task (a file or a link). It goes
- * into the movement's evidence library, as if added in Resources, backing that task (by
+ * into the movement’s evidence library, as if added there, backing that task (by
  * its ODP number), so it shows there at once; and it becomes the task's evidence.
  */
 final class AttachTaskEvidence

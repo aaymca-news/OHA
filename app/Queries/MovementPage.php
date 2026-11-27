@@ -24,6 +24,7 @@ final class MovementPage
     public function __construct(
         private readonly DashboardAnalytics $analytics,
         private readonly Journeys $journeys,
+        private readonly StageOneDocuments $stageOne,
     ) {}
 
     /**
@@ -69,6 +70,8 @@ final class MovementPage
             // Its cycle's journey, baseline by baseline, for those who follow it up.
             'journey' => $followsUp ? $this->journeys->of($lastDone) : [],
             'stage' => Stage::of($cycleOf ?? $snapshot->latest),
+            // Each assessment's Stage 1 as its three approved documents, for everyone who sees the page.
+            'stageOne' => $this->stageOne->for($user, $assessments),
         ] + ($user->isSecretariat() ? $this->manage($user, $movement, $status, $lastDone, $cycleOf, $followsUp) : []);
     }
 

@@ -3,11 +3,13 @@
 {{--
     One National Movement's page (decided 23 Nov 2026), the same for everyone who may see it:
     its Board Chairperson and National General Secretary reach it as their dashboard, AAYMCA
-    staff from the National Movements. The dashboard is analytics only (decided 15 Nov 2026):
-    four key figures; the score over the cycle and where it can still grow; the areas against
-    the baseline or the region; money and people beside the region (its averages and medians
-    only, never another movement's figures); the cycle's journey and the scores over time for
-    those allowed; the movement at a glance, from its form; who leads it and its contacts; and
+    staff from the National Movements. The dashboard is analytics only (decided 15 Nov 2026),
+    and about this movement only: no regional average, median or comparison anywhere on it
+    (decided 27 Nov 2026; the region's figures are on AAYMCA's dashboard). The key figures;
+    the health shape and the score over the cycle; where it can still grow; its money, people
+    and policies; the cycle's journey and the scores over time for
+    those allowed; the movement at a glance, from its form; its Stage 1 documents (the Excel
+    assessment form, report and ODP as approved, and when); who leads it and its contacts; and
     how each figure is worked out. AAYMCA staff also have the Manage section at the foot: the
     next assessment, the evidence, the cycle, the ODP follow-up, the assessors and the
     assessments (starting one too). Data: App\Queries\MovementPage.
@@ -19,14 +21,31 @@
     $label = 'text-[0.75rem] font-semibold uppercase tracking-[0.06em] text-on-surface-variant';
     $vs = 'text-[0.78125rem] text-on-surface-variant';
     $d = $data;
-    $subtitle = $own
-        ? 'Welcome back, '.\Illuminate\Support\Str::before($me->name, ' ').' · '.$me->role->label()
-        : $movement->city.' · '.$movement->zone->name.' · '.$movement->membershipStatus->label;
+    $subtitle = $own ? 'Welcome back, '.\Illuminate\Support\Str::before($me->name, ' ').' · '.$me->role->label() : null;
 @endphp
 <x-layouts.app :title="$movement->name" :subtitle="$subtitle">
+    {{-- Where it is (27 Nov 2026): its National Head Office, its zone and its membership, the same for everyone. --}}
+    <x-slot:meta>
+        <div class="flex flex-wrap items-center gap-x-md gap-y-sm">
+            <x-head-office :movement="$movement" size="lg" />
+            {{-- The zone and the membership move together when the line wraps. --}}
+            <span class="inline-flex flex-wrap items-center gap-sm">
+                <span class="inline-flex items-center gap-[6px] text-[0.875rem] text-on-surface-variant">
+                    <span class="material-symbols-outlined text-[1.125rem]" aria-hidden="true">public</span>{{ $movement->zone->name }}
+                </span>
+                <x-status-pill>{{ $movement->membershipStatus->label }}</x-status-pill>
+            </span>
+        </div>
+    </x-slot:meta>
     <x-slot:actions>
         <div class="flex flex-wrap items-center gap-sm">
             <x-status-pill :tone="$stage->tone()">{{ $stage->label() }}</x-status-pill>
+            {{-- The movement's evidence library lives here, on its page, not in the menu (27 Nov 2026). --}}
+            @can('viewLibrary', [\App\Models\Evidence::class, $movement])
+                <x-row-action :href="route('evidence.index', $movement)" :title="__('oha.nav.evidence_library', ['movement' => $movement->name])">
+                    <span class="material-symbols-outlined text-[1.125rem]" aria-hidden="true">folder_open</span>Evidence Library
+                </x-row-action>
+            @endcan
             @if ($data['rated'])
                 <x-download-menu :pdf="route('movements.report', [$movement, 'pdf'])" :xlsx="route('movements.report', [$movement, 'xlsx'])" />
             @endif
@@ -60,9 +79,12 @@
             </x-empty-state>
         </x-panel>
     @else
-        @php($w = $d['weakest'])
+        {{-- The weakest areas: every one of them when several tie (27 Nov 2026); the first opens the health shape. --}}
+        @php($weak = $d['weakest'])
+        @php($w = $weak[0])
         {{-- Key figures --}}
-        <section aria-label="Key figures" class="grid gap-md sm:grid-cols-2 xl:grid-cols-4">
+        {{-- As many tiles a row as fit (at least 14rem each); a short last row widens to fill it, so no gap is left. --}}
+        <section aria-label="Key figures" class="flex flex-wrap gap-md *:flex-[1_1_14rem]">
             <x-kpi label="Current score" info="current_score" :value="number_format($d['pct'], 1)" unit="%">
                 @if ($status->band)
                     <x-slot:badge><x-status-pill :tone="Bands::tone($status->band_code)">{{ $status->band->label }}</x-status-pill></x-slot:badge>
@@ -74,16 +96,17 @@
                 @else
                     From the approved OHA form
                 @endif
-                <x-band-scale :pct="$d['pct']" :region="$d['region']['mean']" class="mt-1" />
+                <x-band-scale :pct="$d['pct']" class="mt-1" />
             </x-kpi>
-            <x-kpi label="Against the region" info="against_region" :value="Viz::signed($d['pct'] - $d['region']['mean'])" unit=" points">
-                Regional average {{ Viz::pct($d['region']['mean']) }} · {{ $d['region']['movements'] }} movements
+            <x-kpi label="Strongest" info="strongest_weakest" :value="Viz::tiedFigure($d['strongest'])">
+                {{ count($d['strongest']) > 1 ? 'All at '.Viz::pct($d['strongest_pct'], 0).': '.Viz::names($d['strongest']) : 'At '.Viz::pct($d['strongest_pct'], 0) }}
             </x-kpi>
-            <x-kpi label="Strongest" info="strongest_weakest" :value="count($d['strongest']) > 1 ? count($d['strongest']).' areas' : ($d['strongest'][0] ?? '—')">
-                {{ count($d['strongest']) > 1 ? 'At '.Viz::pct($d['strongest_pct'], 0).': '.implode(', ', $d['strongest']) : 'At '.Viz::pct($d['strongest_pct'], 0) }}
-            </x-kpi>
-            <x-kpi label="Weakest" info="strongest_weakest" :value="$w['short']" :tone="($w['band_code'] ?? null) && in_array($w['band_code'], \App\Enums\BandCode::NEEDING_SUPPORT, true) ? 'critical' : null">
-                At {{ Viz::pct($w['pct'], 0) }} · {{ Viz::figure($w['lost']) }} of its {{ $w['max'] }} points still open
+            <x-kpi label="Weakest" info="strongest_weakest" :value="Viz::tiedFigure(array_column($weak, 'short'))" :tone="($w['band_code'] ?? null) && in_array($w['band_code'], \App\Enums\BandCode::NEEDING_SUPPORT, true) ? 'critical' : null">
+                @if (count($weak) > 1)
+                    All at {{ Viz::pct($w['pct'], 0) }}: {{ Viz::names(array_column($weak, 'short')) }} · {{ Viz::figure(array_sum(array_column($weak, 'lost'))) }} points still open between them
+                @else
+                    At {{ Viz::pct($w['pct'], 0) }} · {{ Viz::figure($w['lost']) }} of its {{ $w['max'] }} points still open
+                @endif
             </x-kpi>
         </section>
 
@@ -93,7 +116,7 @@
         {{-- The baseline is drawn only once a follow-up has moved the score: before that it is the score now, and would hide under it. --}}
         @php($hasBaseline = $d['followed'] && collect($shape)->contains(fn ($a) => $a['baseline'] !== null))
         <div class="grid gap-md lg:grid-cols-2 items-start">
-            {{-- The health shape (23 Nov 2026): the 8 areas as an octagon, now, at the baseline and the region's. --}}
+            {{-- The health shape (23 Nov 2026): the 8 areas as an octagon, now and when the cycle began. --}}
             <x-panel title="Health shape" info="area_score" subtitle="The 8 scored areas. Rings at 20, 50, 70 and 90%: where the bands begin. Hover a corner."
                      x-data="{ axis: {{ $axisStart }} }">
                 @if ($latest && $me->can('view', $latest))
@@ -104,7 +127,6 @@
                         <polygon points="{{ \App\Support\Radar::polygon(array_column($shape, 'baseline')) }}" fill="none" stroke="#d9822b" stroke-width="2" stroke-dasharray="6 4" stroke-linejoin="round" />
                     @endif
                     <polygon points="{{ \App\Support\Radar::polygon(array_column($shape, 'pct')) }}" fill="#2f6fb0" fill-opacity="0.16" stroke="#2f6fb0" stroke-width="2.2" stroke-linejoin="round" />
-                    <polygon points="{{ \App\Support\Radar::polygon(array_column($shape, 'region')) }}" fill="none" stroke="var(--color-on-surface)" stroke-width="1.25" stroke-linejoin="round" />
                     @foreach ($shape as $k => $area)
                         @php([$px, $py] = \App\Support\Radar::point($k, count($shape), (float) $area['pct'] / 100 * \App\Support\Radar::RADIUS))
                         <circle cx="{{ $px }}" cy="{{ $py }}" r="3.5" fill="#2f6fb0" />
@@ -119,21 +141,22 @@
                             <p class="text-[0.8125rem] text-on-surface-variant">
                                 Pick another corner of the shape to see its figures.
                                 @if ($hasBaseline)
-                                    The colours match the shape: blue now, dashed orange when the cycle began, black the regional average.
-                                @else
-                                    The colours match the shape: blue now, black the regional average. {{ $d['journey'] ? 'No follow-up yet, so the score now is the baseline; each follow-up then shows how far it has moved.' : '' }}
+                                    The colours match the shape: blue now, dashed orange when the cycle began.
+                                @elseif ($d['journey'])
+                                    No follow-up yet, so the score now is the baseline; each follow-up then shows how far it has moved.
                                 @endif
                             </p>
                         </div>
-                        <dl class="grid grid-cols-1 sm:grid-cols-3 gap-sm">
+                        {{-- Each figure in a column, the columns sharing rows (label, value, note), so the values sit level even when a label wraps. --}}
+                        <dl class="grid grid-cols-1 sm:grid-cols-2 gap-x-sm gap-y-md sm:gap-y-[2px]">
                             {{-- Plain words (24 Nov 2026): what each figure is, and how it compares; each value in its line's colour. --}}
-                            <div>
+                            <div class="sm:grid sm:grid-rows-subgrid sm:row-span-3">
                                 <dt class="text-[0.8125rem] font-semibold text-on-surface-variant">Now</dt>
                                 <dd class="text-[1.25rem] font-bold tabular-nums text-[#2f6fb0]">{{ Viz::pct($area['pct'], 0) }}</dd>
                                 <dd class="{{ $vs }}">{{ Viz::figure($area['points']) }} of its {{ $area['max'] }} points earned</dd>
                             </div>
                             @if ($hasBaseline)
-                                <div>
+                                <div class="sm:grid sm:grid-rows-subgrid sm:row-span-3">
                                     <dt class="text-[0.8125rem] font-semibold text-on-surface-variant">When the cycle began</dt>
                                     <dd class="text-[1.25rem] font-bold tabular-nums text-[#a8590f]">{{ $area['baseline'] !== null ? Viz::pct($area['baseline'], 0) : '—' }}</dd>
                                     @if ($change !== null)
@@ -141,14 +164,6 @@
                                     @endif
                                 </div>
                             @endif
-                            <div>
-                                <dt class="text-[0.8125rem] font-semibold text-on-surface-variant">Regional average</dt>
-                                <dd class="text-[1.25rem] font-bold tabular-nums text-on-surface">{{ $area['region'] !== null ? Viz::pct($area['region'], 0) : '—' }}</dd>
-                                @if ($area['region'] !== null)
-                                    @php($gap = round($area['pct'] - $area['region'], 1))
-                                    <dd class="{{ $vs }}">{{ $gap == 0 ? 'Level with the region' : 'This movement is '.Viz::figure(abs($gap), 1).' points '.($gap > 0 ? 'above' : 'below') }}</dd>
-                                @endif
-                            </div>
                         </dl>
                     </div>
                 @endforeach
@@ -156,7 +171,7 @@
 
             <x-panel title="Score over the cycle" info="baseline" :subtitle="$d['journey'] ? 'The baseline, then each follow-up score, against the bands' : null">
                 @if ($d['journey'])
-                    <x-viz.growth-curve :points="$d['curve']" :height="240" shaded :region="$d['region']['mean']" :pace="$d['pace']['points'] ?? null" />
+                    <x-viz.growth-curve :points="$d['curve']" :height="240" shaded :pace="$d['pace']['points'] ?? null" />
                     @if ($d['pace'])
                         @php($pace = $d['pace'])
                         <div class="mt-md flex items-start gap-sm rounded-xl bg-[#fdf3f4] px-[14px] py-[12px] text-[0.84375rem]">
@@ -205,24 +220,15 @@
                 @endif
             </x-panel>
 
-            <x-panel title="Money" info="region_median" subtitle="From the form as it stands · beside the region · shares only, as currencies differ">
+            <x-panel title="Money" info="international_funding" subtitle="From the form as it stands · the last financial year">
                 @php($groups = \App\Oha\Profile::INCOME_GROUPS)
                 @php($colors = ['#2f6fb0', '#7a5cc2', '#2e9e83', '#d9822b', '#c8433b', '#9a978f'])
                 @php($ourSum = array_sum($money['mix'] ?? []) ?: 1)
                 @if ($money['mix'])
                     <p class="{{ $label }}">Where the money comes from</p>
-                    <div class="mt-sm grid grid-cols-[4.5rem_1fr] items-center gap-x-[12px] gap-y-[8px] text-[0.8125rem]">
-                        <span class="font-semibold">Ours</span>
-                        <span class="flex h-[18px] rounded-[5px] overflow-hidden" role="img" aria-label="Ours: {{ collect($groups)->map(fn ($g, $k) => $g['label'].' '.round(($money['mix'][$k] ?? 0) * 100 / $ourSum).'%')->join(', ') }}">
-                            @foreach ($groups as $k => $g)<span style="width: {{ ($money['mix'][$k] ?? 0) * 100 / $ourSum }}%; background: {{ $colors[$loop->index] }}" title="{{ $g['label'] }} {{ round(($money['mix'][$k] ?? 0) * 100 / $ourSum) }}%"></span>@endforeach
-                        </span>
-                        @if ($money['region_mix'])
-                            <span class="text-on-surface-variant">Region</span>
-                            <span class="flex h-[18px] rounded-[5px] overflow-hidden opacity-75" role="img" aria-label="The region’s average: {{ collect($groups)->map(fn ($g, $k) => $g['label'].' '.round($money['region_mix']['shares'][$k] ?? 0).'%')->join(', ') }}">
-                                @foreach ($groups as $k => $g)<span style="width: {{ $money['region_mix']['shares'][$k] ?? 0 }}%; background: {{ $colors[$loop->index] }}" title="{{ $g['label'] }} {{ round($money['region_mix']['shares'][$k] ?? 0) }}% (region)"></span>@endforeach
-                            </span>
-                        @endif
-                    </div>
+                    <span class="mt-sm flex h-[18px] rounded-[5px] overflow-hidden" role="img" aria-label="Where the money comes from: {{ collect($groups)->map(fn ($g, $k) => $g['label'].' '.round(($money['mix'][$k] ?? 0) * 100 / $ourSum).'%')->join(', ') }}">
+                        @foreach ($groups as $k => $g)<span style="width: {{ ($money['mix'][$k] ?? 0) * 100 / $ourSum }}%; background: {{ $colors[$loop->index] }}" title="{{ $g['label'] }} {{ round(($money['mix'][$k] ?? 0) * 100 / $ourSum) }}%"></span>@endforeach
+                    </span>
                     <p class="mt-sm flex flex-wrap gap-x-md gap-y-xs {{ $vs }}">
                         @foreach ($groups as $k => $g)
                             <span class="inline-flex items-center gap-[6px]"><span class="size-2.5 rounded-[3px]" style="background: {{ $colors[$loop->index] }}" aria-hidden="true"></span>{{ $g['label'] }} {{ round(($money['mix'][$k] ?? 0) * 100 / $ourSum) }}%</span>
@@ -232,15 +238,12 @@
 
                 <p class="mt-lg {{ $label }}">International funding</p>
                 @if ($money['international'] !== null)
-                    <div class="relative mt-sm h-10" role="img" aria-label="International funding {{ Viz::number($money['international']) }}% of income; the form’s line at {{ $money['limit'] }}%{{ $money['region']['international'] !== null ? '; regional median '.Viz::number($money['region']['international']).'%' : '' }}">
+                    <div class="relative mt-sm h-10" role="img" aria-label="International funding {{ Viz::number($money['international']) }}% of income; the form’s line at {{ $money['limit'] }}%">
                         <div class="h-3 rounded-full bg-[#f0eeea] overflow-hidden"><div @class(['h-full rounded-full', 'bg-band-atrisk' => $money['international'] > $money['limit'], 'bg-band-developing' => $money['international'] <= $money['limit']]) style="width: {{ min(100, $money['international']) }}%"></div></div>
                         <span class="absolute -top-[5px] h-[22px] border-l-2 border-band-critical" style="left: {{ $money['limit'] }}%"></span>
                         <span class="absolute top-[20px] -translate-x-1/2 text-[0.75rem] text-critical-ink whitespace-nowrap" style="left: {{ $money['limit'] }}%">Form’s {{ $money['limit'] }}% line</span>
-                        @if ($money['region']['international'] !== null)
-                            <span class="absolute -top-[3px] h-[18px] border-l-2 border-dotted border-on-surface" style="left: {{ min(100, $money['region']['international']) }}%" title="Regional median {{ Viz::number($money['region']['international']) }}%"></span>
-                        @endif
                     </div>
-                    <p class="{{ $vs }}"><span class="font-semibold text-on-surface">Ours {{ Viz::number($money['international']) }}%</span> · regional median {{ $money['region']['international'] !== null ? Viz::number($money['region']['international']).'%' : '—' }} (dotted) · above {{ $money['limit'] }}% the form withholds its point</p>
+                    <p class="{{ $vs }}"><span class="font-semibold text-on-surface">{{ Viz::number($money['international']) }}% of income</span> · above {{ $money['limit'] }}% the form withholds its point</p>
                 @else
                     <p class="{{ $vs }}">Not given on the form.</p>
                 @endif
@@ -249,24 +252,24 @@
                     <div>
                         <dt class="{{ $label }}">Restricted</dt>
                         <dd class="mt-0.5 text-[1.25rem] font-bold tabular-nums">{{ $money['restricted'] !== null ? Viz::number($money['restricted']).'%' : '—' }}</dd>
-                        <dd class="{{ $vs }}">Region {{ $money['region']['restricted'] !== null ? Viz::number($money['region']['restricted']).'%' : '—' }}</dd>
+                        <dd class="{{ $vs }}">Of income, tied to a purpose</dd>
                     </div>
                     <div>
                         <dt class="{{ $label }}">Operating margin</dt>
                         <dd @class(['mt-0.5 text-[1.25rem] font-bold tabular-nums', 'text-critical-ink' => ($money['margin'] ?? 0) < 0])>{{ $money['margin'] !== null ? ($money['margin'] > 0 ? '+' : '').Viz::number($money['margin'], 1).'%' : '—' }}</dd>
-                        <dd class="{{ $vs }}">{{ ($money['margin'] ?? 0) < 0 ? 'A deficit · ' : '' }}Region {{ $money['region']['margin'] !== null ? ($money['region']['margin'] > 0 ? '+' : '').Viz::number($money['region']['margin'], 1).'%' : '—' }}</dd>
+                        <dd class="{{ $vs }}">{{ $money['margin'] === null ? 'Not given on the form' : ($money['margin'] < 0 ? 'A deficit' : 'Income left after costs') }}</dd>
                     </div>
                     <div>
                         <dt class="{{ $label }}">Cash reserve</dt>
                         <dd class="mt-0.5 text-[1.25rem] font-bold tabular-nums">{{ $money['reserve_months'] !== null ? Viz::number($money['reserve_months']).' months' : 'None' }}</dd>
-                        <dd class="{{ $vs }}">{{ $money['region']['with_reserve'] }} of {{ $d['region']['movements'] }} movements have one</dd>
+                        <dd class="{{ $vs }}">{{ $money['reserve_months'] !== null ? 'Of costs, covered by savings' : 'No cash reserve' }}</dd>
                     </div>
                 </dl>
             </x-panel>
         </div>
 
-        {{-- The 19 policies, each beside the share of the region that has it. --}}
-        <x-panel title="Policies in place" info="policies_in_place" :subtitle="$people['policies'].' of '.$people['policies_of'].' · each with the share of the region that has it'">
+        {{-- The 19 policies the form asks about. --}}
+        <x-panel title="Policies in place" info="policies_in_place" :subtitle="$people['policies'].' of the '.$people['policies_of'].' the form asks about'">
             <div class="grid grid-cols-[repeat(auto-fill,minmax(12.5rem,1fr))] gap-sm">
                 @foreach ($d['policies'] as $policy)
                     <div @class(['flex flex-col gap-[4px] rounded-xl border px-[12px] py-[10px] text-[0.8125rem]', 'border-[#f0eeea] bg-[#fafaf8]' => $policy['ours'] === true, 'border-dashed border-[#dcd8d0]' => $policy['ours'] !== true])>
@@ -274,35 +277,29 @@
                             <span @class(['flex-none size-[14px] rounded', 'bg-on-surface' => $policy['ours'] === true, 'border-[1.5px] border-dashed border-[#bdb9b0]' => $policy['ours'] !== true]) aria-hidden="true"></span>
                             <span class="font-semibold">{{ $policy['label'] }}</span>
                         </span>
-                        @if ($policy['region'] !== null)
-                            <span class="flex items-center gap-sm">
-                                <span class="flex-1 h-1 rounded-full bg-[#f0eeea] overflow-hidden" aria-hidden="true"><span class="block h-full bg-outline" style="width: {{ $policy['region'] }}%"></span></span>
-                                <span class="text-[0.75rem] text-on-surface-variant tabular-nums whitespace-nowrap">Region {{ Viz::number($policy['region']) }}%</span>
-                            </span>
-                        @endif
-                        <span class="text-[0.75rem] text-on-surface-variant">{{ $policy['ours'] === true ? 'In place' : ($policy['ours'] === false ? (($policy['region'] ?? 0) >= 50 ? 'Not yet · most of the region has it' : 'Not yet') : 'Not answered') }}</span>
+                        <span class="text-[0.75rem] text-on-surface-variant">{{ $policy['ours'] === true ? 'In place' : ($policy['ours'] === false ? 'Not yet' : 'Not answered on the form') }}</span>
                     </div>
                 @endforeach
             </div>
         </x-panel>
 
-        <x-panel title="People and Board" info="board_make_up" subtitle="From the form as it stands · beside the region where it can be compared">
+        <x-panel title="People and Board" info="board_make_up" subtitle="From the form as it stands">
             @php($identity = $profile['identity'] ?? [])
             @php($federative = ($identity['structure'] ?? null) === 'Federative Structure')
             <dl class="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-x-md gap-y-[18px]">
                 @foreach ([
                     ['People reached', isset($profile['beneficiaries']) ? Viz::compact($profile['beneficiaries']) : null, 'A year (Q518)'],
                     [$federative ? 'Member YMCAs' : 'Branches', $federative ? ($identity['member_organisations'] ?? null) : ($identity['branches'] ?? null), $identity['structure'] ?? 'Structure not given'],
-                    ['Staff', $people['staff'], 'Median '.Viz::number($people['region']['staff'])],
-                    ['Volunteers', $people['volunteers'], 'Median '.Viz::number($people['region']['volunteers'])],
-                    ['Board members', $people['board'], 'Median '.Viz::number($people['region']['board'])],
-                    ['Women on the Board', $people['women'] !== null ? $people['women'].'%' : null, 'Region '.($people['region']['women'] ?? '—').'%'],
-                    ['Under 30 on the Board', $people['under_30'] !== null ? $people['under_30'].'%' : null, 'Region '.($people['region']['under_30'] ?? '—').'%'],
-                ] as [$name, $value, $region])
+                    ['Staff', $people['staff'], 'Paid staff (Q1008)'],
+                    ['Volunteers', $people['volunteers'], 'Q1013'],
+                    ['Board members', $people['board'], 'Current members'],
+                    ['Women on the Board', $people['women'] !== null ? $people['women'].'%' : null, 'Of the current Board'],
+                    ['Under 30 on the Board', $people['under_30'] !== null ? $people['under_30'].'%' : null, 'Of the current Board'],
+                ] as [$name, $value, $note])
                     <div>
                         <dt class="{{ $label }}">{{ $name }}</dt>
                         <dd class="mt-0.5 text-[1.375rem] font-bold tabular-nums">{{ $value === null ? '—' : (is_string($value) ? $value : Viz::number($value)) }}</dd>
-                        <dd class="{{ $vs }}">{{ $region }}</dd>
+                        <dd class="{{ $vs }}">{{ $note }}</dd>
                     </div>
                 @endforeach
             </dl>
@@ -322,8 +319,11 @@
         @include('movements._profile')
     @endif
 
-    {{-- Who leads the movement · its contacts at AAYMCA · its documents (the movement's own users: AAYMCA staff have the assessments in Manage). --}}
-    <div @class(['grid gap-md items-start', 'lg:grid-cols-3' => ! $manage, 'lg:grid-cols-2' => $manage])>
+    {{-- Stage 1 as its three approved documents, with their dates (27 Nov 2026): for everyone who sees the page. --}}
+    <x-stage-documents :entries="$stageOne" id="documents" class="scroll-mt-lg" />
+
+    {{-- Who leads the movement · its contacts at AAYMCA. --}}
+    <div class="grid gap-md items-start lg:grid-cols-2">
         <x-panel title="People" subtitle="Who leads the movement">
             <ul class="flex flex-col">
                 @foreach ([
@@ -355,7 +355,7 @@
                     <x-avatar :user="$person" class="!size-[38px]" />
                     <span class="flex-1 min-w-0">
                         <span class="block text-[0.875rem] font-semibold">{{ $person->name }}</span>
-                        <span class="block text-[0.78125rem] text-on-surface-variant truncate">{{ $person->title ?? $person->role->label() }}</span>
+                        <span class="block text-[0.78125rem] text-on-surface-variant break-words">{{ $person->title ?? $person->role->label() }}</span>
                     </span>
                     <a href="mailto:{{ $person->email }}" title="{{ $person->email }}" aria-label="Email {{ $person->name }} ({{ $person->email }})"
                        class="flex-none size-9 rounded-full border border-[#e4e1db] grid place-items-center text-[#4a4950] hover:bg-[#f2f1ee] hover:text-on-surface">
@@ -366,35 +366,10 @@
                 <x-empty-state icon="support_agent">AAYMCA has not yet named who assesses the movement.</x-empty-state>
             @endforelse
         </x-panel>
-
-        @unless ($manage)
-            <x-panel title="Reports and ODPs" subtitle="Everything approved for the movement">
-                @forelse ($assessments as $assessment)
-                    <a href="{{ route('assessments.show', $assessment) }}" class="flex items-center gap-[14px] py-[12px] border-t border-[#f0eeea] first:border-t-0 first:pt-0 rounded-lg text-on-surface no-underline group">
-                        <span class="flex-none size-[38px] rounded-[10px] bg-[#f2f1ee] grid place-items-center text-[#4a4950]">
-                            <svg class="size-[18px]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 3h7l5 5v13H7zM14 3v5h5M10 13h6M10 17h6"/></svg>
-                        </span>
-                        <span class="flex-1 min-w-0">
-                            <span class="block text-[0.875rem] font-semibold group-hover:underline">{{ $assessment->period_label }} assessment</span>
-                            <span class="block text-[0.78125rem] text-on-surface-variant truncate">
-                                @if ($assessment->score)
-                                    Report, ODP and scores · {{ $assessment->score->band?->label }}, {{ number_format((float) $assessment->score->pct, 1) }}%
-                                @else
-                                    {{ \App\Enums\Stage::of($assessment)->label() }}
-                                @endif
-                            </span>
-                        </span>
-                        <svg class="size-4 flex-none text-[#8a8880]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg>
-                    </a>
-                @empty
-                    <x-empty-state icon="folder_open">No report or ODP has been approved for the movement yet.</x-empty-state>
-                @endforelse
-            </x-panel>
-        @endunless
     </div>
 
     @if ($d['rated'])
-        <x-kpi-glossary :keys="['current_score', 'baseline', 'change_since_baseline', 'pace_needed', 'health_band', 'against_region', 'strongest_weakest', 'area_score', 'points_open', 'international_funding', 'restricted_funding', 'operating_margin', 'cash_reserve', 'region_median', 'policies_in_place', 'board_make_up']" />
+        <x-kpi-glossary :keys="['current_score', 'baseline', 'change_since_baseline', 'pace_needed', 'health_band', 'strongest_weakest', 'area_score', 'points_open', 'international_funding', 'restricted_funding', 'operating_margin', 'cash_reserve', 'policies_in_place', 'board_make_up']" />
     @endif
 
     {{-- AAYMCA staff only: running the movement's assessments, each part behind its own permission. --}}
@@ -425,7 +400,7 @@
                     @endif
                 </x-kpi>
 
-                <x-kpi label="Evidence library" :value="$evidenceCount" :unit="' '.\Illuminate\Support\Str::plural('document', $evidenceCount)">
+                <x-kpi label="Health Assessment Evidence Library" :value="$evidenceCount" :unit="' '.\Illuminate\Support\Str::plural('document', $evidenceCount)">
                     <a href="{{ route('evidence.index', $movement) }}" class="inline-flex items-center gap-[4px] font-semibold text-on-surface hover:underline">
                         Open the library
                         <svg class="size-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg>

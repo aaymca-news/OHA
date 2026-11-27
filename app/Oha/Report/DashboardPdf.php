@@ -17,7 +17,7 @@ use App\Support\Viz;
  * the screen, from App\Queries\DashboardAnalytics, laid out for a board pack.
  *
  *   movement  the key figures, the health shape, the score over the cycle with the pace to
- *             the next band, each area, money and people beside the region, the policies
+ *             the next band, each area, money and people, the policies (its own figures only)
  *   region    the key figures, who needs support, from baseline to now, the bands then and
  *             now, the region's health shape, red flags and the points most often missed
  *
@@ -52,7 +52,7 @@ final class DashboardPdf
     private float $y = 0;
 
     /**
-     * A movement's dashboard.
+     * A movement's dashboard: its own figures only, no regional comparison (27 Nov 2026).
      *
      * @param  array<string, mixed>  $d  from DashboardAnalytics::movement()
      */
@@ -61,29 +61,31 @@ final class DashboardPdf
         $title = $movement->name.' · OHA dashboard';
         $this->pdf = new PdfDocument($title);
         $this->pdf->addPage();
-        $this->masthead($movement->name, 'Dashboard: its health now, over the cycle, and beside the region');
+        $this->masthead($movement->name, 'Dashboard: its health now, over the cycle, and where it can still grow');
 
         $journey = $d['journey'];
         $this->boxes(148, [
             ['CURRENT SCORE', Viz::pct($d['pct']), $this->bandName($d['band'])],
             ['SINCE BASELINE', $d['followed'] ? Viz::signed($journey['change']).' pts' : '—', $journey ? 'Baseline '.Viz::pct($journey['first']) : 'Not closed yet'],
-            ['AGAINST THE REGION', Viz::signed($d['pct'] - $d['region']['mean']).' pts', 'Regional average '.Viz::pct($d['region']['mean'])],
-            ['WEAKEST AREA', $d['weakest']['short'], 'At '.Viz::pct($d['weakest']['pct'], 0).' · '.Viz::figure($d['weakest']['lost']).' of '.$d['weakest']['max'].' points open'],
+            ['POINTS EARNED', Viz::figure($d['points']['earned']).' / '.$d['points']['max'], Viz::figure($d['points']['max'] - $d['points']['earned']).' still open'],
+            [count($d['weakest']) > 1 ? 'WEAKEST AREAS' : 'WEAKEST AREA', Viz::tiedFigure(array_column($d['weakest'], 'short')), count($d['weakest']) > 1
+                ? 'All at '.Viz::pct($d['weakest_pct'], 0).': '.Viz::names(array_column($d['weakest'], 'short'))
+                : 'At '.Viz::pct($d['weakest'][0]['pct'], 0).' · '.Viz::figure($d['weakest'][0]['lost']).' of '.$d['weakest'][0]['max'].' points open'],
         ]);
 
         // The health shape | the score over the cycle
         $this->heading(256, 'Health shape', null);
         $shape = $d['shape'];
-        $series = [['Regional average', array_column($shape, 'region'), self::INK, 0.8]];
-        if (array_filter(array_column($shape, 'baseline'), fn ($v) => $v !== null) !== []) {
-            $series[] = ['Baseline', array_column($shape, 'baseline'), self::ORANGE, 1.4];
+        $series = [];
+        if ($d['followed']) {
+            $series[] = ['When the cycle began', array_column($shape, 'baseline'), self::ORANGE, 1.4];
         }
         $series[] = ['Now', array_column($shape, 'pct'), self::BLUE, 2];
         $this->octagon(self::LEFT + 112, 392, 88, array_column($shape, 'short'), $series);
 
         $this->pdf->text(self::LEFT + 262, 256, 'Score over the cycle', 13, true);
         if ($journey) {
-            $this->curve(self::LEFT + 276, self::LEFT + self::WIDTH - 46, 282, 448, $d['curve'], $d['pace']['points'] ?? null, $d['region']['mean']);
+            $this->curve(self::LEFT + 276, self::LEFT + self::WIDTH - 46, 282, 448, $d['curve'], $d['pace']['points'] ?? null);
             if ($d['pace']) {
                 $p = $d['pace'];
                 $line = 'Pace to '.$p['band'].': about '.Viz::signed($p['need']).' points at each of the '.$p['left'].' follow-up'.($p['left'] === 1 ? '' : 's').' left'
@@ -96,40 +98,39 @@ final class DashboardPdf
 
         // Each area
         $this->y = 540;
-        $this->heading($this->y, 'Each area', 'Points earned of each area’s maximum, now, at the baseline and the regional average. Weakest first.');
+        $this->heading($this->y, 'Each area', 'Points earned of each area’s maximum, now and at the baseline. Weakest first.');
         $this->y += 40;
-        $this->table([['Area', 150, 'left'], ['Points', 70, 'right'], ['Now', 64, 'right'], ['Baseline', 70, 'right'], ['Region', 64, 'right'], ['Points open', 81.28, 'right']],
+        $this->table([['Area', 190, 'left'], ['Points', 80, 'right'], ['Now', 70, 'right'], ['Baseline', 75, 'right'], ['Points open', 84.28, 'right']],
             array_map(fn (array $a) => [$a['name'], Viz::figure($a['points']).' / '.$a['max'], Viz::pct($a['pct'], 0), $a['baseline'] !== null ? Viz::pct($a['baseline'], 0) : '—',
-                $a['region'] !== null ? Viz::pct($a['region'], 0) : '—', $a['lost'] > 0 ? Viz::figure($a['lost']) : 'none'], $d['areas']));
+                $a['lost'] > 0 ? Viz::figure($a['lost']) : 'none'], $d['areas']));
 
         // Money and people
         $money = $d['money'];
         $people = $d['people'];
         $pct = fn (?float $v) => $v === null ? '—' : Viz::number($v).'%';
-        $signedPct = fn (?float $v) => $v === null ? '—' : ($v > 0 ? '+' : '').Viz::number($v, 1).'%';
         $this->room(120);
         $this->y += 18;
-        $this->heading($this->y, 'Money and people', 'From the form as it stands, beside the regional median. Money as shares only, as currencies differ.');
+        $this->heading($this->y, 'Money and people', 'From the form as it stands, the last financial year.');
         $this->y += 40;
-        $this->table([['Figure', 230, 'left'], ['Ours', 130, 'right'], ['Region', 139.28, 'right']], [
-            ['International funding (the form’s line: '.$money['limit'].'%)', $pct($money['international']), $pct($money['region']['international'])],
-            ['Restricted funding', $pct($money['restricted']), $pct($money['region']['restricted'])],
-            ['Operating margin', $signedPct($money['margin']), $signedPct($money['region']['margin'])],
-            ['Cash reserve', $money['reserve_months'] !== null ? Viz::number($money['reserve_months']).' months' : 'None', $money['region']['with_reserve'].' of '.$d['region']['movements'].' have one'],
-            ['Staff', Viz::number($people['staff']), Viz::number($people['region']['staff'])],
-            ['Volunteers', Viz::number($people['volunteers']), Viz::number($people['region']['volunteers'])],
-            ['Board members', Viz::number($people['board']), Viz::number($people['region']['board'])],
-            ['Women on the Board', $people['women'] !== null ? $people['women'].'%' : '—', ($people['region']['women'] ?? '—').'%'],
-            ['Under 30 on the Board', $people['under_30'] !== null ? $people['under_30'].'%' : '—', ($people['region']['under_30'] ?? '—').'%'],
+        $this->table([['Figure', 330, 'left'], ['Value', 169.28, 'right']], [
+            ['International funding (the form’s line: '.$money['limit'].'%)', $pct($money['international'])],
+            ['Restricted funding', $pct($money['restricted'])],
+            ['Operating margin', $money['margin'] === null ? '—' : ($money['margin'] > 0 ? '+' : '').Viz::number($money['margin'], 1).'%'],
+            ['Cash reserve', $money['reserve_months'] !== null ? Viz::number($money['reserve_months']).' months' : 'None'],
+            ['Staff', Viz::number($people['staff'])],
+            ['Volunteers', Viz::number($people['volunteers'])],
+            ['Board members', Viz::number($people['board'])],
+            ['Women on the Board', $people['women'] !== null ? $people['women'].'%' : '—'],
+            ['Under 30 on the Board', $people['under_30'] !== null ? $people['under_30'].'%' : '—'],
         ]);
 
         // Policies
         $this->room(140);
         $this->y += 18;
-        $this->heading($this->y, 'Policies in place: '.$people['policies'].' of '.$people['policies_of'], 'Each with the share of the region that has it.');
+        $this->heading($this->y, 'Policies in place: '.$people['policies'].' of '.$people['policies_of'], 'The policies the form asks about.');
         $this->y += 40;
-        $this->table([['Policy', 250, 'left'], ['Ours', 120, 'left'], ['Region', 129.28, 'right']],
-            array_map(fn (array $p) => [$p['label'], $p['ours'] === true ? 'In place' : ($p['ours'] === false ? 'Not yet' : 'Not answered'), $p['region'] !== null ? Viz::number($p['region']).'%' : '—'], $d['policies']));
+        $this->table([['Policy', 330, 'left'], ['In place', 169.28, 'left']],
+            array_map(fn (array $p) => [$p['label'], $p['ours'] === true ? 'In place' : ($p['ours'] === false ? 'Not yet' : 'Not answered')], $d['policies']));
 
         return $this->finish($title);
     }
@@ -301,13 +302,13 @@ final class DashboardPdf
     }
 
     /**
-     * The score over the cycle: the bands as hairlines, the scores, the regional average
-     * (dotted) and the pace to the next band (dashed, red).
+     * The score over the cycle: the bands as hairlines, the scores, and the pace to the next
+     * band (dashed, red).
      *
      * @param  list<array{label: string, pct: float|null, note: string}>  $points
      * @param  list<float|null>|null  $pace
      */
-    private function curve(float $left, float $right, float $top, float $bottom, array $points, ?array $pace, ?float $region): void
+    private function curve(float $left, float $right, float $top, float $bottom, array $points, ?array $pace): void
     {
         $pdf = $this->pdf;
         $slots = count($points);
@@ -323,10 +324,6 @@ final class DashboardPdf
         $pdf->text($left - 4, $top + 3, '100%', 7, false, self::MUTED, 'right');
         $pdf->text($left - 4, $bottom + 3, '0%', 7, false, self::MUTED, 'right');
 
-        if ($region !== null) {
-            $this->dashed($left, $yOf($region), $right, $yOf($region), self::INK, 1.5, 3, 0.6);
-            $pdf->text(($xOf(1) + $xOf(min(2, $slots - 1))) / 2, $yOf($region) + 10, 'Region '.Viz::pct($region), 6.5, false, self::INK, 'center');
-        }
         if ($pace !== null) {
             $line = [];
             foreach ($pace as $i => $p) {

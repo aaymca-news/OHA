@@ -68,7 +68,7 @@ class UserPolicy
 
         return ! $role->isAdministrator() || $actor->isSuperAdmin()
             ? Response::allow()
-            : Response::deny('Only the Super Administrator gives the Administrator roles.');
+            : Response::deny('Only the Super Administrator gives the Technical Administrator and Super Administrator roles.');
     }
 
     /** Nobody changes their own role: that is how you lock yourself out. */

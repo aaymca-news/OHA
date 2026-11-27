@@ -84,7 +84,7 @@ class FollowUpController extends Controller
         ]);
     }
 
-    /** Evidence added right on a task (a file or a link): into Resources, and onto the task. */
+    /** Evidence added right on a task (a file or a link): into the evidence library, and onto the task. */
     public function evidence(Request $request, OdpTask $odpTask, AttachTaskEvidence $attach): RedirectResponse
     {
         $data = $request->validate([
@@ -99,7 +99,7 @@ class FollowUpController extends Controller
             $file !== null ? (string) $file->getRealPath() : null, $file?->getClientOriginalName(),
             $data['kind'] === 'link' ? ($data['url'] ?? null) : null, $data['title'] ?? null);
 
-        return $this->back($odpTask, "Evidence added: “{$evidence->title}”. It is in Resources too, backing this task.");
+        return $this->back($odpTask, "Evidence added: “{$evidence->title}”. It is in the evidence library too, backing this task.");
     }
 
     /** An assessor drops an unfinished task with a reason (or, with ?undo, restores it). */

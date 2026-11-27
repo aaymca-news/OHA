@@ -15,7 +15,7 @@ use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
  * The dashboards as an Excel workbook, for those who work the figures further (decided
  * 23 Nov 2026): the same figures as the screen and the PDF, one sheet per part.
  *
- *   movement  Summary · Areas · Over the cycle · Money and people · Policies
+ *   movement  Summary · Areas · Over the cycle · Money and people · Policies (its own figures only)
  *   region    Movements · Areas · Bands · Red flags · Most missed
  */
 final class DashboardWorkbook
@@ -37,8 +37,6 @@ final class DashboardWorkbook
             ['Band', $d['band']->label ?? null],
             ['Baseline (%)', $journey['first'] ?? null],
             ['Points since baseline', $d['followed'] ? $journey['change'] : null],
-            ['Regional average (%)', $d['region']['mean']],
-            ['Against the region (points)', round($d['pct'] - $d['region']['mean'], 1)],
             ['Points earned', $d['points']['earned']],
             ['Points available', $d['points']['max']],
             ['Pace: next band', $pace['band'] ?? null],
@@ -47,29 +45,29 @@ final class DashboardWorkbook
             ['Prepared', now()->format('Y-m-d')],
         ]);
 
-        $this->sheet($book->createSheet(), 'Areas', ['Area', 'Points', 'Out of', 'Now (%)', 'Baseline (%)', 'Regional average (%)', 'Points still open'],
-            array_map(fn (array $a) => [$a['name'], $a['points'], $a['max'], $a['pct'], $a['baseline'], $a['region'], $a['lost']], $d['shape']));
+        $this->sheet($book->createSheet(), 'Areas', ['Area', 'Points', 'Out of', 'Now (%)', 'Baseline (%)', 'Points still open'],
+            array_map(fn (array $a) => [$a['name'], $a['points'], $a['max'], $a['pct'], $a['baseline'], $a['lost']], $d['shape']));
 
         $this->sheet($book->createSheet(), 'Over the cycle', ['Score', 'Score (%)', 'Pace to the next band (%)'],
             array_map(fn (array $p, int $i) => [$p['label'], $p['pct'], $pace['points'][$i] ?? null], $d['curve'], array_keys($d['curve'])));
 
         $money = $d['money'];
         $people = $d['people'];
-        $this->sheet($book->createSheet(), 'Money and people', ['Figure', 'Ours', 'Region (median)'], [
-            ['International funding (%)', $money['international'], $money['region']['international']],
-            ['Restricted funding (%)', $money['restricted'], $money['region']['restricted']],
-            ['Operating margin (%)', $money['margin'], $money['region']['margin']],
-            ['Cash reserve (months)', $money['reserve_months'], null],
-            ['Staff', $people['staff'], $people['region']['staff']],
-            ['Volunteers', $people['volunteers'], $people['region']['volunteers']],
-            ['Board members', $people['board'], $people['region']['board']],
-            ['Women on the Board (%)', $people['women'], $people['region']['women']],
-            ['Under 30 on the Board (%)', $people['under_30'], $people['region']['under_30']],
-            ...array_map(fn ($g, $k) => ['Income: '.$g['label'].' (% of income)', $this->share($money['mix'] ?? null, $k), $money['region_mix']['shares'][$k] ?? null], Profile::INCOME_GROUPS, array_keys(Profile::INCOME_GROUPS)),
+        $this->sheet($book->createSheet(), 'Money and people', ['Figure', 'Value'], [
+            ['International funding (%)', $money['international']],
+            ['Restricted funding (%)', $money['restricted']],
+            ['Operating margin (%)', $money['margin']],
+            ['Cash reserve (months)', $money['reserve_months']],
+            ['Staff', $people['staff']],
+            ['Volunteers', $people['volunteers']],
+            ['Board members', $people['board']],
+            ['Women on the Board (%)', $people['women']],
+            ['Under 30 on the Board (%)', $people['under_30']],
+            ...array_map(fn ($g, $k) => ['Income: '.$g['label'].' (% of income)', $this->share($money['mix'] ?? null, $k)], Profile::INCOME_GROUPS, array_keys(Profile::INCOME_GROUPS)),
         ]);
 
-        $this->sheet($book->createSheet(), 'Policies', ['Policy', 'Ours', 'Region (% with it)'],
-            array_map(fn (array $p) => [$p['label'], $p['ours'] === true ? 'In place' : ($p['ours'] === false ? 'Not yet' : 'Not answered'), $p['region']], $d['policies']));
+        $this->sheet($book->createSheet(), 'Policies', ['Policy', 'In place'],
+            array_map(fn (array $p) => [$p['label'], $p['ours'] === true ? 'In place' : ($p['ours'] === false ? 'Not yet' : 'Not answered')], $d['policies']));
 
         return $this->bytes($book);
     }

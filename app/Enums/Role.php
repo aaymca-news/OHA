@@ -5,7 +5,8 @@ namespace App\Enums;
 /**
  * Role a Secretariat or National Movement user holds.
  *
- * AAYMCA: Staff, Administrator and Super Administrator. Both kinds of Administrator
+ * AAYMCA (Area Personnel): Assessment Officer (staff), Technical Administrator and Super
+ * Administrator (the titles shown since 27 Nov 2026). Both kinds of Administrator
  * approve and manage users alike; only a Super Administrator gives or takes away an
  * Administrator role. A National Movement has two users: its Board Chairperson, who
  * may sign the ODP (optional), and its National General Secretary, who supplies its evidence.
@@ -22,8 +23,8 @@ enum Role: string
     {
         return match ($this) {
             self::SuperAdmin => 'Super Administrator',
-            self::Admin => 'Administrator',
-            self::Staff => 'AAYMCA Staff',
+            self::Admin => 'Technical Administrator',
+            self::Staff => 'Assessment Officer',
             self::Board => 'Board Chairperson',
             self::Ngs => 'National General Secretary',
         };

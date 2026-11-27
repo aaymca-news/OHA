@@ -8,11 +8,10 @@
       points  list of ['label' => 'Follow-up 1 score', 'pct' => float|null, 'note' => string], one per slot
       height  the plot's height in px
       shaded  true: each band's span washed in its colour behind the line (23 Nov 2026)
-      region  null, or the regional average: a dotted line across, named
       pace    null, or one value per slot (App\Support\Pace::of()['points']): the pace to the
               next band, a red dashed line from the newest score to the cycle's end
 --}}
-@props(['points', 'height' => 200, 'shaded' => false, 'region' => null, 'pace' => null])
+@props(['points', 'height' => 200, 'shaded' => false, 'pace' => null])
 @php
     // The bands' lower limits, read once per request (App\Support\Bands); the lowest starts at 0.
     $bands = collect(\App\Support\Bands::scale())->filter(fn ($b) => $b['from'] > 1)->map(fn ($b) => (object) ['label' => $b['label'], 'min_pct' => $b['from']]);
@@ -23,7 +22,7 @@
     $last = $reached->last();
     $polyline = $reached->map(fn ($p) => round($p['x'], 2).','.round(100 - (float) $p['pct'], 2))->join(' ');
 @endphp
-<figure {{ $attributes->class('flex flex-col gap-sm') }} x-data="{ hover: null }">
+<figure {{ $attributes->class('@container flex flex-col gap-sm') }} x-data="{ hover: null }">
     <div class="grid grid-cols-[2.25rem_1fr_6.5rem] gap-x-xs">
         {{-- The y axis: 0% and 100%, the bands carry the rest. --}}
         <div class="relative text-[0.75rem] text-on-surface-variant tabular-nums" style="height: {{ $height }}px" aria-hidden="true">
@@ -50,12 +49,6 @@
             @foreach ($points as $i => $point)
                 <span x-show="hover === {{ $i }}" x-cloak class="absolute inset-y-0 border-l border-[#b8b6af]" style="left: {{ $x($i) }}%" aria-hidden="true"></span>
             @endforeach
-
-            @if ($region !== null)
-                <span class="absolute inset-x-0 border-t-2 border-dotted border-on-surface/70" style="bottom: {{ (float) $region }}%" aria-hidden="true"></span>
-                {{-- Named midway between two slots, under the line, on a light backing: clear of the points and their labels. --}}
-                <span class="absolute -translate-x-1/2 translate-y-[calc(100%+2px)] rounded px-[4px] bg-surface-container-lowest/85 text-[0.75rem] text-on-surface whitespace-nowrap" style="left: {{ $slots > 2 ? ($x(1) + $x(2)) / 2 : 50 }}%; bottom: {{ (float) $region }}%" aria-hidden="true">Region {{ \App\Support\Viz::pct((float) $region) }}</span>
-            @endif
 
             @if ($pace !== null)
                 {{-- The pace to the next band: from the newest score to the cycle's end. --}}
@@ -114,7 +107,7 @@
         <div class="relative h-[2.75rem] text-[0.78125rem] leading-tight" aria-hidden="true">
             @foreach ($points as $i => $point)
                 <span class="absolute top-xs -translate-x-1/2 flex flex-col items-center text-center" style="left: {{ $x($i) }}%; width: {{ $slots > 1 ? round(88 / ($slots - 1), 2) : 100 }}%">
-                    <span @class(['font-semibold', 'text-on-surface-variant' => $point['pct'] === null])>{{ \Illuminate\Support\Str::replaceLast(' score', '', $point['label']) }}</span>
+                    <span @class(['font-semibold', 'text-on-surface-variant' => $point['pct'] === null])>@php($slotName = \Illuminate\Support\Str::replaceLast(' score', '', $point['label'])){{-- In a narrow chart (a phone, or a half-width card), "FU 1" for "Follow-up 1" (the hover tip names it in full). --}}@if (str_starts_with($slotName, 'Follow-up '))<span class="@max-[34rem]:hidden">{{ $slotName }}</span><span class="@min-[34rem]:hidden">FU {{ substr($slotName, 10) }}</span>@else{{ $slotName }}@endif</span>
                     @if ($point['pct'] === null)<span class="text-on-surface-variant">not yet</span>@endif
                 </span>
             @endforeach

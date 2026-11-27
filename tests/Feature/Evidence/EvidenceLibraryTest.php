@@ -94,7 +94,7 @@ function evidenceFile(string $content): string
 it('shows the National General Secretary their own movement only, with nothing to sign or approve', function () {
     $this->actingAs($this->ngs)->get(route('movements.show', $this->j->zambia))->assertOk()->assertSee('Mwila Banda');
     $this->actingAs($this->ngs)->get(route('assessments.show', $this->assessment))->assertOk();
-    $this->actingAs($this->ngs)->get(route('resources'))->assertOk()->assertSee('Zambia YMCA')->assertDontSee('Ghana YMCA');
+    $this->actingAs($this->ngs)->get(route('libraries'))->assertRedirect(route('evidence.index', $this->j->zambia));
     $this->actingAs($this->ngs)->get(route('movements.show', $this->j->ghana))->assertForbidden();
     $this->actingAs($this->ngs)->get(route('movements.index'))->assertForbidden();
 
@@ -170,15 +170,15 @@ it('shares a document with other movements without opening up the movement', fun
 
     // Unshared: another movement cannot have it.
     $this->actingAs($this->ghanaNgs)->get(route('evidence.download', $evidence))->assertForbidden();
-    $this->actingAs($this->ghanaNgs)->get(route('resources'))->assertDontSee('Safeguarding Policy');
+    $this->actingAs($this->ghanaNgs)->get(route('resource-repository'))->assertDontSee('Safeguarding Policy');
 
-    // Staff who are not Administrators do not decide sharing.
-    $this->actingAs($this->j->otherStaff)->put(route('evidence.share', $evidence), ['shared' => 1])->assertSessionHasErrors('action');
+    // The Board Chairperson does not decide sharing (27 Nov 2026: AAYMCA staff and the NGS do).
+    $this->actingAs($this->j->chair)->put(route('evidence.share', $evidence), ['shared' => 1])->assertSessionHasErrors('action');
     $this->actingAs($this->ngs)->put(route('evidence.share', $evidence), ['shared' => 1])->assertSessionHasNoErrors();
     expect($evidence->refresh()->isShared())->toBeTrue()
         ->and($evidence->shared_by)->toBe($this->ngs->id);
 
-    $this->actingAs($this->ghanaNgs)->get(route('resources'))->assertSee('Shared by other movements')->assertSee('Safeguarding Policy')->assertSee('Zambia YMCA');
+    $this->actingAs($this->ghanaNgs)->get(route('resource-repository'))->assertSee('Area Resource Repository')->assertSee('Safeguarding Policy')->assertSee('Zambia YMCA');
     $this->actingAs($this->ghanaNgs)->get(route('evidence.download', $evidence))->assertOk()->assertDownload('Safeguarding Policy.pdf');
     // Only the document: not Zambia's library, page, scores or assessments.
     $this->actingAs($this->ghanaNgs)->get(route('evidence.index', $this->j->zambia))->assertForbidden();

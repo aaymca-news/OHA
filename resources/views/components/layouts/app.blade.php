@@ -41,7 +41,7 @@
                 <nav class="px-[12px] pt-1 pb-[12px] flex flex-col gap-0.5 flex-1 overflow-y-auto" aria-label="Main">
                     @php($group = null)
                     @foreach ($navigation as $item)
-                        {{-- AAYMCA staff see the menu in groups, each under a small caption. --}}
+                        {{-- The menu in groups, each under a small caption (a movement’s own users: Library only). --}}
                         @if (($item['group'] ?? null) !== $group)
                             @php($group = $item['group'] ?? null)
                             @if ($group)
@@ -56,7 +56,8 @@
                                'text-[#2b2a2e] font-medium hover:bg-[#f0eeea]' => ! $isActive,
                            ])>
                             <span @class(['material-symbols-outlined text-[1.25rem]', 'text-brand-red-ink' => $isActive, 'text-[#6b6a70]' => ! $isActive]) aria-hidden="true">{{ $item['icon'] }}</span>
-                            <span class="flex-1 min-w-0 truncate">{{ $item['label'] }}</span>
+                            {{-- Long names wrap ("Zambia YMCA Health Assessment Evidence Library"), never cut off. --}}
+                            <span class="flex-1 min-w-0 break-words leading-snug">{{ $item['label'] }}</span>
                             @if ($item['badge'] > 0)
                                 <span @class([
                                     'inline-flex items-center justify-center h-[22px] min-w-[22px] px-2 rounded-full text-[0.75rem] font-bold',
@@ -176,6 +177,10 @@
                         @if ($subtitle)
                             <p class="text-[0.9375rem] text-on-surface-variant mt-1">{{ $subtitle }}</p>
                         @endif
+                        {{-- Optional details beneath the title (a movement's head office, zone and membership). --}}
+                        @isset($meta)
+                            <div class="mt-sm">{{ $meta }}</div>
+                        @endisset
                     </div>
                     {{ $actions ?? '' }}
                 </div>

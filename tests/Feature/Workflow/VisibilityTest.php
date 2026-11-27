@@ -32,7 +32,7 @@ it('shows an approved document to every AAYMCA staff member', function () {
     $form = $this->j->form($this->j->assessmentAt('form_approved'));
 
     expect(($this->can)($this->j->otherStaff, 'view', $form))->toBeTrue()
-        // And to the movement's own Board Chairperson (in Resources), never another's.
+        // And to the movement's own Board Chairperson (on its movement’s page), never another's.
         ->and(($this->can)($this->j->chair, 'view', $form))->toBeTrue()
         ->and(($this->can)($this->j->ghanaChair, 'view', $form))->toBeFalse();
 });

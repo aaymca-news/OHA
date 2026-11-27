@@ -12,7 +12,7 @@ use Illuminate\Validation\Rule;
 
 /**
  * The demo site only: "Choose who to be". One click signs in as one of the demo's people:
- * the Administrator, the AAYMCA assessor, or a movement's Board Chairperson or National
+ * the Technical Administrator, the Assessment Officer, or a movement's Board Chairperson or National
  * General Secretary. Anywhere config oha.demo is off (the live site), it answers 404.
  */
 class DemoSignInController extends Controller

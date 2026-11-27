@@ -7,7 +7,7 @@
                     <x-avatar :user="$person" />
                     <span class="flex-1 min-w-0">
                         <span class="block text-[0.875rem] font-semibold truncate">{{ $person->name }}</span>
-                        <span class="block text-[0.78125rem] text-on-surface-variant">
+                        <span class="block text-[0.78125rem] text-on-surface-variant whitespace-normal break-words">
                             {{ $person->title ?: $person->role->label() }}{{ isset($assignedSince[$person->id]) ? ' · since '.$assignedSince[$person->id]->asDay() : '' }}
                         </span>
                     </span>

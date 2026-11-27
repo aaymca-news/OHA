@@ -2,13 +2,12 @@
 
 use App\Actions\Evidence\UploadEvidence;
 use App\Models\User;
-use App\Models\Zone;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Notification;
 use Tests\Support\Journey;
 
 /*
- * Finding things in Resources: filters, the table of documents, ZIP downloads, and the
+ * Downloading a movement’s files: an assessment, or the whole movement, as one ZIP, and the
  * download log that records who downloaded a movement's files.
  */
 
@@ -20,38 +19,6 @@ beforeEach(function () {
     file_put_contents($path, '%PDF-1.4 safeguarding policy');
     $this->evidence = app(UploadEvidence::class)->handle($this->j->assessor, $this->assessment, $path, 'Safeguarding Policy.pdf');
     app(UploadEvidence::class)->handle($this->j->assessor, $this->assessment, null, null, 'Website', url: 'https://zambiaymca.org');
-});
-
-it('filters by zone, health band, year and whether the ODP is validated', function () {
-    $staff = $this->j->otherStaff;
-    $zambiaZone = $this->j->zambia->zone_id;
-    $otherZone = Zone::query()->whereKeyNot($zambiaZone)->value('id');
-    $year = (int) $this->assessment->assessed_on->format('Y');
-    $band = DB::table('v_movement_status')->where('movement_id', $this->j->zambia->id)->value('band_code');
-
-    $sees = fn (array $query) => $this->actingAs($staff)->get(route('resources', $query))->assertOk();
-
-    $sees(['zone' => $zambiaZone])->assertSee('Zambia YMCA');
-    $sees(['zone' => $otherZone])->assertDontSee('Zambia YMCA')->assertSee('Nothing matches these filters.');
-    $sees(['band' => $band])->assertSee('Zambia YMCA');
-    $sees(['band' => $band === 'strong' ? 'atrisk' : 'strong'])->assertDontSee('Zambia YMCA');
-    $sees(['year' => $year])->assertSee('Zambia YMCA');
-    $sees(['year' => $year - 1])->assertDontSee('Zambia YMCA');
-    $sees(['odp' => 'not_validated'])->assertSee('Zambia YMCA');
-    $sees(['odp' => 'validated'])->assertDontSee('Zambia YMCA');
-});
-
-it('lists every document in a table, by type, sorted by the column chosen', function () {
-    $this->actingAs($this->j->otherStaff)->get(route('resources', ['view' => 'table']))->assertOk()
-        ->assertSee('OHA form')->assertSee('Report')->assertSee('ODP')->assertSee('Evidence')
-        ->assertSee('Safeguarding Policy · General')->assertSee('Not validated')
-        ->assertSee('aria-sort="ascending"', escape: false);
-
-    $this->actingAs($this->j->otherStaff)->get(route('resources', ['view' => 'table', 'type' => 'evidence']))->assertOk()
-        ->assertSee('Safeguarding Policy')->assertSee('2 documents')->assertDontSee('ZAM26 OHA Form.xlsx');
-
-    $this->actingAs($this->j->otherStaff)->get(route('resources', ['view' => 'table', 'sort' => 'date', 'dir' => 'desc']))->assertOk()
-        ->assertSee('aria-sort="descending"', escape: false);
 });
 
 it('downloads an assessment as one ZIP: the approved documents and the evidence, links listed', function () {

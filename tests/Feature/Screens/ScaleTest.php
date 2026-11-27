@@ -77,7 +77,7 @@ it('serves the cached sidebar again to a movement’s own users (plain values on
 
     foreach ([$this->j->chair, $ngs] as $user) {
         $this->actingAs($user)->get(route('dashboard'))->assertOk();
-        // Their dashboard is their movement's page (23 Nov 2026); the cached sidebar still leads to Resources.
-        $this->actingAs($user)->get(route('dashboard'))->assertOk()->assertSee('Zambia YMCA')->assertSee(route('resources'), false);
+        // Their dashboard is their movement's page (23 Nov 2026); the cached sidebar still leads to the Area Resource Repository.
+        $this->actingAs($user)->get(route('dashboard'))->assertOk()->assertSee('Zambia YMCA')->assertSee(route('resource-repository'), false);
     }
 });

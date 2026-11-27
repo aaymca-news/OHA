@@ -192,10 +192,10 @@
                 @else
                     <ul class="flex flex-wrap gap-sm">
                         @foreach ($working['evidenceGaps'] as $code)
-                            <li><x-status-pill tone="warning">{{ \App\Oha\EvidenceQuestions::shown($code) }} · {{ \App\Oha\EvidenceQuestions::label($code) }}</x-status-pill></li>
+                            <li class="max-w-full"><x-status-pill tone="warning" class="!whitespace-normal max-w-full">{{ \App\Oha\EvidenceQuestions::shown($code) }} · {{ \App\Oha\EvidenceQuestions::label($code) }}</x-status-pill></li>
                         @endforeach
                     </ul>
-                    <x-button variant="link" :href="route('evidence.index', $movement)" class="mt-sm">Add the evidence in Resources</x-button>
+                    <x-button variant="link" :href="route('evidence.index', $movement)" class="mt-sm">Add the evidence in the evidence library</x-button>
                 @endif
             </x-panel>
         @endif
@@ -255,7 +255,7 @@
                         <p class="text-[0.875rem] font-semibold">“Yes” answers with no evidence then</p>
                         <ul class="flex flex-wrap gap-sm">
                             @foreach ($viewed->evidence_gaps as $code)
-                                <li><x-status-pill tone="warning">{{ \App\Oha\EvidenceQuestions::shown($code) }} · {{ \App\Oha\EvidenceQuestions::label($code) }}</x-status-pill></li>
+                                <li class="max-w-full"><x-status-pill tone="warning" class="!whitespace-normal max-w-full">{{ \App\Oha\EvidenceQuestions::shown($code) }} · {{ \App\Oha\EvidenceQuestions::label($code) }}</x-status-pill></li>
                             @endforeach
                         </ul>
                     </div>

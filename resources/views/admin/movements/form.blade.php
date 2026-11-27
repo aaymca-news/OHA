@@ -12,7 +12,7 @@
                 <x-input name="name" label="Name" :value="$movement?->name" required maxlength="80" hint="As the Alliance writes it, for example: Botswana YMCA" />
                 <x-input name="country" label="Country" :value="$movement?->country" required maxlength="60"
                          hint="The country’s usual short name, for example: Botswana. Uploaded OHA forms are checked against it (Q102)." />
-                <x-input name="city" label="City" :value="$movement?->city" required maxlength="60" hint="Where the national office is." />
+                <x-input name="city" label="National Head Office: city" :value="$movement?->city" required maxlength="60" hint="The city of the movement’s National Head Office, not necessarily the capital." />
                 @foreach ([['zone_id', 'Zone', $zones, 'name', $movement?->zone_id], ['membership_status_id', 'Membership', $memberships, 'label', $movement?->membership_status_id]] as [$field, $label, $options, $text, $current])
                     <x-select :name="$field" :label="$label" required>
                         <option value="" disabled @selected(old($field, $current) === null)>Choose…</option>

@@ -16,7 +16,7 @@ use RuntimeException;
 use ZipArchive;
 
 /**
- * One ZIP file of what Resources offers for some assessments, as this user may see it:
+ * One ZIP file of an assessment’s documents, as this user may see it:
  * the approved OHA form, report and ODP, and the evidence library (files, and the links
  * listed in a text file). One folder per assessment. Each download is recorded.
  */

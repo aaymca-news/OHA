@@ -10,6 +10,7 @@ use App\Support\Navigation;
 use App\Support\SignedInDevices;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Notification;
+use PhpOffice\PhpSpreadsheet\IOFactory;
 use Tests\Support\Journey;
 use Tests\Support\ValidHtml;
 
@@ -27,16 +28,16 @@ beforeEach(function () {
 });
 
 it('gives each role its own menu', function () {
-    expect(($this->menu)($this->j->admin))->toBe(['Dashboard', 'My Work', 'National Movements', 'Assessments', 'Timelines', 'Journeys', 'Resources', 'Users & Roles'])
-        ->and(($this->menu)($this->j->superAdmin))->toBe(['Dashboard', 'My Work', 'National Movements', 'Assessments', 'Timelines', 'Journeys', 'Resources', 'Users & Roles'])
-        ->and(($this->menu)($this->j->assessor))->toBe(['Dashboard', 'My Work', 'National Movements', 'Timelines', 'Journeys', 'Resources'])
-        ->and(($this->menu)($this->j->chair))->toBe(['Dashboard', 'My Work', 'Resources'])
-        ->and(($this->menu)($this->ngs))->toBe(['Dashboard', 'Resources']);
+    expect(($this->menu)($this->j->admin))->toBe(['Dashboard', 'My Work', 'National Movements', 'Assessments', 'Timelines', 'Journeys', 'Area Resource Repository', 'Users & Roles'])
+        ->and(($this->menu)($this->j->superAdmin))->toBe(['Dashboard', 'My Work', 'National Movements', 'Assessments', 'Timelines', 'Journeys', 'Area Resource Repository', 'Users & Roles'])
+        ->and(($this->menu)($this->j->assessor))->toBe(['Dashboard', 'My Work', 'National Movements', 'Timelines', 'Journeys', 'Area Resource Repository'])
+        ->and(($this->menu)($this->j->chair))->toBe(['Dashboard', 'My Work', 'Area Resource Repository'])
+        ->and(($this->menu)($this->ngs))->toBe(['Dashboard', 'Area Resource Repository']);
 
-    // AAYMCA staff see the menu in captioned groups; a movement's own short menu has none.
+    // The menu in captioned groups; a movement's own short menu has only its Library.
     $this->actingAs($this->j->admin)->get(route('dashboard'))->assertOk()
-        ->assertSeeInOrder(['Movements', 'National Movements', 'Timelines', 'Library', 'Resources', 'Administration', 'Users &amp; Roles'], false);
-    $this->actingAs($this->j->chair)->get(route('dashboard'))->assertOk()->assertDontSee('Administration')->assertDontSee('>Library<', false);
+        ->assertSeeInOrder(['Movements', 'National Movements', 'Timelines', 'Library', 'Area Resource Repository', 'Administration', 'Users &amp; Roles'], false);
+    $this->actingAs($this->j->chair)->get(route('dashboard'))->assertOk()->assertDontSee('Administration')->assertSeeInOrder(['Library', 'Area Resource Repository']);
 });
 
 it('shows the movement’s own users its approved form, report and ODP; the ODP from its approval, to sign and to read', function () {
@@ -54,7 +55,7 @@ it('shows the movement’s own users its approved form, report and ODP; the ODP 
             ->and($user->can('view', $report))->toBeTrue()
             ->and($user->can('view', $odp))->toBeTrue()
             ->and($user->can('download', $odp->approvedVersion))->toBeTrue();
-        $this->actingAs($user)->get(route('resources'))->assertOk()
+        $this->actingAs($user)->get(route('movements.show', $this->j->zambia))->assertOk()
             ->assertSee(route('downloads.document', $report->approvedVersion))
             ->assertSee(route('downloads.document', $odp->approvedVersion));
     }
@@ -129,7 +130,7 @@ it('shows AAYMCA the region, and the movement its own dashboard', function () {
 
     // Analytics only (decided 15 Nov 2026): the movement's scores and figures, never its work or tasks.
     $this->actingAs($this->j->chair)->get(route('dashboard'))->assertOk()
-        ->assertSee('Welcome back')->assertSee('Current score')->assertSee('Where the missing points are')->assertSee('Against the region')
+        ->assertSee('Welcome back')->assertSee('Current score')->assertSee('Where the missing points are')->assertDontSee('Against the region')->assertDontSee('Regional average')
         ->assertDontSee('Your assessment cycle')->assertDontSee('Your ODP')->assertDontSee('Blocked')
         ->assertSee('Contacts at AAYMCA')->assertSee('Tendai Moyo')->assertDontSee('By zone')
         // Signing is optional: never a prompt on the dashboard (it is in My Work).
@@ -157,7 +158,29 @@ it('shows one movement page: the same dashboard to its own users and AAYMCA staf
     $page = $this->actingAs($this->j->assessor)->get(route('movements.show', $this->j->zambia))->assertOk();
     ValidHtml::assert($page->getContent(), 'movement page with Manage');
     $page->assertSee('How these figures are worked out')
-        ->assertSeeInOrder(['Current score', 'Where the missing points are', 'id="manage"', 'Next assessment', 'Evidence library', 'Assessments'], false);
+        ->assertSeeInOrder(['Current score', 'Where the missing points are', 'id="manage"', 'Next assessment', 'Health Assessment Evidence Library', 'Assessments'], false);
+});
+
+it('compares a movement with the region nowhere on its page or its downloads, only on AAYMCA’s dashboard', function () {
+    $this->j->assessmentAt('closed');
+    $regional = '/\b(region|regional|median)\b/i';
+
+    // A movement's page, for its own users and AAYMCA staff alike, and both its downloads.
+    foreach ([$this->j->chair, $this->ngs, $this->j->assessor] as $user) {
+        $page = $this->actingAs($user)->get(route('movements.show', $this->j->zambia))->assertOk()->assertSee('Health shape');
+        expect(preg_match($regional, strip_tags($page->getContent())))->toBe(0);
+    }
+    $workbook = tempnam(sys_get_temp_dir(), 'dash');
+    file_put_contents($workbook, $this->actingAs($this->ngs)->get(route('movements.report', [$this->j->zambia, 'xlsx']))->assertOk()->getContent());
+    $sheets = IOFactory::load($workbook);
+    foreach ($sheets->getAllSheets() as $sheet) {
+        expect(preg_match($regional, implode(' ', array_map(fn ($row) => implode(' ', array_map('strval', $row)), $sheet->toArray()))))->toBe(0);
+    }
+    @unlink($workbook);
+
+    // The region's figures stay on AAYMCA's dashboard.
+    $this->actingAs($this->j->assessor)->get(route('dashboard'))->assertOk()
+        ->assertSee('The region’s health shape')->assertSee('Median now');
 });
 
 it('keeps the job title of a National Movement’s users as the Administrators set it', function () {

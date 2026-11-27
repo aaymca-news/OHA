@@ -15,7 +15,8 @@
     <span aria-hidden="true"></span>
     <div class="relative h-4 text-[0.75rem] text-on-surface-variant tabular-nums" aria-hidden="true">
         @foreach ($edges as $edge)
-            <span class="absolute -translate-x-1/2" style="left: {{ $x($edge) }}%">{{ Viz::figure($edge) }}%</span>
+            {{-- On a phone only where Strong begins, so the numbers never run together. --}}
+            <span @class(['absolute -translate-x-1/2', 'max-sm:hidden' => $edge != \App\Support\Bands::from('strong')]) style="left: {{ $x($edge) }}%">{{ Viz::figure($edge) }}%</span>
         @endforeach
     </div>
     <span aria-hidden="true"></span>

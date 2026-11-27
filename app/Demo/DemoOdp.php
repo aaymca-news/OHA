@@ -113,7 +113,7 @@ final class DemoOdp
                 $sheet->setCellValue("I{$row}", $random->getInt(0, 1) === 1 ? 'Staff time' : 'Budget line in the annual plan');
             }
         }
-        $sheet->setCellValue('C63', 'The General Secretary, with the AAYMCA assessor');
+        $sheet->setCellValue('C63', 'The General Secretary, with the Assessment Officer');
 
         $path = tempnam(sys_get_temp_dir(), 'demo-odp').'.xlsx';
         IOFactory::createWriter($book, 'Xlsx')->save($path);

@@ -28,6 +28,22 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
  */
 class EvidenceController extends Controller
 {
+    /**
+     * The old Resources address (/resources), kept for old links: each movement's evidence
+     * library now opens from its page (27 Nov 2026). A movement's own users go to theirs;
+     * AAYMCA staff to the National Movements, to choose one.
+     */
+    public function libraries(Request $request): RedirectResponse
+    {
+        $user = $request->user();
+        if ($user->isSecretariat()) {
+            return redirect()->route('movements.index');
+        }
+        abort_if($user->movement === null, 403);
+
+        return redirect()->route('evidence.index', $user->movement);
+    }
+
     public function index(Request $request, Movement $movement, EvidenceLibrary $library): View
     {
         Gate::authorize('viewLibrary', [Evidence::class, $movement]);

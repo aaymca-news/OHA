@@ -50,7 +50,7 @@ it('shows the Administrators the Secretariat and the Board Chairpersons', functi
 it('offers the Administrator roles only to the Super Administrator', function () {
     $this->actingAs($this->admin)->get(route('admin.users.create'))->assertOk()
         ->assertDontSee('value="admin"', false)->assertDontSee('value="super_admin"', false)
-        ->assertSee('Only the Super Administrator gives the Administrator roles.');
+        ->assertSee('Only the Super Administrator gives the Technical Administrator and Super Administrator roles.');
 
     $this->actingAs($this->superAdmin)->get(route('admin.users.create'))->assertOk()
         ->assertSee('value="admin"', false)->assertSee('value="super_admin"', false);
@@ -91,7 +91,7 @@ it('changes a role through the screen, and never the user’s own', function () 
 
 it('keeps an Administrator from giving or taking away the Administrator roles', function () {
     $this->actingAs($this->admin)->put(route('admin.users.role', $this->staff), ['role' => 'admin'])
-        ->assertSessionHasErrors(['action' => 'Only the Super Administrator gives the Administrator roles.']);
+        ->assertSessionHasErrors(['action' => 'Only the Super Administrator gives the Technical Administrator and Super Administrator roles.']);
     $this->actingAs($this->admin)->put(route('admin.users.role', $this->superAdmin), ['role' => 'staff'])
         ->assertSessionHasErrors(['action' => 'Only the Super Administrator manages an Administrator’s account.']);
     $this->actingAs($this->admin)->post(route('admin.users.deactivate', $this->superAdmin))

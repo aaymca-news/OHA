@@ -23,7 +23,7 @@ use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\ReportDraftController;
 use App\Http\Controllers\ReportFixController;
-use App\Http\Controllers\ResourceController;
+use App\Http\Controllers\ResourceRepositoryController;
 use App\Http\Controllers\SearchController;
 use App\Http\Controllers\SecurityController;
 use App\Http\Controllers\TimelineController;
@@ -146,7 +146,10 @@ Route::middleware('auth')->group(function () {
         Route::delete('review', 'reopen')->name('reopen');
     });
 
-    Route::get('resources', ResourceController::class)->name('resources');
+    // The old Resources address, kept for old links (27 Nov 2026): a movement's own users go to
+    // their evidence library, AAYMCA staff to the National Movements. And the Area Resource Repository.
+    Route::get('resources', [EvidenceController::class, 'libraries'])->name('libraries');
+    Route::get('area-resource-repository', ResourceRepositoryController::class)->name('resource-repository');
 
     // Each movement's evidence library: supporting documents linked to the form and the ODP.
     Route::get('resources/{movement}', [EvidenceController::class, 'index'])->name('evidence.index');

@@ -22,7 +22,7 @@ use Tests\Support\Journey;
 
 /*
  * Stage 2, the follow-up cycle to its end: evidence added right on a task (it shows in
- * Resources too), dropping an unfinished task with a reason, and closing the cycle once
+ * the evidence library too), dropping an unfinished task with a reason, and closing the cycle once
  * its meetings, its overall review and every task are settled; then it is read-only.
  */
 
@@ -46,7 +46,7 @@ function holdTheYear(object $test): void
     app(RecordOdpReview::class)->handle($test->assessment, $test->j->assessor, 'The board was trained.', 'The fund was not raised: no donor yet.');
 }
 
-it('adds evidence right on a task, as a link or a file, and it shows in Resources backing that task', function () {
+it('adds evidence right on a task, as a link or a file, and it shows in the evidence library backing that task', function () {
     Storage::fake((string) config('oha.disk'));
 
     $this->actingAs($this->ngs)->post(route('follow-up.evidence', $this->task), ['kind' => 'link', 'url' => 'https://example.org/board-minutes', 'title' => 'Board minutes, June'])
@@ -55,7 +55,7 @@ it('adds evidence right on a task, as a link or a file, and it shows in Resource
     expect($this->task->refresh()->evidence_id)->toBe($link->id)
         ->and(DB::table('evidence_odp_tasks')->where('evidence_id', $link->id)->value('task'))->toBe('1.1');
 
-    // In Resources, the movement's evidence library, at once.
+    // In the movement’s evidence library, at once.
     $this->actingAs($this->ngs)->get(route('evidence.index', $this->j->zambia))->assertOk()->assertSee('Board minutes, June');
 
     // A file, by the assessor.

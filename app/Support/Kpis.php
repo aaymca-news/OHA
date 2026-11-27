@@ -52,13 +52,7 @@ final class Kpis
         'strongest_weakest' => [
             'label' => 'Strongest and weakest',
             'means' => 'The areas with the highest and the lowest area score.',
-            'how' => 'Area scores compared as percentages, so a small area is judged fairly beside a large one.',
-        ],
-        'against_region' => [
-            'label' => 'Against the region',
-            'means' => 'How the movement compares with the other assessed movements.',
-            'how' => 'Its current score − the average current score of every assessed movement, in percentage points.',
-            'mind' => 'Only the region’s averages and medians are shown, never another movement’s figures.',
+            'how' => 'Area scores compared as percentages, so a small area is judged fairly beside a large one. When several areas tie, every one of them is named.',
         ],
         'pace_needed' => [
             'label' => 'Pace needed',
@@ -152,13 +146,13 @@ final class Kpis
         'region_median' => [
             'label' => 'Regional median',
             'means' => 'The middle value among the assessed movements.',
-            'how' => 'Half the movements are above it and half below. Used for money and people so that one very large or very small movement does not pull the comparison.',
+            'how' => 'Half the movements are above it and half below. Used for the region’s health shape so that one very large or very small movement does not pull it. Shown on AAYMCA’s dashboard only, never on a movement’s page.',
             'mind' => 'Money is never added up across movements: each reports in its own currency, so only shares and ratios are compared.',
         ],
         'policies_in_place' => [
             'label' => 'Policies in place',
             'means' => 'How many of the key policies the movement has and applies.',
-            'how' => 'The policies answered as in place, of the 19 the form asks about (Q412–Q430), each beside the share of assessed movements that have it.',
+            'how' => 'The policies answered as in place, of the 19 the form asks about (Q412–Q430).',
         ],
         'board_make_up' => [
             'label' => 'Women and under 30 on the Board',

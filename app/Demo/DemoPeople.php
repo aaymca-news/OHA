@@ -7,17 +7,17 @@ use App\Models\Movement;
 use App\Models\User;
 
 /**
- * Who a visitor can be in their demo, one click each from "Choose who to be": the AAYMCA
- * staff (the Administrator, and the AAYMCA assessor, assigned to every movement), and any
+ * Who a visitor can be in their demo, one click each from "Choose who to be": the Area
+ * Personnel (the Technical Administrator, and the Assessment Officer, assigned to every movement), and any
  * movement's Board Chairperson or National General Secretary. All invented, at
  * example.org (a domain that never receives mail), made with every new demo (DemoSeeder).
  */
 final class DemoPeople
 {
-    /** @var array<string, array{email: string, label: string, explains: string}> AAYMCA staff: key => person */
+    /** @var array<string, array{email: string, label: string, explains: string}> Area Personnel (AAYMCA staff): key => person */
     public const STAFF = [
-        'admin' => ['email' => 'demo.admin@example.org', 'label' => 'Administrator', 'explains' => 'Approves, assigns assessors, and can do all an assessor does, on any movement'],
-        'assessor' => ['email' => 'demo.assessor@example.org', 'label' => 'AAYMCA assessor', 'explains' => 'Runs the assessments, closes them, and runs the follow-ups and re-scoring, for every movement'],
+        'admin' => ['email' => 'demo.admin@example.org', 'label' => 'Technical Administrator', 'explains' => 'Approves, assigns Assessment Officers, and can do all an Assessment Officer does, on any movement'],
+        'assessor' => ['email' => 'demo.assessor@example.org', 'label' => 'Assessment Officer', 'explains' => 'Runs the assessments, closes them, and runs the follow-ups and re-scoring, for every movement'],
     ];
 
     /** @var array<string, array{role: Role, label: string, explains: string}> a movement's people: key => role */

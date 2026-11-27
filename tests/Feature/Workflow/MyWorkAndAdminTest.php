@@ -80,7 +80,7 @@ it('never lets anyone change their own role', function () {
 
 it('lets only the Super Administrator give or take away an Administrator role', function () {
     expect(fn () => app(ChangeUserRole::class)->handle($this->j->admin, $this->j->otherStaff, Role::Admin))
-        ->toThrow(WorkflowRuleBroken::class, 'Only the Super Administrator gives the Administrator roles')
+        ->toThrow(WorkflowRuleBroken::class, 'Only the Super Administrator gives the Technical Administrator and Super Administrator roles')
         ->and(fn () => app(ChangeUserRole::class)->handle($this->j->admin, $this->j->secondAdmin, Role::Staff))
         ->toThrow(WorkflowRuleBroken::class, 'Only the Super Administrator manages an Administrator’s account');
 

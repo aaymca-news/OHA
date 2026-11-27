@@ -115,18 +115,18 @@ final class ApproveArtefact
             if ($artefact->kind === ArtefactKind::Odp) {
                 Notify::send([$assessment->movement->chair], new WorkflowNotice(
                     "Now available: {$name}, {$movement}",
-                    $approved.' You can read and download it in Resources. You may also sign it on behalf of your board; this is optional.',
+                    $approved.' You can download it from your movement’s page, under Stage 1 documents. You may also sign it on behalf of your board; this is optional.',
                     Notify::link($assessment), 'info',
                 ));
                 Notify::send([$assessment->movement->generalSecretary], new WorkflowNotice(
                     "Now available: {$name}, {$movement}",
-                    $approved.' You can read and download it in Resources, and you can now add your supporting documents there.',
+                    $approved.' You can download it from your movement’s page, under Stage 1 documents, and you can now add your supporting documents in your Health Assessment Evidence Library.',
                     Notify::link($assessment), 'info',
                 ));
             } else {
                 Notify::send([$assessment->movement->chair, $assessment->movement->generalSecretary], new WorkflowNotice(
                     "Now available: {$name}, {$movement}",
-                    $approved.' You can read and download it in Resources.',
+                    $approved.' You can download it from your movement’s page, under Stage 1 documents.',
                     Notify::link($assessment), 'info',
                 ));
             }
@@ -148,7 +148,7 @@ final class ApproveArtefact
         $upload->update(['approved_by' => $approver->id, 'approved_at' => now(), 'approved_supplied' => $upload->supplied]);
 
         // Approved with answers typed in the platform: the corrected copy becomes the form's
-        // file everywhere (previews, downloads, Resources); the copy as uploaded goes.
+        // file everywhere (previews, downloads, the Stage 1 documents); the copy as uploaded goes.
         if ($upload->hasEdits()) {
             [$disk, $path] = [$upload->disk, $upload->path];
             $upload->update([

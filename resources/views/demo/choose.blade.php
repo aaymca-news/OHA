@@ -1,6 +1,6 @@
 {{--
-    The demo site only: "Choose who to be", in the visitor's own demo. The AAYMCA staff (the
-    Administrator, the AAYMCA assessor), or a movement's Board Chairperson or National
+    The demo site only: "Choose who to be", in the visitor’s own demo. The Area Personnel (the
+    Technical Administrator, the Assessment Officer), or a movement’s Board Chairperson or National
     General Secretary. One click each, no password; sign out to come back here.
 --}}
 @php
@@ -16,7 +16,7 @@
     </p>
 
     <section class="flex flex-col gap-sm" aria-labelledby="demo-staff">
-        <h2 id="demo-staff" class="text-[0.9375rem] font-bold text-primary">AAYMCA staff</h2>
+        <h2 id="demo-staff" class="text-[0.9375rem] font-bold text-primary">Area Personnel</h2>
         @foreach (\App\Demo\DemoPeople::STAFF as $key => $person)
             <form method="POST" action="{{ route('demo.sign-in') }}">
                 @csrf
