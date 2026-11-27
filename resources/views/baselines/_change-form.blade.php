@@ -1,7 +1,7 @@
 {{--
     Changing one scored item's answer during an open follow-up, with the reason: one form per
     answer it reads (Q244 reads Q244 and Q245), or, for the income mix, the percentages of
-    every source together. Read exactly as the Excel form's answer would be. Expects
+    every source together. Read exactly as the OHA Form's answer would be. Expects
     $assessment, $item (from ScoreGaps), $answers (being re-scored), $labels.
 --}}
 @php

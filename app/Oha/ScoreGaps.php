@@ -13,7 +13,7 @@ use App\Models\Category;
  * Each scored question is one item: its points now and at most, the answers that decide
  * it (its "drivers"; most read only their own answer), and what earns the points, in the
  * form's terms. "Not Applicable" scores 0 with the maximum unchanged, exactly as the
- * Excel form scores it (decided 12 Nov 2026).
+ * OHA Form scores it (decided 12 Nov 2026).
  */
 final class ScoreGaps
 {

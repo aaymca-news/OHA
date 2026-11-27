@@ -10,7 +10,7 @@ use Illuminate\Support\Facades\DB;
 /**
  * Where re-scoring stands during a follow-up (decided 12 Nov 2026). Follow-up N starts
  * from Baseline N (the one in force); while it is open, its answers are changed (a
- * re-uploaded Excel form, or answer by answer on the site) and kept on the follow-up's
+ * re-uploaded OHA Form, or answer by answer on the site) and kept on the follow-up's
  * window; closing it records them as Baseline N + 1. Read here the same way by the page,
  * the actions and the baseline recorded, so they never disagree.
  */

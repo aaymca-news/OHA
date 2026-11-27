@@ -179,7 +179,7 @@ class AssessmentPolicy
     }
 
     /**
-     * Re-scoring the answers for the next baseline (a re-uploaded Excel form, or answer by
+     * Re-scoring the answers for the next baseline (a re-uploaded OHA Form, or answer by
      * answer on the site): while a follow-up is open, by the movement's assessors, an
      * Administrator or the Super Administrator. Closing the follow-up is the sign-off.
      */

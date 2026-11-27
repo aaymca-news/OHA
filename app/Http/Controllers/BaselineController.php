@@ -18,7 +18,7 @@ use Illuminate\View\View;
 /**
  * An assessment's baselines (decided 12 Nov 2026): Baseline 1 from the closed assessment,
  * one more as each follow-up is closed; and, while a follow-up is open, re-scoring its
- * answers (a re-uploaded Excel form, or answer by answer on the site).
+ * answers (a re-uploaded OHA Form, or answer by answer on the site).
  */
 class BaselineController extends Controller
 {
@@ -84,7 +84,7 @@ class BaselineController extends Controller
         return redirect()->to(route('baselines.show', $assessment).'#changes')->with('status', 'The answer is set back to what it was.');
     }
 
-    /** The movement's re-filled Excel form: its answers become the answers re-scored. */
+    /** The movement's re-filled OHA Form: its answers become the answers re-scored. */
     public function upload(Request $request, Assessment $assessment, Rescore $rescore): RedirectResponse
     {
         $data = $request->validate([

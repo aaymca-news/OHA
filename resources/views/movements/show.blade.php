@@ -8,7 +8,7 @@
     (decided 27 Nov 2026; the region's figures are on AAYMCA's dashboard). The key figures;
     the health shape and the score over the cycle; where it can still grow; its money, people
     and policies; the cycle's journey and the scores over time for
-    those allowed; the movement at a glance, from its form; its Stage 1 documents (the Excel
+    those allowed; the movement at a glance, from its form; its Stage 1 documents (the OHA
     assessment form, report and ODP as approved, and when); who leads it and its contacts; and
     how each figure is worked out. AAYMCA staff also have the Manage section at the foot: the
     next assessment, the evidence, the cycle, the ODP follow-up, the assessors and the

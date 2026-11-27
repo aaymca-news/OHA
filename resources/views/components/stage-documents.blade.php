@@ -1,6 +1,6 @@
 {{--
     Stage 1 of a movement's assessments as its three documents (decided 27 Nov 2026): 1. the
-    Excel assessment form, 2. the report, 3. the ODP, each with when it was approved and a
+    OHA Form (the Excel assessment form), 2. the report, 3. the ODP, each with when it was approved and a
     download; then when Stage 1 closed and the follow-ups began. The newest assessment open,
     earlier ones folded. Only approved documents: never the checks or what is missing. The
     same for the movement's Board Chairperson and National General Secretary as for AAYMCA
@@ -9,7 +9,7 @@
 --}}
 @props(['entries'])
 <x-panel {{ $attributes }} title="Stage 1 documents"
-         subtitle="The Excel assessment form, the report and the ODP as approved, and when, before the follow-ups begin">
+         subtitle="The OHA Form, the report and the ODP as approved, and when, before the follow-ups begin">
     @forelse ($entries as $i => $entry)
         @if ($i === 1)
             <details class="mt-lg border-t border-[#f0eeea] pt-md">
@@ -73,6 +73,6 @@
             </details>
         @endif
     @empty
-        <x-empty-state icon="folder_open">No assessment yet. The approved Excel assessment form, report and ODP appear here once Stage 1 begins.</x-empty-state>
+        <x-empty-state icon="folder_open">No assessment yet. The approved OHA Form, report and ODP appear here once Stage 1 begins.</x-empty-state>
     @endforelse
 </x-panel>

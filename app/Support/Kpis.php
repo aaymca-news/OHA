@@ -21,7 +21,7 @@ final class Kpis
             'label' => 'Current score',
             'means' => 'How healthy the movement is now, as a share of the points it could earn.',
             'how' => 'Points earned ÷ points available across the 8 scored areas (84 points), as a percentage, from its newest score: the latest follow-up score, else the baseline, else the approved OHA form before the assessment is closed.',
-            'mind' => '“Not Applicable” earns 0 and the maximum stays the same, exactly as in the Excel form.',
+            'mind' => '“Not Applicable” earns 0 and the maximum stays the same, exactly as in the OHA Form.',
         ],
         'baseline' => [
             'label' => 'Baseline',

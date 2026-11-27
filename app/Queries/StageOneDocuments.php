@@ -16,7 +16,7 @@ use Illuminate\Support\Facades\Gate;
 
 /**
  * Stage 1 of each assessment as its three approved documents (decided 27 Nov 2026): the
- * Excel assessment form, the report and the ODP, each with when it was approved and its
+ * OHA Form (the Excel assessment form), the report and the ODP, each with when it was approved and its
  * download; then when Stage 1 closed and the follow-ups began. Only what is approved and
  * this person may download: never the checks, the drafts or what is missing. AAYMCA staff
  * also get a link to read each one in its assessment.
@@ -54,7 +54,7 @@ final class StageOneDocuments
             $entries[] = [
                 'assessment' => $assessment,
                 'steps' => [
-                    $this->step('form', 'Excel assessment form', 'table_view', $form, $form !== null ? route('downloads.form', $form) : null,
+                    $this->step('form', 'OHA Form', 'table_view', $form, $form !== null ? route('downloads.form', $form) : null,
                         $staff && $form !== null ? route('assessments.show', ['assessment' => $assessment, 'tab' => 'form', 'upload' => $form->id]).'#form-preview' : null),
                     $this->step('report', 'Report', 'description', $report, $report !== null ? route('downloads.document', $report) : null,
                         $staff && $report !== null ? route('assessments.show', ['assessment' => $assessment, 'tab' => 'report', 'version' => $report->id]) : null),

@@ -9,7 +9,7 @@ use Tests\Support\Journey;
 
 /*
  * The Library (decided 27 Nov 2026), in place of Resources: each assessment's Stage 1
- * documents (the Excel assessment form, the report and the ODP, as approved, and when) on
+ * documents (the OHA Form, the report and the ODP, as approved, and when) on
  * the movement's page; each movement's Health Assessment Evidence Library, named for it;
  * and the Area Resource Repository, where what movements share is open to everyone.
  */
@@ -36,7 +36,7 @@ it('shows the three Stage 1 documents on the movement’s page, each with when i
     // The movement's own people: the documents, their dates and downloads; never a way into the assessment's work.
     foreach ([$this->j->chair, $this->ngs] as $user) {
         $this->actingAs($user)->get(route('movements.show', $this->j->zambia))->assertOk()
-            ->assertSeeInOrder(['Stage 1 documents', '1. Excel assessment form', '2. Report', '3. ODP'])
+            ->assertSeeInOrder(['Stage 1 documents', '1. OHA Form', '2. Report', '3. ODP'])
             ->assertSee('ZAM26 OHA Form.xlsx')->assertSee('Zambia OHA Report 2026.pdf · version 1')->assertSee('Zambia ODP 2026.pdf · version 1')
             ->assertSee('Approved '.$form->approved_at->asDay())->assertSee('Approved '.$odp->approved_at->asDay())
             ->assertSee(route('downloads.form', $form))->assertSee(route('downloads.document', $report))->assertSee(route('downloads.document', $odp))

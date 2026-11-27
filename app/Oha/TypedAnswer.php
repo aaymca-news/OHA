@@ -7,7 +7,7 @@ use App\Exceptions\WorkflowRuleBroken;
 /**
  * An answer typed in the platform, read as its question asks for it: one of its options,
  * a figure, a percentage, or the percentages of a group. Read the same way as an answer
- * in the Excel form (see Interpreter), so a typed answer scores exactly as the form would
+ * in the OHA Form (see Interpreter), so a typed answer scores exactly as the form would
  * score it. Refused with a plain reason otherwise. Used for the answers typed for a form's
  * gaps (SupplyAnswer) and for the answers changed at a follow-up (Rescore).
  */

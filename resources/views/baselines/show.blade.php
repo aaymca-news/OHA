@@ -1,9 +1,9 @@
 {{--
     The score history of one closed assessment (decided 12 Nov 2026; named 15 Nov 2026): the
     baseline is the approved form; closing each follow-up records its follow-up score. While a follow-up is open, its
-    answers are re-scored, from the re-filled Excel form or answer by answer here, by the
+    answers are re-scored, from the re-filled OHA Form or answer by answer here, by the
     form's own formulas: every point still open is listed with what earns it, so once each
-    is met the score is the full 100%. "Not Applicable" scores 0, as on the Excel form.
+    is met the score is the full 100%. "Not Applicable" scores 0, as on the OHA Form.
     Earlier scores are kept and can be viewed. Expects what BaselineController::show gives.
 --}}
 @php
@@ -60,7 +60,7 @@
         @if ($working)
             {{-- Two ways to re-score --}}
             <x-panel id="rescore" stack :title="'Re-scoring for '.$the($working['number'])"
-                     :subtitle="'Follow-up '.$working['followUp'].' is open. Change the answers either way below: they are scored by the OHA form’s own formulas, exactly as the Excel form scores them (“Not Applicable” scores 0). Closing the follow-up is the sign-off.'">
+                     :subtitle="'Follow-up '.$working['followUp'].' is open. Change the answers either way below: they are scored by the OHA Form’s own formulas, so they always match the OHA Form (“Not Applicable” scores 0). Closing the follow-up is the sign-off.'">
                 @if ($canRescore)
                     <form method="POST" action="{{ route('baselines.upload', $assessment) }}" enctype="multipart/form-data" class="flex flex-col gap-sm">
                         @csrf
@@ -186,7 +186,7 @@
 
             {{-- "Yes" answers with no evidence counted yet --}}
             <x-panel title="“Yes” answers with no evidence yet"
-                     subtitle="They still score, as on the Excel form, but nothing proves them yet. Evidence added during this follow-up counts in it.">
+                     subtitle="They still score, as on the OHA Form, but nothing proves them yet. Evidence added during this follow-up counts in it.">
                 @if ($working['evidenceGaps'] === [])
                     <x-empty-state icon="verified">Every “Yes” that evidence can prove has evidence counted.</x-empty-state>
                 @else

@@ -13,7 +13,7 @@ use Illuminate\Support\Facades\Schema;
  * assessment is closed; each follow-up closed records the next (follow-up 1: Baseline 2,
  * and so on). During an open follow-up, the answers are re-scored, from a re-uploaded Excel
  * form or answer by answer on the site, with the form's own scoring (Not Applicable scores
- * 0, the maximum unchanged, exactly as the Excel form). Closing the follow-up is the
+ * 0, the maximum unchanged, exactly as the OHA Form). Closing the follow-up is the
  * sign-off: its baseline is then frozen.
  *
  *   baselines        one per baseline: the answers it scored, what changed since the one
@@ -24,7 +24,7 @@ use Illuminate\Support\Facades\Schema;
  *   baseline_scores  its points per weighted category, with the maximum then. Never edited.
  *   follow_up_windows.answers / answer_changes
  *                    the answers being re-scored while the follow-up is open.
- *   rescore_uploads  the Excel forms re-uploaded during a follow-up.
+ *   rescore_uploads  the OHA Forms re-uploaded during a follow-up.
  *
  * The newest baseline is the movement's score everywhere: v_current_category_scores
  * (falling back to the approved form's category_scores before the assessment is closed)

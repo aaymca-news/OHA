@@ -357,12 +357,12 @@ final class JourneyPdf
         $this->y += 16;
         $text = $gaps === []
             ? 'Every “Yes” that evidence can prove has evidence counted.'
-            : 'They still score, as on the Excel form, but nothing proves them yet: '
+            : 'They still score, as on the OHA Form, but nothing proves them yet: '
                 .implode('; ', array_map(fn (string $code) => EvidenceQuestions::shown($code).' '.EvidenceQuestions::label($code), $gaps)).'.';
         $this->room(14 * count($pdf->wrap($text, self::WIDTH, 9)));
         $this->y = $pdf->paragraph(self::LEFT, $this->y, self::WIDTH, $text, 9);
 
-        $note = 'How the scores are worked out: each score is worked out from its answers by the OHA form’s own formulas, exactly as the Excel form scores them. “Not Applicable” scores 0, with the category’s maximum unchanged. A score is never changed once recorded; when a follow-up is reopened, its score is set aside and kept.';
+        $note = 'How the scores are worked out: each score is worked out from its answers by the OHA Form’s own formulas, so it always matches the OHA Form. “Not Applicable” scores 0, with the category’s maximum unchanged. A score is never changed once recorded; when a follow-up is reopened, its score is set aside and kept.';
         $this->room(14 * count($pdf->wrap($note, self::WIDTH, 8.5)) + 20);
         $this->y += 18;
         $pdf->paragraph(self::LEFT, $this->y, self::WIDTH, $note, 8.5, false, self::MUTED);

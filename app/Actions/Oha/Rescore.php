@@ -27,12 +27,12 @@ use Illuminate\Support\Facades\DB;
  * movement's assessors, an Administrator or the Super Administrator:
  *
  *   change  one answer on the site (or the income percentages together), with the reason:
- *           read exactly as the Excel form's answer would be (TypedAnswer)
+ *           read exactly as the OHA Form's answer would be (TypedAnswer)
  *   undo    an answer changed, set back to the starting baseline's
- *   upload  the movement's re-filled Excel form: checked as in Stage 1 (the right form,
+ *   upload  the movement's re-filled OHA Form: checked as in Stage 1 (the right form,
  *           the right movement), and its answers become the answers re-scored
  *
- * The answers are scored by the form's own formulas, so the site and the Excel form never
+ * The answers are scored by the form's own formulas, so the site and the OHA Form never
  * disagree. Each change is kept with what it was, why, who and how. No separate approval:
  * closing the follow-up records them as its baseline.
  */
@@ -97,7 +97,7 @@ final class Rescore
         }, 'baseline.answer_restored', ['codes' => $codes]);
     }
 
-    /** The re-filled Excel form: its answers become the answers re-scored. */
+    /** The re-filled OHA Form: its answers become the answers re-scored. */
     public function upload(Assessment $assessment, User $by, string $sourcePath, string $originalName, ?string $note = null): RescoreUpload
     {
         $this->ensure($by, 'rescore', $assessment);

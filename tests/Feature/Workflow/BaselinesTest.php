@@ -21,10 +21,10 @@ use Tests\Support\Journey;
 
 /*
  * Baselines 1–4 (decided 12 Nov 2026): Baseline 1 is the approved form when the assessment
- * is closed; during each open follow-up the answers are re-scored (a re-filled Excel form,
+ * is closed; during each open follow-up the answers are re-scored (a re-filled OHA Form,
  * or answer by answer on the site) by the form's own formulas; closing the follow-up
  * records the next baseline, which is then the movement's score everywhere. The site and
- * the Excel form never disagree: once every gap is met, the score is 84 of 84 (100%).
+ * the OHA Form never disagree: once every gap is met, the score is 84 of 84 (100%).
  */
 
 beforeEach(function () {
@@ -100,7 +100,7 @@ it('lists every point still open, and once each is met on the site the score is 
         ->and($baseline->changes[array_key_first($baseline->changes)])->toHaveKeys(['from', 'to', 'reason', 'by_name', 'via']);
 });
 
-it('scores "Not Applicable" 0 with the maximum unchanged, as the Excel form does, and flags a "Yes" without evidence', function () {
+it('scores "Not Applicable" 0 with the maximum unchanged, as the OHA Form does, and flags a "Yes" without evidence', function () {
     $this->j->openFollowUp($this->assessment);
     $this->rescore->change($this->assessment, $this->j->assessor, 'q:Q203', 'Not Applicable', 'No internal controls are mandated.');
     $this->rescore->change($this->assessment, $this->j->assessor, 'q:Q201', 'Yes', 'The budget is now approved.');
@@ -115,7 +115,7 @@ it('scores "Not Applicable" 0 with the maximum unchanged, as the Excel form does
         ->not->toHaveKey('Q203');
 });
 
-it('re-scores from a re-filled Excel form exactly as the form is scored when uploaded', function () {
+it('re-scores from a re-filled OHA Form exactly as the form is scored when uploaded', function () {
     $start = Rescoring::inForce($this->assessment, 1);
     $upload = FormUpload::query()->find($start->form_upload_id);
     $items = array_values(array_filter(array_merge(...array_values(ScoreGaps::for($start->answers))), fn ($i) => $i['options'] !== null && $i['options'] !== []));
